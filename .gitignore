@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# Datasets are large and separately licensed (CDLA-Sharing-1.0).
+# Download instructions are in the README.
+data/amlworld/
+data/stream/
+data/cases/
+data/*.json
+data/*.log
+
+.pytest_cache/
+.DS_Store
+payops-sentinel.zip

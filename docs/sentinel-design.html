@@ -1,0 +1,1275 @@
+<title>Sentinel Ring Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F3F5F4;
+  --surface:#FFFFFF;
+  --surface-2:#EAEEED;
+  --ink:#12191B;
+  --ink-2:#33413F;
+  --muted:#5A6A6D;
+  --line:#D2DAD8;
+  --line-2:#BCC7C4;
+  --accent:#0F766E;
+  --accent-soft:#DCEEEB;
+  --warn:#B45309;
+  --warn-soft:#FBEFDF;
+  --crit:#9F1239;
+  --crit-soft:#FBE5EA;
+  --ok:#15803D;
+  --ok-soft:#E1F2E6;
+  --shadow:0 1px 2px rgba(18,25,27,.05), 0 8px 24px -16px rgba(18,25,27,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1416;
+    --surface:#151D20;
+    --surface-2:#1C2528;
+    --ink:#E4EAE9;
+    --ink-2:#B9C6C4;
+    --muted:#889895;
+    --line:#283537;
+    --line-2:#3A4A4C;
+    --accent:#3FB3A6;
+    --accent-soft:#12312E;
+    --warn:#E0A264;
+    --warn-soft:#2E2313;
+    --crit:#E88BA1;
+    --crit-soft:#2E151C;
+    --ok:#5FBF83;
+    --ok-soft:#132A1C;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1416;
+  --surface:#151D20;
+  --surface-2:#1C2528;
+  --ink:#E4EAE9;
+  --ink-2:#B9C6C4;
+  --muted:#889895;
+  --line:#283537;
+  --line-2:#3A4A4C;
+  --accent:#3FB3A6;
+  --accent-soft:#12312E;
+  --warn:#E0A264;
+  --warn-soft:#2E2313;
+  --crit:#E88BA1;
+  --crit-soft:#2E151C;
+  --ok:#5FBF83;
+  --ok-soft:#132A1C;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"Archivo","Helvetica Neue",Arial,sans-serif;
+  font-size:16px;
+  line-height:1.62;
+  margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+
+.shell{
+  display:grid;
+  grid-template-columns:1fr;
+  max-width:1360px;
+  margin:0 auto;
+  padding:0 20px 96px;
+}
+@media(min-width:1120px){
+  .shell{grid-template-columns:216px minmax(0,1fr);gap:56px;padding:0 40px 120px}
+}
+
+/* ---------- section index ---------- */
+.index{display:none}
+@media(min-width:1120px){
+  .index{
+    display:block;
+    position:sticky;top:0;align-self:start;
+    max-height:100vh;overflow-y:auto;
+    padding:56px 0 40px;
+    font-size:13px;line-height:1.45;
+  }
+}
+.index-label{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:14px;
+}
+.index a{
+  display:flex;gap:9px;
+  color:var(--ink-2);text-decoration:none;
+  padding:5px 0;
+  border-top:1px solid var(--line);
+}
+.index a:first-of-type{border-top:none}
+.index a:hover{color:var(--accent)}
+.index a span{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  color:var(--muted);font-size:11px;padding-top:2px;
+  font-variant-numeric:tabular-nums;
+}
+
+main{min-width:0}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+.masthead{padding:60px 0 40px;border-bottom:1px solid var(--line-2)}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:20px;
+}
+h1{
+  font-family:"Newsreader",Georgia,serif;
+  font-weight:500;
+  font-size:clamp(38px,6vw,62px);
+  line-height:1.02;
+  letter-spacing:-.018em;
+  margin:0 0 22px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-family:"Newsreader",Georgia,serif;
+  font-size:clamp(18px,2.3vw,22px);
+  line-height:1.5;color:var(--ink-2);
+  max-width:60ch;margin:0 0 30px;
+}
+.meta{
+  display:flex;flex-wrap:wrap;gap:8px 28px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px;color:var(--muted);
+}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- sections ---------- */
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:none}
+h2{
+  font-family:"Newsreader",Georgia,serif;
+  font-weight:500;font-size:clamp(26px,3.4vw,36px);
+  line-height:1.14;letter-spacing:-.012em;
+  margin:0 0 8px;text-wrap:balance;
+}
+.h2num{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.14em;color:var(--accent);
+  display:block;margin-bottom:12px;
+}
+.deck{color:var(--muted);font-size:16px;margin:0 0 30px;max-width:62ch}
+h3{
+  font-family:"Archivo",sans-serif;
+  font-weight:600;font-size:17px;letter-spacing:-.005em;
+  margin:34px 0 10px;
+}
+h4{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-weight:500;font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin:28px 0 10px;
+}
+p{margin:0 0 17px}
+a{color:var(--accent)}
+strong{font-weight:600;color:var(--ink)}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em}
+code{background:var(--surface-2);padding:.1em .34em;border-radius:3px}
+ul,ol{margin:0 0 17px;padding-left:20px}
+li{margin-bottom:8px}
+li::marker{color:var(--muted)}
+
+/* ---------- callouts ---------- */
+.note{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-left:2px solid var(--accent);
+  padding:18px 20px;margin:24px 0;
+  font-size:15px;
+}
+.note.warn{border-left-color:var(--warn)}
+.note.crit{border-left-color:var(--crit)}
+.note p:last-child{margin-bottom:0}
+.note-tag{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent);display:block;margin-bottom:7px;
+}
+.note.warn .note-tag{color:var(--warn)}
+.note.crit .note-tag{color:var(--crit)}
+
+/* ---------- chips ---------- */
+.chip{
+  display:inline-block;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:3px;white-space:nowrap;
+  background:var(--surface-2);color:var(--muted);
+  border:1px solid var(--line);
+}
+.chip.build{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.chip.desc{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.cut{background:var(--crit-soft);color:var(--crit);border-color:transparent}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:24px 0;border:1px solid var(--line);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;
+  background:var(--surface-2);
+  position:sticky;top:0;
+}
+tr:last-child td{border-bottom:none}
+td.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- figures ---------- */
+figure{margin:32px 0;padding:0}
+.fig svg{display:block;width:100%;max-width:100%;height:auto;color:var(--ink)}
+.fig .em{stroke:var(--accent)}
+.fig .em-f{fill:var(--accent)}
+.fig .warn-s{stroke:var(--crit)}
+.fig .warn-f{fill:var(--crit)}
+.fig .panel{fill:var(--surface);stroke:var(--line-2)}
+.fig .panel-2{fill:var(--surface-2);stroke:var(--line-2)}
+.fig .lbl{fill:var(--ink);font-family:"Archivo",sans-serif;font-size:12px}
+.fig .lbl-s{fill:var(--muted);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px}
+.fig .lbl-a{fill:var(--accent);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px}
+figcaption{
+  font-size:13px;color:var(--muted);margin-top:12px;
+  padding-top:10px;border-top:1px solid var(--line);
+  max-width:64ch;
+}
+.figbox{background:var(--surface);border:1px solid var(--line);padding:24px}
+
+/* ---------- case file mock ---------- */
+.case{
+  background:var(--surface);border:1px solid var(--line-2);
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:12.5px;line-height:1.55;
+  margin:28px 0;box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.case-hd{
+  padding:14px 18px;border-bottom:1px solid var(--line-2);
+  background:var(--surface-2);
+  display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between;
+}
+.case-id{font-size:14px;font-weight:600;color:var(--ink);letter-spacing:.02em}
+.case-sub{color:var(--muted);font-size:11.5px}
+.case-btns{display:flex;gap:6px;flex-wrap:wrap}
+.btn{
+  font-family:inherit;font-size:11px;letter-spacing:.04em;
+  padding:4px 10px;border:1px solid var(--line-2);background:var(--ground);
+  color:var(--ink-2);border-radius:3px;
+}
+.btn.p{background:var(--accent);color:var(--surface);border-color:transparent;font-weight:600}
+:root[data-theme="dark"] .btn.p{color:#0E1416}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.p{color:#0E1416}}
+.case-body{padding:4px 18px 18px}
+.case-sec{padding:14px 0;border-bottom:1px dashed var(--line)}
+.case-sec:last-child{border-bottom:none}
+.case-k{
+  font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:8px;
+}
+.ev{display:flex;justify-content:space-between;gap:14px;padding:3px 0;border-bottom:1px solid var(--line);}
+.ev:last-child{border-bottom:none}
+.ev-n{color:var(--ink-2)}
+.ev-v{color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.ev-x{color:var(--accent);font-size:10.5px}
+.mem{display:flex;gap:10px;padding:3px 0;align-items:baseline;flex-wrap:wrap}
+.mem-id{color:var(--ink);min-width:62px}
+.mem-r{color:var(--muted);min-width:96px;font-size:11.5px}
+.mem-c{font-variant-numeric:tabular-nums;color:var(--ink-2);min-width:64px}
+.lowconf{color:var(--warn)}
+.case-narr{color:var(--ink-2);font-family:"Archivo",sans-serif;font-size:14px;line-height:1.55}
+
+/* ---------- timeline ---------- */
+.tl{margin:28px 0;border-left:2px solid var(--line-2);padding-left:0}
+.tl-row{
+  display:grid;grid-template-columns:88px 1fr;gap:18px;
+  padding:16px 0 16px 20px;position:relative;
+  border-bottom:1px solid var(--line);
+}
+.tl-row:last-child{border-bottom:none}
+.tl-row::before{
+  content:"";position:absolute;left:-5px;top:23px;
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent);
+}
+.tl-row.gate::before{background:var(--crit)}
+.tl-when{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;color:var(--muted);letter-spacing:.04em;padding-top:2px;
+}
+.tl-what h4{margin:0 0 5px;font-family:"Archivo",sans-serif;font-size:15px;
+  letter-spacing:0;text-transform:none;color:var(--ink);font-weight:600}
+.tl-what p{margin:0;font-size:14px;color:var(--ink-2)}
+@media(max-width:600px){
+  .tl-row{grid-template-columns:1fr;gap:4px}
+}
+
+/* ---------- misc ---------- */
+.kicker{
+  font-family:"Newsreader",Georgia,serif;
+  font-size:clamp(19px,2.4vw,24px);line-height:1.42;
+  color:var(--ink);border-left:2px solid var(--accent);
+  padding:2px 0 2px 20px;margin:28px 0;max-width:56ch;
+}
+.grid2{display:grid;gap:18px;margin:24px 0}
+@media(min-width:760px){.grid2{grid-template-columns:1fr 1fr}}
+.card{background:var(--surface);border:1px solid var(--line);padding:18px 20px}
+.card h4{margin-top:0}
+.card p:last-child{margin-bottom:0}
+.sig{counter-reset:sig;list-style:none;padding:0;margin:24px 0}
+.sig li{
+  counter-increment:sig;position:relative;padding:12px 0 12px 44px;
+  border-bottom:1px solid var(--line);margin:0;
+}
+.sig li:last-child{border-bottom:none}
+.sig li::before{
+  content:counter(sig,decimal-leading-zero);
+  position:absolute;left:0;top:13px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;color:var(--accent);
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="shell">
+
+<nav class="index" aria-label="Contents">
+  <div class="index-label">Contents</div>
+  <a href="#s1"><span>01</span> Thesis</a>
+  <a href="#s2"><span>02</span> The problem</a>
+  <a href="#s3"><span>03</span> Architecture</a>
+  <a href="#s4"><span>04</span> The case file</a>
+  <a href="#s5"><span>05</span> Geography</a>
+  <a href="#s6"><span>06</span> Workflow fit</a>
+  <a href="#s7"><span>07</span> Learning loop</a>
+  <a href="#s8"><span>08</span> Data strategy</a>
+  <a href="#s9"><span>09</span> Metrics</a>
+  <a href="#s10"><span>10</span> Failure modes</a>
+  <a href="#s11"><span>11</span> Build plan</a>
+  <a href="#s12"><span>12</span> Real vs simulated</a>
+  <a href="#s13"><span>13</span> Demo script</a>
+  <a href="#s14"><span>14</span> Judgment signals</a>
+</nav>
+
+<main>
+
+<header class="masthead">
+  <div class="eyebrow">Design document · v1</div>
+  <h1>Sentinel</h1>
+  <p class="standfirst">A fraud-ring investigation console for payment risk operations. It changes the unit of investigation from the transaction to the ring, and delivers each ring pre-investigated.</p>
+  <div class="meta">
+    <span><b>Track</b> AI Risk Manager</span>
+    <span><b>Loss class</b> Money-movement / mule rings</span>
+    <span><b>Posture</b> Defense only</span>
+    <span><b>Status</b> Design — pre-implementation</span>
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <div class="col">
+    <span class="h2num">01</span>
+    <h2>The thesis</h2>
+    <p class="deck">The bottleneck in fraud operations is not detection. It is investigation throughput.</p>
+
+    <p>Every payments risk team already runs detectors that produce more alerts than the team can work. Adding a better detector to that pipeline adds alerts to a queue that is already over capacity. The binding constraint is further downstream: an analyst spends the large majority of their time on <strong>evidence assembly</strong> — pulling transaction history, checking KYC records, cross-referencing devices, reconstructing a narrative — and a small minority on the judgment that actually requires a human.</p>
+
+    <p>Sentinel attacks that constraint with two multipliers, stacked.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4>Multiplier 1 — unit of work</h4>
+        <p>Today an analyst dispositions a transaction or an account. Sentinel makes the unit a <strong>ring</strong>. One decision now covers forty accounts instead of one.</p>
+      </div>
+      <div class="card">
+        <h4>Multiplier 2 — pre-investigation</h4>
+        <p>The case arrives with evidence assembled and the narrative written. The analyst spends their time on judgment, not on SQL.</p>
+      </div>
+    </div>
+
+    <p class="kicker">Same team. Same standards. An order of magnitude more ground held under continuous review.</p>
+
+    <p>This reframe is also what makes the product <em>augmentation</em> rather than replacement. Sentinel does not take the analyst's decision. It takes the four hours of assembly in front of the decision.</p>
+
+    <div class="note">
+      <span class="note-tag">Build consequence</span>
+      <p>Because the thesis is throughput and not detection accuracy, the <strong>case file and the queue are higher-priority build items than detector sophistication.</strong> A mediocre detector wrapped in an excellent investigation workflow beats an excellent detector that outputs node IDs. The build plan in §11 reflects that ordering.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <div class="col">
+    <span class="h2num">02</span>
+    <h2>The problem, in the terms the business feels it</h2>
+    <p class="deck">Three costs, one of which carries a regulatory penalty.</p>
+
+    <h3>The ring survives</h3>
+    <p>An analyst working transaction-level alerts can often tell that an account is part of something larger. What they cannot do, within the time available, is <em>enumerate the rest of it</em>. So they action the one account they can prove, the ring loses a node, and it re-forms within a week using a replacement. Per-transaction tooling structurally cannot resolve this, because the evidence that a ring exists lives in the relationships between accounts, not inside any single account's record.</p>
+
+    <h3>Alert fatigue is the failure mode of the tooling, not of the team</h3>
+    <p>One underlying cause generates many surface alerts. Without correlation, the queue fills with duplicates of the same story, and the team's real capacity is spent re-deriving the same conclusion.</p>
+
+    <h3>The regulatory clock</h3>
+    <p>Under PMLA, a reporting entity must file a Suspicious Transaction Report with FIU-IND <strong>within seven working days of forming suspicion</strong> — and the reporting guidance is explicit that <em>protracted internal review is the most common cause of late filing</em>. Separately, the RBI Payment Aggregator Directions require continuous monitoring of merchant transactions to identify suspicious activity, adverse-news screening, suspicious-transaction reporting, and log retention for five years.</p>
+
+    <p>Sentinel compresses both clocks that feed the seven-day window:</p>
+    <ul>
+      <li><strong>Time to form suspicion</strong> — continuous graph surveillance rather than periodic review.</li>
+      <li><strong>Time to assemble the evidence pack</strong> — the case file <em>is</em> substantially the STR narrative.</li>
+    </ul>
+
+    <div class="note">
+      <span class="note-tag">Design dividend</span>
+      <p>The immutable case timeline and the point-in-time feature snapshot described in §7 exist for machine-learning reasons. They also happen to be exactly the audit artifact the retention and reporting obligations require. One design, two justifications — the compliance deliverable falls out of the ML architecture for free.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <div class="col">
+    <span class="h2num">03</span>
+    <h2>Architecture</h2>
+    <p class="deck">Six layers. The scale property is a consequence of layer two, and it is the part most implementations get wrong.</p>
+  </div>
+
+  <figure class="fig">
+    <div class="figbox">
+      <svg viewBox="0 0 960 300" role="img" aria-label="Six-layer pipeline: transaction stream feeds a dual graph, which feeds a narrowing candidate funnel of trigger, expand and structure stages, then scoring, case assembly and disposition, with verdicts looping back to the scorer.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="currentColor"/>
+          </marker>
+          <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" class="em-f"/>
+          </marker>
+        </defs>
+
+        <!-- L0 -->
+        <rect x="8" y="86" width="120" height="64" class="panel" stroke-width="1"/>
+        <text x="68" y="112" class="lbl" text-anchor="middle">Ingest</text>
+        <text x="68" y="130" class="lbl-s" text-anchor="middle">edge stream</text>
+        <text x="68" y="168" class="lbl-s" text-anchor="middle">L0</text>
+
+        <!-- L1 dual graph -->
+        <rect x="164" y="52" width="132" height="58" class="panel" stroke-width="1"/>
+        <text x="230" y="76" class="lbl" text-anchor="middle">Money graph</text>
+        <text x="230" y="93" class="lbl-s" text-anchor="middle">directed · 30d</text>
+        <rect x="164" y="126" width="132" height="58" class="panel" stroke-width="1"/>
+        <text x="230" y="150" class="lbl" text-anchor="middle">Identity graph</text>
+        <text x="230" y="167" class="lbl-s" text-anchor="middle">shared attrs · 90d</text>
+        <text x="230" y="204" class="lbl-s" text-anchor="middle">L1</text>
+
+        <!-- L2 funnel -->
+        <rect x="332" y="40" width="118" height="156" class="panel-2" stroke-width="1"/>
+        <text x="391" y="62" class="lbl" text-anchor="middle">Candidates</text>
+        <line x1="346" y1="74" x2="436" y2="74" stroke="currentColor" stroke-width="1" opacity=".25"/>
+        <text x="391" y="94" class="lbl-a" text-anchor="middle">trigger</text>
+        <text x="391" y="110" class="lbl-s" text-anchor="middle">velocity z-score</text>
+        <text x="391" y="134" class="lbl-a" text-anchor="middle">expand</text>
+        <text x="391" y="150" class="lbl-s" text-anchor="middle">2-hop, pruned</text>
+        <text x="391" y="174" class="lbl-a" text-anchor="middle">structure</text>
+        <text x="391" y="190" class="lbl-s" text-anchor="middle">leiden + motifs</text>
+        <text x="391" y="216" class="lbl-s" text-anchor="middle">L2</text>
+
+        <!-- L3 -->
+        <rect x="486" y="86" width="118" height="64" class="panel" stroke-width="1"/>
+        <text x="545" y="106" class="lbl" text-anchor="middle">Score</text>
+        <text x="545" y="123" class="lbl-s" text-anchor="middle">rank, not</text>
+        <text x="545" y="137" class="lbl-s" text-anchor="middle">threshold</text>
+        <text x="545" y="168" class="lbl-s" text-anchor="middle">L3</text>
+
+        <!-- L4 -->
+        <rect x="640" y="86" width="118" height="64" class="panel" stroke-width="1"/>
+        <text x="699" y="106" class="lbl" text-anchor="middle">Case file</text>
+        <text x="699" y="123" class="lbl-s" text-anchor="middle">evidence +</text>
+        <text x="699" y="137" class="lbl-s" text-anchor="middle">narrative</text>
+        <text x="699" y="168" class="lbl-s" text-anchor="middle">L4</text>
+
+        <!-- L5 -->
+        <rect x="794" y="86" width="118" height="64" class="panel" stroke-width="1"/>
+        <text x="853" y="106" class="lbl" text-anchor="middle">Disposition</text>
+        <text x="853" y="123" class="lbl-s" text-anchor="middle">analyst</text>
+        <text x="853" y="137" class="lbl-s" text-anchor="middle">verdict</text>
+        <text x="853" y="168" class="lbl-s" text-anchor="middle">L5</text>
+
+        <!-- arrows -->
+        <line x1="128" y1="105" x2="160" y2="82" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="128" y1="131" x2="160" y2="154" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="296" y1="81" x2="328" y2="104" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="296" y1="155" x2="328" y2="132" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="450" y1="118" x2="482" y2="118" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="604" y1="118" x2="636" y2="118" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="758" y1="118" x2="790" y2="118" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+
+        <!-- feedback -->
+        <path d="M853 150 L853 252 L545 252 L545 154" fill="none" class="em" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar-a)"/>
+        <text x="699" y="268" class="lbl-a" text-anchor="middle">labelled verdicts retrain the ranker</text>
+      </svg>
+    </div>
+    <figcaption>The pipeline. Work narrows sharply at L2 — the funnel is what keeps cost proportional to anomaly volume rather than transaction volume.</figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>L0 — Ingest and entity extraction</h3>
+    <p>A normalised edge stream: <code>ts, src, dst, amount, currency, channel, meta</code>. In production this is a Kafka topic of attempted and settled transactions. For the buildathon it is a dataset replay through the existing tick loop. The normalised schema with a thin per-source adapter is what makes a second dataset pluggable later, and it is a day-one decision, not a retrofit.</p>
+    <p>Node types: account, card fingerprint, device, VPA, IP/ASN, email, phone, beneficiary account, merchant.</p>
+
+    <h3>L1 — Two graphs, not one</h3>
+    <p>This distinction is load-bearing and is commonly missed.</p>
+    <ul>
+      <li><strong>Money graph</strong> — directed, weighted, timestamped. Catches layering, cycles, mule fan-out, bust-out.</li>
+      <li><strong>Identity graph</strong> — undirected, bipartite entity-to-attribute. Catches collusion: one device across twelve unrelated accounts, one beneficiary account behind forty merchants.</li>
+    </ul>
+    <p>Rings usually surface in one or the other. <strong>The strongest cases surface in both</strong>, and scoring that intersection is where the real signal is: a cluster that both shares devices and cycles money is almost never innocent. Building only the money graph discards half the available evidence.</p>
+  </div>
+
+  <figure class="fig">
+    <div class="figbox">
+      <svg viewBox="0 0 720 250" role="img" aria-label="Money graph shows a cycle among four accounts; identity graph shows three of the same accounts sharing one device; the intersection of both is scored highest.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="currentColor"/>
+          </marker>
+        </defs>
+        <text x="12" y="20" class="lbl-s">MONEY GRAPH — directed value flow</text>
+        <circle cx="70" cy="80" r="15" class="panel" stroke-width="1.2"/><text x="70" y="84" class="lbl-s" text-anchor="middle">A1</text>
+        <circle cx="190" cy="58" r="15" class="panel" stroke-width="1.2"/><text x="190" y="62" class="lbl-s" text-anchor="middle">A2</text>
+        <circle cx="250" cy="140" r="15" class="panel" stroke-width="1.2"/><text x="250" y="144" class="lbl-s" text-anchor="middle">A3</text>
+        <circle cx="110" cy="170" r="15" class="panel" stroke-width="1.2"/><text x="110" y="174" class="lbl-s" text-anchor="middle">A4</text>
+        <line x1="85" y1="74" x2="174" y2="62" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="202" y1="70" x2="242" y2="124" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="236" y1="149" x2="127" y2="166" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="102" y1="156" x2="76" y2="96" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="150" y="212" class="lbl-s" text-anchor="middle">cycle · 94% of value returns</text>
+
+        <line x1="330" y1="30" x2="330" y2="215" stroke="currentColor" stroke-width="1" opacity=".2"/>
+
+        <text x="360" y="20" class="lbl-s">IDENTITY GRAPH — shared attributes</text>
+        <rect x="470" y="96" width="58" height="26" class="panel-2" stroke-width="1.2"/>
+        <text x="499" y="113" class="lbl-s" text-anchor="middle">device</text>
+        <circle cx="390" cy="52" r="15" class="panel" stroke-width="1.2"/><text x="390" y="56" class="lbl-s" text-anchor="middle">A1</text>
+        <circle cx="378" cy="109" r="15" class="panel" stroke-width="1.2"/><text x="378" y="113" class="lbl-s" text-anchor="middle">A2</text>
+        <circle cx="392" cy="166" r="15" class="panel" stroke-width="1.2"/><text x="392" y="170" class="lbl-s" text-anchor="middle">A4</text>
+        <line x1="405" y1="59" x2="468" y2="99" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="393" y1="109" x2="468" y2="109" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="407" y1="160" x2="468" y2="120" stroke="currentColor" stroke-width="1.2"/>
+        <text x="560" y="150" class="lbl-s">3 of 4 members</text>
+        <text x="560" y="164" class="lbl-s">share one device</text>
+
+        <rect x="12" y="228" width="696" height="0.8" class="em" stroke-width="1.4"/>
+        <text x="360" y="246" class="lbl-a" text-anchor="middle">members appearing in BOTH structures carry the highest ring score</text>
+      </svg>
+    </div>
+    <figcaption>The dual graph. Either structure alone is ambiguous; their overlap is close to conclusive.</figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>L2 — Candidate generation, and why it scales</h3>
+    <p>You cannot cluster the whole platform graph every hour. You also should not: it is wasted compute on a graph that is almost entirely quiet. The funnel:</p>
+    <ol>
+      <li><strong>Trigger</strong> (cheap, streaming, every tick). Per-entity velocity z-scores against each entity's own hour-of-week baseline. Only entities that go anomalous become <em>seeds</em>. Cost is proportional to entities touched this minute, not to graph size.</li>
+      <li><strong>Expand</strong> (per seed). Extract the two-hop neighbourhood, capped at N nodes with degree-based pruning.</li>
+      <li><strong>Structure</strong>. Leiden community detection on the neighbourhood, <em>plus</em> direct motif matching for cycle, fan-in, fan-out and scatter-gather. Both are needed: clustering alone swallows small rings beneath its resolution limit, and motif matching alone misses diffuse ones.</li>
+    </ol>
+
+    <p class="kicker">You never cluster the global graph. You cluster small neighbourhoods around anomalous seeds.</p>
+
+    <p>A five-million-edge global clustering problem becomes a few hundred independent two-hundred-node subgraph problems — embarrassingly parallel, near-instant, horizontally scalable by adding workers. Scale stops being an algorithms problem and becomes a queue-workers problem, which is a problem with a known solution.</p>
+  </div>
+
+  <figure class="fig">
+    <div class="figbox">
+      <svg viewBox="0 0 720 220" role="img" aria-label="Comparison: global clustering runs one job over the entire five million edge graph every cycle; seed and expand runs many small bounded jobs only around anomalous seeds.">
+        <text x="12" y="20" class="lbl-s">GLOBAL CLUSTERING — cost grows with the platform</text>
+        <rect x="12" y="32" width="300" height="70" class="panel" stroke-width="1"/>
+        <text x="162" y="62" class="lbl" text-anchor="middle">one job · 515k nodes · 5M edges</text>
+        <text x="162" y="82" class="lbl-s" text-anchor="middle">every cycle, mostly over quiet data</text>
+        <text x="162" y="122" class="warn-f lbl-s" text-anchor="middle" style="font-size:11px">re-runs entirely when volume doubles</text>
+
+        <line x1="360" y1="24" x2="360" y2="196" stroke="currentColor" stroke-width="1" opacity=".2"/>
+
+        <text x="384" y="20" class="lbl-a">SEED &amp; EXPAND — cost grows with anomalies only</text>
+        <rect x="384" y="32" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="417" y="53" class="lbl-s" text-anchor="middle">~200n</text>
+        <rect x="462" y="32" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="495" y="53" class="lbl-s" text-anchor="middle">~200n</text>
+        <rect x="540" y="32" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="573" y="53" class="lbl-s" text-anchor="middle">~200n</text>
+        <rect x="618" y="32" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="651" y="53" class="lbl-s" text-anchor="middle">~200n</text>
+        <rect x="384" y="74" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="417" y="95" class="lbl-s" text-anchor="middle">~200n</text>
+        <rect x="462" y="74" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="495" y="95" class="lbl-s" text-anchor="middle">~200n</text>
+        <rect x="540" y="74" width="66" height="34" class="panel" stroke-width="1"/>
+        <text x="573" y="95" class="lbl-s" text-anchor="middle">~200n</text>
+        <text x="534" y="130" class="lbl-a" text-anchor="middle">independent · parallel · bounded</text>
+        <text x="534" y="148" class="lbl-s" text-anchor="middle">add workers, not bigger machines</text>
+      </svg>
+    </div>
+    <figcaption>The one architectural change the scale claim rests on. Everything else in the pipeline is downstream of this choice.</figcaption>
+  </figure>
+
+  <div class="col">
+    <div class="note crit">
+      <span class="note-tag">Hub suppression — the make-or-break detail</span>
+      <p>A payroll account, a popular merchant, a corporate NAT device or an ISP-level shared IP connects thousands of unrelated entities and will produce one enormous garbage "ring" that discredits the whole product. Detect hubs by degree percentile <em>combined with entropy of counterparties</em> — a genuine hub's counterparties are diverse and unrelated; a mule hub's are not — then <strong>exclude them as connective edges while keeping them as displayed context.</strong> Get this wrong and nothing else in the system matters.</p>
+    </div>
+
+    <h3>L3 — Score to rank, not to threshold</h3>
+    <p>Per-candidate features, each surfaced independently rather than collapsed into an opaque number: cycle presence, degree skew, <strong>value conservation through the cluster</strong> (money in ≈ money out is the defining layering signature), account-age spread, cross-bank hop count, round-amount fraction, temporal burstiness, identity-overlap density.</p>
+    <p>v1 is a transparent weighted sum. v2 is the learned re-ranker from §7.</p>
+    <p>The critical choice: <strong>the score orders the queue; it does not gate an alert.</strong> Ops teams have a fixed daily capacity. You fill that capacity with the best available candidates. A fixed threshold produces a flood or a drought as the world drifts; a capacity-filled ranked queue is stable by construction, and it is how real systems actually run.</p>
+
+    <h3>L4 — Case assembly</h3>
+    <p>Covered in §4. Deterministic evidence is built first; language is generated strictly downstream of it and may not assert anything the evidence object does not contain.</p>
+
+    <h3>L5 — Disposition and learning</h3>
+    <p>Covered in §7.</p>
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <div class="col">
+    <span class="h2num">04</span>
+    <h2>The case file</h2>
+    <p class="deck">This is the product. Everything upstream exists to populate it.</p>
+
+    <p>Clustering produces a set of node IDs. A set of node IDs is not an alert a human can act on. The layer that turns <code>community 4471, 9 nodes, modularity 0.31</code> into a story an analyst can verify and defend is the entire difference between a class project and something a risk team would actually adopt.</p>
+  </div>
+
+  <div class="case">
+    <div class="case-hd">
+      <div>
+        <div class="case-id">CASE-2211</div>
+        <div class="case-sub">scatter-gather · 9 accounts · 3 banks · ₹41.2L · high confidence</div>
+        <div class="case-sub">opened 14:22 · first suspicious edge 6d ago · detection latency 4.1h</div>
+      </div>
+      <div class="case-btns">
+        <span class="btn p">Confirm</span>
+        <span class="btn">Dismiss</span>
+        <span class="btn">Need more</span>
+      </div>
+    </div>
+    <div class="case-body">
+
+      <div class="case-sec">
+        <div class="case-k">Why this fired now</div>
+        <div>Account A7734 fan-out degree reached 9 — baseline 1.2 for Tuesday 14:00, z = −8.4</div>
+      </div>
+
+      <div class="case-sec">
+        <div class="case-k">What it looks like</div>
+        <p class="case-narr" style="margin:0">Funds leave A7734 to six intermediaries, reconverge on A9902, and 94% returns to A7734 within 48 hours. Scatter-gather is a layering structure: the split-and-recombine exists to break the audit trail, and value conservation through the cluster is what distinguishes it from ordinary commerce. <span class="ev-x">[what is this pattern? ▾]</span></p>
+      </div>
+
+      <div class="case-sec">
+        <div class="case-k">Evidence <span style="text-transform:none;letter-spacing:0">— every row expands to raw transactions</span></div>
+        <div class="ev"><span class="ev-n">Value conservation</span><span class="ev-v">94% · 31 txns <span class="ev-x">▸</span></span></div>
+        <div class="ev"><span class="ev-n">Cycle detected</span><span class="ev-v">length 3 · 2 cycles <span class="ev-x">▸</span></span></div>
+        <div class="ev"><span class="ev-n">Account age</span><span class="ev-v">2 members &lt; 11 days <span class="ev-x">▸</span></span></div>
+        <div class="ev"><span class="ev-n">Round amounts</span><span class="ev-v">71% of transfers <span class="ev-x">▸</span></span></div>
+        <div class="ev"><span class="ev-n">Cross-bank hops</span><span class="ev-v">3 banks <span class="ev-x">▸</span></span></div>
+        <div class="ev"><span class="ev-n">Shared device (identity graph)</span><span class="ev-v">4 members · d41a… <span class="ev-x">▸</span></span></div>
+        <div class="ev"><span class="ev-n">Geographic dispersion</span><span class="ev-v">3.1σ above peer clusters <span class="ev-x">▸</span></span></div>
+      </div>
+
+      <div class="case-sec">
+        <div class="case-k">Members <span style="text-transform:none;letter-spacing:0">— individually droppable</span></div>
+        <div class="mem"><span class="mem-id">A7734</span><span class="mem-r">origin</span><span class="mem-c">0.94</span><span class="ev-x">keep · open ↗</span></div>
+        <div class="mem"><span class="mem-id">A9902</span><span class="mem-r">collector</span><span class="mem-c">0.91</span><span class="ev-x">keep · open ↗</span></div>
+        <div class="mem"><span class="mem-id">A2210</span><span class="mem-r">intermediary</span><span class="mem-c">0.88</span><span class="ev-x">keep · open ↗</span></div>
+        <div class="mem"><span class="mem-id">A3391</span><span class="mem-r">intermediary</span><span class="mem-c">0.86</span><span class="ev-x">keep · open ↗</span></div>
+        <div class="mem lowconf"><span class="mem-id">A5567</span><span class="mem-r">intermediary</span><span class="mem-c">0.41</span><span>low confidence — review before confirming</span></div>
+      </div>
+
+      <div class="case-sec">
+        <div class="case-k">Related</div>
+        <div>CASE-1904 · <span style="color:var(--ok)">confirmed ring</span> · 12 Aug · shares device fingerprint d41a…</div>
+      </div>
+
+      <div class="case-sec">
+        <div class="case-k">Recommended actions <span style="text-transform:none;letter-spacing:0">— pre-checked, editable, executed on approval</span></div>
+        <div class="mem"><span>☑</span><span>Hold payouts — 5 accounts</span></div>
+        <div class="mem"><span>☑</span><span>Step-up authentication — 2 accounts</span></div>
+        <div class="mem"><span>☑</span><span>Watchlist — 2 accounts</span></div>
+        <div class="mem"><span>☐</span><span>Draft STR narrative — A7734</span><span class="btn" style="margin-left:auto">Approve batch</span></div>
+      </div>
+
+      <div class="case-sec">
+        <div class="case-k">Timeline <span style="text-transform:none;letter-spacing:0">— immutable, append-only</span></div>
+        <div style="color:var(--muted)">14:22 detected · 14:22 evidence built · 14:23 narrated · 14:23 queued rank 1</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="col">
+    <h4>Five properties that make it work</h4>
+    <ol>
+      <li><strong>Narrative first, graph collapsed by default.</strong> Analysts think in stories and write dispositions in prose. The network diagram is a supporting exhibit, not the interface. This is the opposite of what most implementations build.</li>
+      <li><strong>Every claim expands to raw rows.</strong> Trust in an automated case comes from one-click verifiability. It also <em>structurally</em> prevents fabrication: the narrative may only assert what an evidence object contains, and every evidence object renders as a table.</li>
+      <li><strong>Per-member confidence, individually droppable.</strong> Lets the analyst confirm seven of nine rather than all-or-nothing — and produces the partial-confirmation label, which is the highest-value training signal in the system.</li>
+      <li><strong>"Why this fired now"</strong> answers the first question every analyst asks, before they ask it.</li>
+      <li><strong>Related cases</strong> is institutional memory as a feature — the thing senior analysts have and juniors do not.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <div class="col">
+    <span class="h2num">05</span>
+    <h2>Geographic and corridor intelligence</h2>
+    <p class="deck">Geography earns its place in exactly three ways. Everything else is a population-density map with extra steps.</p>
+
+    <div class="note warn">
+      <span class="note-tag">The discipline that makes this honest</span>
+      <p>A raw fraud heatmap plots where people live. <strong>Any geographic view must be normalised by legitimate transaction volume</strong>, or it is measuring population, not risk. State this in the interface, not just the README — it is one of the clearest competence signals available in this whole project.</p>
+    </div>
+
+    <h3>(a) Dispersion as a ring-cohesion feature</h3>
+    <p>A genuine ring is often geographically implausible <em>as a group</em>: nine accounts transacting heavily together whose registered locations are scattered nationally with no commercial relationship to explain it. The opposite tail is equally suspicious — forty "unrelated" accounts within two hundred metres is a farm. Both extremes signal; the middle is normal. So the feature is not distance but <strong>dispersion relative to what the cluster's activity implies</strong>, scored against peer clusters of similar size and type.</p>
+
+    <h3>(b) Impossible travel</h3>
+    <p>The same card fingerprint transacting at merchants 900 km apart twenty minutes apart. Directly computable wherever coordinates and timestamps exist, and unusually valuable because it produces <strong>hard evidence rather than a soft score</strong> — an analyst can act on it without interpretation.</p>
+
+    <h3>(c) Corridor flow — the right map for money movement</h3>
+    <p>For account-to-account laundering, geography is not pin-drops. It is <strong>corridors</strong>: bank-to-bank and currency-to-currency paths. Layering is <em>defined</em> by moving value across institutional and jurisdictional boundaries to break the trail. The correct visualisation is therefore a flow diagram over institutions, with the case's own path highlighted against normal corridor volume.</p>
+  </div>
+
+  <figure class="fig">
+    <div class="figbox">
+      <svg viewBox="0 0 720 230" role="img" aria-label="Corridor view: value leaves bank 010, splits across banks 032, 047 and 018 in a second layer, reconverges at bank 010, with the flagged path highlighted against normal corridor volume.">
+        <defs>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" class="em-f"/>
+          </marker>
+          <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="currentColor"/>
+          </marker>
+        </defs>
+        <text x="12" y="18" class="lbl-s">CORRIDOR VIEW — value path across institutions</text>
+
+        <rect x="20" y="92" width="86" height="40" class="panel" stroke-width="1.2"/>
+        <text x="63" y="110" class="lbl" text-anchor="middle">BANK 010</text>
+        <text x="63" y="125" class="lbl-s" text-anchor="middle">origin</text>
+
+        <rect x="250" y="30" width="86" height="36" class="panel" stroke-width="1.2"/>
+        <text x="293" y="53" class="lbl-s" text-anchor="middle">BANK 032</text>
+        <rect x="250" y="94" width="86" height="36" class="panel" stroke-width="1.2"/>
+        <text x="293" y="117" class="lbl-s" text-anchor="middle">BANK 047</text>
+        <rect x="250" y="158" width="86" height="36" class="panel" stroke-width="1.2"/>
+        <text x="293" y="181" class="lbl-s" text-anchor="middle">BANK 018</text>
+
+        <rect x="470" y="92" width="86" height="40" class="panel" stroke-width="1.2"/>
+        <text x="513" y="110" class="lbl" text-anchor="middle">BANK 010</text>
+        <text x="513" y="125" class="lbl-s" text-anchor="middle">returns</text>
+
+        <path d="M106 106 C 180 90, 200 52, 246 48" fill="none" class="em" stroke-width="2.2" marker-end="url(#ar3)"/>
+        <path d="M106 112 C 180 112, 200 112, 246 112" fill="none" class="em" stroke-width="2.8" marker-end="url(#ar3)"/>
+        <path d="M106 118 C 180 134, 200 172, 246 176" fill="none" class="em" stroke-width="1.6" marker-end="url(#ar3)"/>
+
+        <path d="M336 48 C 390 52, 410 90, 466 106" fill="none" class="em" stroke-width="2.2" marker-end="url(#ar3)"/>
+        <path d="M336 112 C 390 112, 410 112, 466 112" fill="none" class="em" stroke-width="2.8" marker-end="url(#ar3)"/>
+        <path d="M336 176 C 390 172, 410 134, 466 118" fill="none" class="em" stroke-width="1.6" marker-end="url(#ar3)"/>
+
+        <line x1="20" y1="212" x2="60" y2="212" class="em" stroke-width="2.4"/>
+        <text x="68" y="216" class="lbl-s">flagged path · stroke width = value</text>
+        <line x1="300" y1="212" x2="340" y2="212" stroke="currentColor" stroke-width="1" opacity=".35"/>
+        <text x="348" y="216" class="lbl-s">normal corridor volume (baseline)</text>
+
+        <text x="600" y="106" class="lbl-a">94%</text>
+        <text x="600" y="122" class="lbl-s">conserved</text>
+      </svg>
+    </div>
+    <figcaption>Split, cross three institutions, reconverge at origin. The shape is the evidence; the corridor view is what makes it legible in one glance.</figcaption>
+  </figure>
+
+  <div class="col">
+    <h4>Three views to build</h4>
+    <div class="tw">
+      <table>
+        <thead><tr><th>View</th><th>Data that supports it</th><th>What it answers</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Corridor</strong></td><td>Bank IDs + currencies (AMLworld)</td><td>Where does value cross institutional boundaries, and does this case's path deviate from normal corridor volume?</td></tr>
+          <tr><td><strong>Geospatial</strong></td><td>Real coordinates: <code>lat</code>, <code>long</code>, <code>merch_lat</code>, <code>merch_long</code> (Sparkov)</td><td>Cardholder-to-merchant arcs, impossible-travel pairs, volume-normalised hotspots</td></tr>
+          <tr><td><strong>Case-local strip</strong></td><td>Either, scoped to one ring</td><td>Does this cluster's footprint make commercial sense? Sits inside the case file.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The case-local strip is the one that matters most for the workflow, because it answers a question the analyst is already asking at exactly the moment they ask it. The two global views are for the risk lead, not the case worker.</p>
+
+    <div class="note crit">
+      <span class="note-tag">Do not fake an India map</span>
+      <p>AMLworld bank identifiers are numeric with no country. Sparkov geography is United States. You <em>could</em> map bank IDs onto Indian cities to render a familiar-looking map — <strong>don't.</strong> A reviewer who spots a fabricated India map will discount every other number in the submission, and that is a fair response. Show the real corridor view and say plainly: <em>"these are dataset bank identifiers; in production they are Indian bank BINs and IFSC prefixes, and this becomes an India map with no change to the logic."</em> The honest version is the stronger version.</p>
+    </div>
+
+    <h4>Implementation note</h4>
+    <p>No external map tiles — the artifact CSP blocks them, and an offline-capable demo is worth more than pretty basemaps. Use an inline SVG projection over a bundled simplified geometry, or plot on a plain graticule. Keep it light; the corridor view carries most of the analytical weight anyway.</p>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <div class="col">
+    <span class="h2num">06</span>
+    <h2>Workflow fit</h2>
+    <p class="deck">Augment the job that exists. Do not invent a new one.</p>
+
+    <h3>The analyst's day, before</h3>
+    <p>Priya opens a queue of 340 transaction alerts. She works one: admin panel, account lookup, second tab for the merchant, a query for the last ninety days. The beneficiary account looks familiar; she searches Slack, finds a colleague flagged something similar three weeks ago, pulls that case, cross-references devices in a spreadsheet. Ninety minutes later she concludes it is part of something larger — but she has no way to enumerate the rest, so she blocks the one account she can prove. <strong>The ring survives, minus one node, and re-forms within a week.</strong></p>
+
+    <h3>The analyst's day, after</h3>
+    <p>Priya opens a queue of 14 ranked cases. She reads the top brief. She clicks <em>94% returns to origin</em> and sees the 31 underlying transactions. She expands the graph, agrees with the shape, drops two members she judges to be genuine counterparties caught in the net, and confirms the rest. She approves the recommended action batch.</p>
+    <p><strong>Eleven minutes. Seven accounts actioned, not one. Two negative labels and seven positive ones recorded.</strong></p>
+    <p>The difference is not that the machine was smarter than Priya. It is that her ninety minutes of assembly happened before she sat down — and the thing she previously <em>could not do at all</em>, enumerate the whole ring, was done for her.</p>
+
+    <h3>Seven integration commitments</h3>
+    <ol>
+      <li><strong>Do not build a new destination.</strong> In production, render into the queue they already open, or push cases into the existing case-management system by API. For the buildathon, build the standalone console but make every entity a deep link outward — the gesture reads correctly.</li>
+      <li><strong>Never make them retype an identifier.</strong> Everything is copyable and linked. This one detail is most of what "fits my workflow" means in practice.</li>
+      <li><strong>The system proposes; the human disposes.</strong> Only reversible, low-severity actions run autonomously. Anything touching money or a merchant relationship is proposed as a pre-checked batch and executed on approval.</li>
+      <li><strong>Batch execution is where the time is actually saved.</strong> Confirming a ring today means forty manual operations in an admin panel. One approved batch replacing forty manual actions is a larger real-world win than the detection itself — and it is unglamorous enough that most submissions will not build it.</li>
+      <li><strong>The tool must be able to say "I don't know."</strong> Low-confidence candidates go to a separate, clearly labelled lane. A system that presents everything with uniform confidence teaches analysts to distrust all of it.</li>
+      <li><strong>Disposition must cost under ten seconds.</strong> Three buttons, one-click reason code, keyboard shortcuts. If disposition is a form, the label loop dies — and the label loop is the entire long-term value.</li>
+      <li><strong>Escalate on a ladder, not a switch.</strong> Watch → step-up auth → hold payout → block. v1 reaches only the lowest rungs on its own.</li>
+    </ol>
+
+    <div class="note">
+      <span class="note-tag">Why autonomy is deliberately reduced here</span>
+      <p>The predecessor system rerouted payment traffic autonomously, which was correct: a bad reroute costs a few basis points of success rate and is instantly reversible. Auto-freezing a merchant's funds on an unsupervised clustering signal is a categorically different error with an asymmetric cost. Keeping the "knowing when not to act" thesis while <em>lowering</em> the autonomy ceiling is the correct adaptation, and it should be argued explicitly rather than left to look like a missing feature.</p>
+    </div>
+
+    <h3>Removing the skill floor</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Skill the job demands today</th><th>Replaced by</th></tr></thead>
+        <tbody>
+          <tr><td>SQL and query writing</td><td>Pre-assembled evidence. Nobody writes a query.</td></tr>
+          <tr><td>Graph literacy</td><td>Named typology plus a plain-language explanation of what the pattern means and why it is suspicious, inline and expandable. A new analyst on day three can work the queue.</td></tr>
+          <tr><td>Institutional memory</td><td>Related-case lookup: has any member been seen before, in what case, with what verdict.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>One addition that is cheap and rarely built: <strong>a consistency check.</strong> Because dispositions are structured, the system can surface <em>"you dismissed a near-identical pattern last Tuesday and confirmed this one today — reconcile?"</em> That levels the whole team toward its own best judgment, and turns the label store into a training aid for humans as well as for models.</p>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <div class="col">
+    <span class="h2num">07</span>
+    <h2>The learning loop</h2>
+    <p class="deck">Every alert produces a labelled example. This is legitimate to claim only if the architecture actually does it.</p>
+
+    <p>Each alert writes an <strong>immutable case record</strong> at alert time containing the feature vector exactly as computed, the subgraph snapshot, the detector version and parameters, and — once rendered — the analyst's verdict, timestamp and reason code.</p>
+  </div>
+
+  <figure class="fig">
+    <div class="figbox">
+      <svg viewBox="0 0 720 250" role="img" aria-label="Detector output splits into a ranked queue and a small random control arm; both flow to analyst review, whose verdicts write to a point-in-time label store that trains a re-ranker feeding back into scoring.">
+        <defs>
+          <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="currentColor"/>
+          </marker>
+          <marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" class="em-f"/>
+          </marker>
+        </defs>
+
+        <rect x="10" y="86" width="104" height="48" class="panel" stroke-width="1"/>
+        <text x="62" y="108" class="lbl" text-anchor="middle">Candidates</text>
+        <text x="62" y="124" class="lbl-s" text-anchor="middle">scored</text>
+
+        <rect x="164" y="42" width="118" height="46" class="panel" stroke-width="1"/>
+        <text x="223" y="63" class="lbl" text-anchor="middle">Ranked queue</text>
+        <text x="223" y="79" class="lbl-s" text-anchor="middle">top-k by score</text>
+
+        <rect x="164" y="132" width="118" height="46" class="panel-2" stroke-width="1"/>
+        <text x="223" y="153" class="lbl-a" text-anchor="middle">Control arm</text>
+        <text x="223" y="169" class="lbl-s" text-anchor="middle">random unflagged</text>
+
+        <rect x="332" y="86" width="112" height="48" class="panel" stroke-width="1"/>
+        <text x="388" y="108" class="lbl" text-anchor="middle">Analyst</text>
+        <text x="388" y="124" class="lbl-s" text-anchor="middle">verdict + reason</text>
+
+        <rect x="494" y="86" width="122" height="48" class="panel" stroke-width="1"/>
+        <text x="555" y="105" class="lbl" text-anchor="middle">Label store</text>
+        <text x="555" y="121" class="lbl-s" text-anchor="middle">point-in-time</text>
+
+        <rect x="494" y="176" width="122" height="44" class="panel" stroke-width="1"/>
+        <text x="555" y="195" class="lbl" text-anchor="middle">Re-ranker</text>
+        <text x="555" y="211" class="lbl-s" text-anchor="middle">v2 · gradient boosted</text>
+
+        <line x1="114" y1="100" x2="160" y2="70" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar5)"/>
+        <line x1="114" y1="120" x2="160" y2="152" class="em" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar6)"/>
+        <line x1="282" y1="68" x2="328" y2="98" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar5)"/>
+        <line x1="282" y1="152" x2="328" y2="124" class="em" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar6)"/>
+        <line x1="444" y1="110" x2="490" y2="110" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar5)"/>
+        <line x1="555" y1="134" x2="555" y2="172" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar5)"/>
+        <path d="M494 198 L 62 198 L 62 138" fill="none" class="em" stroke-width="1.4" marker-end="url(#ar6)"/>
+        <text x="290" y="240" class="lbl-a" text-anchor="middle">the control arm is what makes recall estimable and keeps the loop from poisoning itself</text>
+      </svg>
+    </div>
+    <figcaption>The flywheel. Without the dashed branch, the system trains its successor to reproduce its own blind spots.</figcaption>
+  </figure>
+
+  <div class="col">
+    <h4>Five details that separate this from a claim</h4>
+
+    <p><strong>Point-in-time correctness.</strong> Features are snapshotted at scoring time and never recomputed. Recompute in six months and the account's degree now includes edges that did not exist when it was flagged — the classic and fatal leakage in fraud ML. Cheap to build now, impossible to retrofit.</p>
+
+    <p><strong>A verdict taxonomy, not a thumbs-up.</strong> <code>confirmed_ring</code> · <code>confirmed_partial</code> · <code>not_a_ring</code> · <code>benign_explained</code> · <code>insufficient_evidence</code>. Partial confirmation is the highest-value label in the system: it yields node-level positives <em>and</em> negatives inside the same subgraph, which is exactly the supervision a node classifier needs. And <code>benign_explained</code> with a reason code is what eventually teaches the model the legitimate structures that look like rings — which is where all the false positives live.</p>
+
+    <p><strong>Label the ring and its members.</strong> Store the ring-level verdict plus per-member inclusion flags, so a later model can be trained at either granularity without re-labelling.</p>
+
+    <p><strong>Control-arm sampling.</strong> If you only ever label what the detector flags, the next model faithfully reproduces the current detector's blind spots, and production recall becomes unmeasurable because you never look at what you did not flag. Routing a small random sample of unflagged clusters into the same queue costs a config flag and a few percent of analyst time, and buys negatives drawn from the true distribution.</p>
+
+    <p><strong>Version stamping.</strong> Detector version on every case, so labels stay interpretable after thresholds move.</p>
+
+    <h4>The maturation path, stated plainly</h4>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Stage</th><th>What it is</th><th>Prerequisite</th></tr></thead>
+        <tbody>
+          <tr><td class="num">v1</td><td>Unsupervised clustering + motif matching + hand-designed features + transparent rule ensemble. <strong>No trained model.</strong></td><td>None</td></tr>
+          <tr><td class="num">v2</td><td>Gradient-boosted re-ranker over the same point-in-time features, predicting P(analyst confirms). Reorders the queue. No graph learning.</td><td>A few thousand verdicts</td></tr>
+          <tr><td class="num">v3</td><td>Graph neural network over confirmed subgraphs.</td><td>Enough confirmed rings</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="kicker">You cannot train a supervised ring detector before you have confirmed rings. That is precisely why v1 must be unsupervised, and precisely why the label pipeline is the actual product.</p>
+
+    <p>Which leads to the strategic point worth making out loud: <strong>the algorithm is not the moat.</strong> Leiden and Louvain are publicly available and anyone can run them. A payments company's proprietary corpus of confirmed rings, with point-in-time features attached, is not reproducible by a competitor. That is the answer to "why should we care."</p>
+
+    <div class="note">
+      <span class="note-tag">Demonstrate the loop closing — do not skip this</span>
+      <p>Because the primary dataset ships ground truth, you can <strong>simulate the analyst</strong>: replay N cases, use ground-truth pattern labels as stand-in verdicts, train the re-ranker on the first half of the timeline, and measure precision@20 on the second half, before versus after. This converts <em>"it could train a model later"</em> from a slide bullet into a measured result inside the pitch video. It is roughly one day of work on top of infrastructure needed anyway, and it is the single highest-leverage item in the project.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <div class="col">
+    <span class="h2num">08</span>
+    <h2>Data strategy</h2>
+    <p class="deck">The track requires measured precision and recall on a held-out test set. That makes dataset choice the most load-bearing decision in the project.</p>
+
+    <p>The critical distinction: most fraud datasets label <em>transactions</em>. This product outputs <em>rings</em>. Reporting transaction-level metrics for a ring-level product is a visible mismatch. Only one public dataset resolves it.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Dataset</th><th>Graph?</th><th>Ground-truth rings?</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>IBM AMLworld</strong><br><span class="chip">HI-Small</span></td>
+          <td>Native — every row is an account-to-account edge</td>
+          <td><strong>Yes</strong> — labelled typologies</td>
+          <td><strong>Primary.</strong> 5.08M transactions, 515K accounts, 91 MB, illicit ratio 1 in 981. NeurIPS 2023 benchmark, CDLA-Sharing licence.</td>
+        </tr>
+        <tr>
+          <td><strong>IEEE-CIS</strong></td>
+          <td>Latent but real — card fingerprint, device, email, address</td>
+          <td>No — per-transaction only</td>
+          <td><strong>Secondary.</strong> 590,540 <em>real</em> card-not-present transactions. Report cluster fraud-lift, not ring precision.</td>
+        </tr>
+        <tr>
+          <td><strong>Sparkov</strong></td>
+          <td>Bipartite card↔merchant, dense (800 merchants)</td>
+          <td>No</td>
+          <td><strong>Geography surface.</strong> The only candidate with real coordinates. 1,296,675 rows.</td>
+        </tr>
+        <tr>
+          <td>Elliptic / Elliptic++</td>
+          <td>Yes, real</td>
+          <td>No</td>
+          <td><span class="chip cut">Rejected</span> Bitcoin, not payments; anonymised features make analyst-readable evidence impossible; published criticism of its opacity.</td>
+        </tr>
+        <tr>
+          <td>PaySim</td>
+          <td>Nominal — destinations barely reused</td>
+          <td>No</td>
+          <td><span class="chip cut">Rejected</span> Weak graph plus a well-known leak that trivialises the task.</td>
+        </tr>
+        <tr>
+          <td>ULB <code>creditcard.csv</code></td>
+          <td>None — PCA components only</td>
+          <td>No</td>
+          <td><span class="chip cut">Rejected</span> No entities, therefore no graph. Also the dataset most student submissions use.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <h3>Why AMLworld is decisive</h3>
+    <p>Confirmed schema: <code>Timestamp</code>, <code>From Bank</code>, <code>Account</code>, <code>To Bank</code>, <code>Account.1</code>, <code>Amount Received</code>, <code>Receiving Currency</code>, <code>Amount Paid</code>, <code>Payment Currency</code>, <code>Payment Format</code>, <code>Is Laundering</code>.</p>
+    <p>Beyond the per-transaction flag, it ships a <strong>separate pattern-label file grouping transactions into labelled ring typologies</strong>: fan-out, fan-in, cycle, random, bipartite, stack, scatter-gather, gather-scatter. Published counts for the large variant run to roughly 250–300 instances per typology.</p>
+    <p>It also comes with <strong>published baselines to position against</strong> — a PNA graph network reaches about 59.7% minority-class F1 on the medium variant; boosted trees with graph-feature preprocessing reach about 42.7% on the large one. Being able to say <em>"the published GNN baseline achieves X, our unsupervised v1 achieves Y, and here is why that is the correct v1"</em> is far more credible than a number in a vacuum.</p>
+
+    <h4>Its two honest weaknesses, to be stated in the README rather than discovered by a reviewer</h4>
+    <ol>
+      <li>It is synthetic. But it is <em>the</em> peer-reviewed synthetic benchmark for this problem, which is categorically different from a self-written simulator.</li>
+      <li>It is bank-transfer shaped, not card-gateway shaped. Mitigated structurally by the normalised edge schema and a second adapter onto real card data.</li>
+    </ol>
+
+    <p><strong>Recommended combination:</strong> AMLworld HI-Small as the primary benchmark, IEEE-CIS as the real-card-payments second surface, Sparkov as the geography surface. Three datasets, three honest metric types, one engine — which is what makes it read as a system rather than a notebook. Plus an injected-ring harness for live demo control, clearly labelled in the interface and excluded from all reported metrics.</p>
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <div class="col">
+    <span class="h2num">09</span>
+    <h2>Metrics</h2>
+    <p class="deck">The track's stated bar is honest metrics including false-positive cost. That is an unusual scoring environment, and it suits this project.</p>
+
+    <h4>On AMLworld — ring-level, against ground truth</h4>
+    <ul>
+      <li><strong>Ring precision@k</strong> — of the top 20 and 50 flagged clusters, what share contain at least one ground-truth pattern. The headline, because it is what an ops team actually experiences: hit rate on the queue they work.</li>
+      <li><strong>Ring recall</strong> — of labelled patterns in the window, how many are covered by at least one flagged cluster.</li>
+      <li><strong>Per-typology recall, including the misses.</strong> Fan-out, fan-in and cycle should be detectable; <em>random</em> and <em>stack</em> will be much harder. Publishing the table that shows what the detector cannot see is a large credibility win under this specific bar.</li>
+      <li><strong>Transaction-level P/R/F1</strong> on the laundering flag for flagged clusters' transactions — directly comparable to the published baselines, with the honest caveat that unsupervised clustering will lose to a supervised GNN and that this is expected.</li>
+    </ul>
+
+    <h4>Operational, and explicitly requested by the track</h4>
+    <ul>
+      <li><strong>False-positive cost</strong> — clean accounts pulled into review, expressed as <em>analyst-hours per confirmed ring</em> at an assumed review time. This is the number that makes a risk manager trust the system.</li>
+      <li><strong>Alert-volume compression</strong> — accounts under review versus a naive per-transaction threshold baseline, <em>at matched recall</em>. This is the "so what."</li>
+      <li><strong>Re-ranker lift</strong> — precision@20 before and after training on simulated verdicts.</li>
+    </ul>
+
+    <div class="note warn">
+      <span class="note-tag">Include baselines or the numbers mean nothing</span>
+      <p>Compare against random cluster selection, a per-account velocity/amount threshold rule, and degree-only ranking. <code>precision@20 = 0.35</code> alone is uninterpretable. <code>0.35 versus 0.06 random versus 0.14 threshold-rule</code> is a result.</p>
+    </div>
+
+    <h4>Instrumented in the product itself, not only the eval harness</h4>
+    <ul>
+      <li>Median time-to-disposition per case</li>
+      <li><strong>Accounts per analyst decision</strong> — the leverage number, and the headline for the pitch</li>
+      <li>Detection latency: first suspicious edge to case opened</li>
+      <li>Queue depth and age of oldest unworked case</li>
+      <li>Confirm rate by queue-rank decile — a live precision proxy. If decile one and decile five confirm at the same rate, the ranking is doing nothing.</li>
+    </ul>
+
+    <div class="note">
+      <span class="note-tag">Expectation setting</span>
+      <p>Expect modest ring recall from unsupervised detection — plausibly 20–50% on the structural typologies — and decent-but-not-remarkable precision@20. <strong>Do not aim for or claim 90%+.</strong> Under a bar that explicitly rewards honest false-positive accounting, a modest number with a per-typology breakdown and three baselines will score better than an inflated headline.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="col">
+    <span class="h2num">10</span>
+    <h2>Failure modes designed against</h2>
+    <p class="deck">Naming these in the repository is itself a competence signal. Each one is a real way this class of system dies.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Failure</th><th>Mechanism</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Hub explosion</strong></td><td>Payroll accounts, popular merchants, shared NAT devices connect everything</td><td>Degree percentile + counterparty entropy; exclude as edges, keep as context</td></tr>
+          <tr><td><strong>Giant-candidate trap</strong></td><td>A 400-node cluster is nearly always a hub artefact</td><td>Cap candidate size; split rather than emit</td></tr>
+          <tr><td><strong>Alert fatigue</strong></td><td>One cause generates many surface alerts; ring membership drifts and re-fires</td><td>Capacity-based queue + Jaccard merge of re-detected rings into the existing case</td></tr>
+          <tr><td><strong>Loop poisoning</strong></td><td>Training only on what you flagged reproduces your blind spots</td><td>Control-arm sampling of unflagged clusters</td></tr>
+          <tr><td><strong>Rubber-stamping</strong></td><td>Confirm rate approaching 100% means blind trust, not accuracy</td><td>Instrument confirm rate; control arm partly exists to detect this</td></tr>
+          <tr><td><strong>Concept drift</strong></td><td>Retuning thresholds silently changes what old labels meant</td><td>Detector version stamped on every case record</td></tr>
+          <tr><td><strong>Geographic theatre</strong></td><td>An un-normalised heatmap plots population, not risk</td><td>Normalise by legitimate transaction volume; state it in the interface</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <div class="col">
+    <span class="h2num">11</span>
+    <h2>Build plan</h2>
+    <p class="deck">Roughly two weeks. Achievable because the detector, the evidence-narration split, the case lifecycle and the streaming spine already exist in the predecessor codebase.</p>
+
+    <div class="note warn">
+      <span class="note-tag">Confirm this first</span>
+      <p>The programme page states no explicit submission deadline — only that the internship starts from September. <strong>Confirm the actual date before committing to this schedule.</strong> Budget 1.5 days for the graded deliverables: public repository, five-minute pitch video, architecture writeup. Those are evaluated artifacts, not overhead.</p>
+    </div>
+  </div>
+
+  <div class="tl">
+    <div class="tl-row gate">
+      <div class="tl-when">Day 1 · AM</div>
+      <div class="tl-what">
+        <h4>Risk gate — verify the pattern-label format</h4>
+        <p>Download HI-Small (91 MB) and open the patterns file. Its exact block structure is not documented in the paper. <strong>This is the project's single largest unknown and must be resolved on day one, not day six.</strong> Fallback if it does not map cleanly to transaction rows: derive rings from laundering-flagged transactions via connected components on the illicit subgraph. Weaker, but survivable. Know the fallback before you need it.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-when">Days 1–3</div>
+      <div class="tl-what">
+        <h4>Replay spine</h4>
+        <p>Dataset adapter emitting timestamp-ordered batches in the normalised edge schema. Sliding-window graph builder with incremental add and expire. Keep the existing SSE loop and tick pacing.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-when">Days 3–5</div>
+      <div class="tl-what">
+        <h4>Detection</h4>
+        <p>Seed-and-expand funnel. Leiden on neighbourhoods plus motif matching. Hub suppression. Feature computation reusing the existing baseline machinery for velocity signals. Cluster on an hourly cadence, never per tick.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-when">Days 5–7</div>
+      <div class="tl-what">
+        <h4>Case layer</h4>
+        <p>Port the incident lifecycle to cases. Correlation by member overlap. Port the narration stage with a risk-analyst system prompt, strict JSON contract and template fallback intact. Largely a careful adaptation of code that already works.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-when">Days 7–9</div>
+      <div class="tl-what">
+        <h4>Feedback loop and re-ranker — protect this time</h4>
+        <p>Case store with point-in-time features. Verdict endpoints. Control-arm sampling. The simulated-analyst experiment and the gradient-boosted re-ranker. This is the differentiator, and it is the phase most likely to be squeezed by frontend work — which is why it is scheduled before the frontend.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-when">Days 9–11</div>
+      <div class="tl-what">
+        <h4>Console</h4>
+        <p>Ranked case queue, case file, subgraph view, verdict buttons, batch approval, corridor strip. <strong>Resist the force-directed hairball</strong> — render only the ring itself, capped at ~40 nodes, with a deterministic layout, and lean on good tables for everything else. A bad graph visualisation is worse than none, and this is where scope creep will eat days.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-when">Days 11–13</div>
+      <div class="tl-what">
+        <h4>Evaluation harness, README, video</h4>
+        <p>Metrics with baselines and the per-typology table. Geography surface on Sparkov and the IEEE-CIS second surface if time permits.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <h4>Cut list, in order</h4>
+    <p>
+      <span class="chip cut">cut first</span> IEEE-CIS second surface &nbsp;→&nbsp;
+      <span class="chip cut">then</span> geospatial view (keep the corridor strip) &nbsp;→&nbsp;
+      <span class="chip cut">then</span> graduated action ladder beyond watchlist
+    </p>
+    <p><strong>Never cut the feedback loop.</strong> It is the difference between a detector and a product with a future.</p>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="col">
+    <span class="h2num">12</span>
+    <h2>What is real and what is simulated</h2>
+    <p class="deck">State this plainly in the README. A clean seam labelled "production plugs in here" reads as competence; a faked integration reads as the opposite.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4><span class="chip build">Built</span></h4>
+        <ul style="margin-bottom:0">
+          <li>Graph construction over a real public dataset</li>
+          <li>Seed-and-expand candidate generation</li>
+          <li>Community detection and motif matching</li>
+          <li>Risk scoring and ranked queue</li>
+          <li>Case file, evidence, narration</li>
+          <li>Disposition loop with reason codes</li>
+          <li>Point-in-time label store</li>
+          <li>Re-ranker and the closing-loop experiment</li>
+          <li>Evaluation harness with baselines</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4><span class="chip desc">Described, not built</span></h4>
+        <ul style="margin-bottom:0">
+          <li>Kafka ingest from a live transaction topic</li>
+          <li>Deep links into an internal admin panel</li>
+          <li>Push into an existing case-management system</li>
+          <li>Real execution of payout holds and step-up auth</li>
+          <li>Filing integration with the regulatory portal</li>
+        </ul>
+        <p style="margin-top:14px">Batch actions are simulated and labelled as such in the interface.</p>
+      </div>
+    </div>
+
+    <p>The predecessor README already handles this well — <em>"to point it at production, replace the simulator step with a reader over the real transaction topic emitting the same row shape."</em> Keep that habit exactly.</p>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <div class="col">
+    <span class="h2num">13</span>
+    <h2>Demo script</h2>
+    <p class="deck">Five minutes, structured around an analyst and a clock — not around the algorithm.</p>
+
+    <ol>
+      <li><strong>The problem, in numbers.</strong> 340 transaction alerts, one analyst, ninety minutes per real investigation, and the ring survives.</li>
+      <li><strong>Open on the queue.</strong> Fourteen ranked cases, not 340 alerts. <em>"Same data. Different unit of work."</em></li>
+      <li><strong>Work the top case live.</strong> Read the brief, click one evidence row through to raw transactions, expand the graph, check the corridor strip, drop two members, confirm partial, approve the batch. Narrate the clock throughout.</li>
+      <li><strong>Show the loop closing.</strong> The simulated-analyst experiment: precision@20 before and after. <em>"Every disposition is a training label. This is the first model, trained on four hundred of them."</em></li>
+      <li><strong>The honest metrics slide.</strong> Per-typology recall including the misses, false-positive cost in analyst-hours, three baselines. <em>"Here is exactly what it sees and exactly what it doesn't."</em></li>
+      <li><strong>Close on the seven-day clock.</strong> The STR window, and the audit artifact that falls out of the ML architecture for free.</li>
+    </ol>
+
+    <p class="kicker">Lead with the workflow. The graph is the mechanism; the workflow is the value.</p>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <div class="col">
+    <span class="h2num">14</span>
+    <h2>Judgment signals</h2>
+    <p class="deck">What actually distinguishes a submission is not polish. It is the density of decisions that only someone who has thought hard about the problem would make.</p>
+
+    <p>Each of the following is a real design decision defended elsewhere in this document — not a trick. They are collected here so they can be pointed at deliberately in the repository and the video, because a reviewer skimming quickly will not otherwise find them.</p>
+
+    <ol class="sig">
+      <li><strong>Point-in-time feature snapshotting.</strong> Demonstrates awareness of temporal leakage — the failure that quietly invalidates most fraud ML.</li>
+      <li><strong>Control-arm sampling of unflagged clusters.</strong> Shows you understand that a feedback loop trained only on its own output has no estimable recall.</li>
+      <li><strong>Hub suppression by counterparty entropy.</strong> Names the actual failure mode of graph-based fraud detection rather than the textbook version.</li>
+      <li><strong>A ranked capacity queue instead of a score threshold.</strong> Shows you know how operations teams are actually staffed and run.</li>
+      <li><strong>Deliberately refusing to auto-block.</strong> Demonstrates understanding of asymmetric error cost, and reverses a prior design decision with an argument for why.</li>
+      <li><strong>Per-typology recall including what is missed.</strong> Publishing your own blind spots under a bar that rewards honesty.</li>
+      <li><strong>Baselines reported alongside the headline metric.</strong> The difference between a number and a result.</li>
+      <li><strong>Normalising geographic views by transaction volume.</strong> Refusing to ship a map that measures population.</li>
+      <li><strong>Not claiming a graph neural network</strong> — and explaining why v1 structurally cannot be supervised.</li>
+      <li><strong>A labelled production seam rather than a faked integration.</strong></li>
+      <li><strong>Naming the seven-working-day STR clock.</strong> Regulatory fluency in the jurisdiction the company actually operates in.</li>
+      <li><strong>Identifying partial confirmation as the highest-value label.</strong> A non-obvious observation about supervision that follows from thinking about the workflow, not the model.</li>
+    </ol>
+
+    <div class="note">
+      <span class="note-tag">Positioning</span>
+      <p>The company already operates an order-level fraud product for return-to-origin and chargeback risk. That is per-order, entity-level and merchant-scoped. This is network-level and platform-scoped, and the differentiating claim is structural: <strong>a gateway sits across thousands of merchants and can see the cluster hitting twelve of them at once; a per-merchant order scorer cannot.</strong> Make that claim. Do <em>not</em> claim they lack this capability internally — you cannot verify that, and claiming it is the fastest way to look naive.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
