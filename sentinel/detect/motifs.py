@@ -40,9 +40,20 @@ class Motifs:
     max_cycle_len: int = 0
     shortest_cycle: int = 0
     nodes_in_cycles: int = 0
+    # A cycle whose edges are chronologically ordered, so value could actually
+    # have travelled the loop. Structural cycles occur by chance constantly in a
+    # 244k-node graph; temporally valid ones do not.
+    n_temporal_cycles: int = 0
+    shortest_temporal_cycle: int = 0
+    nodes_in_temporal_cycles: int = 0
     # scatter-gather: A distributes to S, S reconverges on B
     scatter_gather: int = 0
     sg_pairs: list[tuple[int, int, int]] = field(default_factory=list)
+    # The reverse shape: many collect into one, which then disperses again.
+    gather_scatter: int = 0
+    # Pattern counts rather than only the maximum degree, matching GFP.
+    fan_out_count: int = 0
+    fan_in_count: int = 0
     # pass-through nodes are the mule signature
     n_passthrough: int = 0
     exact: bool = True
@@ -56,7 +67,13 @@ class Motifs:
             "max_cycle_len": self.max_cycle_len,
             "shortest_cycle": self.shortest_cycle,
             "nodes_in_cycles": self.nodes_in_cycles,
+            "n_temporal_cycles": self.n_temporal_cycles,
+            "shortest_temporal_cycle": self.shortest_temporal_cycle,
+            "nodes_in_temporal_cycles": self.nodes_in_temporal_cycles,
             "scatter_gather": self.scatter_gather,
+            "gather_scatter": self.gather_scatter,
+            "fan_out_count": self.fan_out_count,
+            "fan_in_count": self.fan_in_count,
             "n_passthrough": self.n_passthrough,
             "exact": self.exact,
         }
@@ -85,6 +102,57 @@ def find_cycles(G: nx.DiGraph, max_len: int = MAX_CYCLE_LEN,
         if len(out) >= limit:
             break
     return out
+
+
+def is_temporally_valid(G: nx.DiGraph, cycle: list[int]) -> bool:
+    """Could value actually have travelled this loop?
+
+    A cycle is temporally valid when each hop can occur after the previous one
+    arrived. Edges carry a window (first_t..last_t) because a pair may transact
+    several times, so the test asks whether *some* choice of transactions is
+    consistent, using the earliest feasible time at each step.
+
+    This is what separates a laundering loop from three unrelated payments that
+    happen to form a triangle.
+    """
+    n = len(cycle)
+    if n < 2:
+        return False
+    # Try each starting point: the loop is a cycle, so any hop may be first.
+    for start in range(n):
+        t = -1
+        ok = True
+        for i in range(n):
+            a = cycle[(start + i) % n]
+            b = cycle[(start + i + 1) % n]
+            e = G.get_edge_data(a, b)
+            if e is None:
+                ok = False
+                break
+            # Earliest transaction on this pair at or after t.
+            if e["last_t"] < t:
+                ok = False
+                break
+            t = max(t, e["first_t"])
+        if ok:
+            return True
+    return False
+
+
+def find_gather_scatter(G: nx.DiGraph, min_width: int = 2) -> int:
+    """Widest S -> A -> T where |S| and |T| both reach min_width.
+
+    The mirror of scatter-gather: many sources collect into one account which
+    then disperses again. GFP treats these as distinct features and so does
+    this, because they implicate different accounts as the controller.
+    """
+    best = 0
+    for a in G:
+        preds = [p for p in G.predecessors(a) if p != a]
+        succs = [s for s in G.successors(a) if s != a]
+        if len(preds) >= min_width and len(succs) >= min_width:
+            best = max(best, min(len(preds), len(succs)))
+    return best
 
 
 def find_scatter_gather(G: nx.DiGraph, min_width: int = 2) -> list[tuple[int, int, int]]:
@@ -143,7 +211,19 @@ def detect(edges) -> Motifs:
         m.shortest_cycle = min(lengths)
         m.nodes_in_cycles = len({n for c in cycles for n in c})
 
+        temporal = [c for c in cycles if is_temporally_valid(G, c)]
+        if temporal:
+            m.n_temporal_cycles = len(temporal)
+            m.shortest_temporal_cycle = min(len(c) for c in temporal)
+            m.nodes_in_temporal_cycles = len({n for c in temporal for n in c})
+
     sg = find_scatter_gather(G)
     m.sg_pairs = sg[:20]
     m.scatter_gather = max((w for _, _, w in sg), default=0)
+    m.gather_scatter = find_gather_scatter(G)
+
+    # Pattern counts: how many accounts act as a fan hub at all, not just the
+    # single largest. GFP reports these separately from max degree.
+    m.fan_out_count = sum(1 for n in G if out_deg.get(n, 0) >= 2)
+    m.fan_in_count = sum(1 for n in G if in_deg.get(n, 0) >= 2)
     return m

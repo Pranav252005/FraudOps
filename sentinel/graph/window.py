@@ -26,6 +26,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from sentinel.graph.stats import AccountStats
+
 # Pack an ordered pair into one int64 key. Node ids are int32, so the shift is
 # lossless and lets the aggregate live in a single flat dict.
 _SHIFT = 32
@@ -73,6 +75,11 @@ class WindowedGraph:
         self.out_adj: dict[int, set[int]] = defaultdict(set)
         self.in_adj: dict[int, set[int]] = defaultdict(set)
         self._pending: deque = deque()   # (t_end, arrays) awaiting expiry
+        # Per-account behavioural statistics. Deliberately NOT expired with the
+        # window: dormancy and lifetime velocity are only meaningful against an
+        # account's whole observed history, and re-deriving them from a 72h
+        # window would erase the signal they exist to capture.
+        self.account_stats: dict[int, AccountStats] = defaultdict(AccountStats)
         self.now: int = 0
         self.n_added = 0
         self.n_expired = 0
@@ -94,6 +101,15 @@ class WindowedGraph:
                     self.out_adj[s].add(d)
                     self.in_adj[d].add(s)
                 agg.add(int(ts[i]), float(amount[i]), int(lab[i]))
+                a_t, a_amt = int(ts[i]), float(amount[i])
+                so = self.account_stats[s]
+                if so.outflow.n == 0 and so.inflow.n == 0:
+                    so.quiet_before_first = a_t
+                so.add_out(a_amt, a_t)
+                sd = self.account_stats[d]
+                if sd.outflow.n == 0 and sd.inflow.n == 0:
+                    sd.quiet_before_first = a_t
+                sd.add_in(a_amt, a_t)
             self.n_added += len(batch)
             self._pending.append((batch.t_end, src, dst, amount, lab))
         self._expire()

@@ -24,13 +24,19 @@ from sentinel.detect.motifs import Motifs
 # drove the rank. The learned re-ranker replaces this in v2 -- it does not
 # replace the features.
 WEIGHTS = {
-    "cycle": 0.28,
-    "conservation": 0.22,
-    "scatter_gather": 0.16,
-    "passthrough": 0.12,
-    "cross_border": 0.10,
-    "burstiness": 0.07,
-    "round_amounts": 0.05,
+    # A temporally valid cycle is worth far more than a structural one: in a
+    # 244k-node graph, triangles occur by chance constantly, but triangles whose
+    # timestamps let value actually travel the loop do not.
+    "temporal_cycle": 0.26,
+    "cycle": 0.10,
+    "conservation": 0.18,
+    "scatter_gather": 0.12,
+    "gather_scatter": 0.06,
+    "fast_passthrough": 0.14,
+    "passthrough": 0.05,
+    "cross_border": 0.05,
+    "burstiness": 0.02,
+    "round_amounts": 0.02,
 }
 
 
@@ -52,9 +58,23 @@ class Features:
     has_cycle: bool = False
     shortest_cycle: int = 0
     cycle_coverage: float = 0.0       # share of nodes sitting on a cycle
+    has_temporal_cycle: bool = False
+    shortest_temporal_cycle: int = 0
+    temporal_cycle_coverage: float = 0.0
     scatter_gather_width: int = 0
+    gather_scatter_width: int = 0
+    fan_out_count: int = 0
+    fan_in_count: int = 0
     passthrough_ratio: float = 0.0
     max_fan: int = 0
+
+    # Behavioural family -- aggregated from per-account statistics. Absent
+    # entirely from v1, which modelled structure only.
+    fast_passthrough_ratio: float = 0.0   # share of members forwarding >=80% within 48h
+    median_passthrough_value: float = 0.0
+    median_dormancy_h: float = 0.0
+    max_amount_skew: float = 0.0
+    mean_velocity: float = 0.0
 
     # money
     inflow: float = 0.0               # value entering the candidate
@@ -129,9 +149,31 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
     f.has_cycle = motifs.n_cycles > 0
     f.shortest_cycle = motifs.shortest_cycle
     f.cycle_coverage = motifs.nodes_in_cycles / len(nodes) if nodes else 0.0
+    f.has_temporal_cycle = motifs.n_temporal_cycles > 0
+    f.shortest_temporal_cycle = motifs.shortest_temporal_cycle
+    f.temporal_cycle_coverage = (
+        motifs.nodes_in_temporal_cycles / len(nodes) if nodes else 0.0)
     f.scatter_gather_width = motifs.scatter_gather
+    f.gather_scatter_width = motifs.gather_scatter
+    f.fan_out_count = motifs.fan_out_count
+    f.fan_in_count = motifs.fan_in_count
     f.passthrough_ratio = motifs.n_passthrough / len(nodes)
     f.max_fan = max(motifs.max_out_degree, motifs.max_in_degree)
+
+    # Behavioural family, from the per-account statistics the graph maintains.
+    stats = getattr(graph, "account_stats", None)
+    if stats:
+        members = [stats[n] for n in nodes if n in stats]
+        if members:
+            import statistics as _st
+            f.fast_passthrough_ratio = (
+                sum(1 for a in members if a.is_fast_passthrough) / len(members))
+            f.median_passthrough_value = _st.median(
+                a.passthrough_value_ratio for a in members)
+            f.median_dormancy_h = _st.median(a.dormancy_hours for a in members)
+            f.max_amount_skew = max(
+                (abs(a.outflow.skewness) for a in members), default=0.0)
+            f.mean_velocity = _st.fmean(a.velocity for a in members)
 
     # Timing.
     if first_t is not None and last_t is not None:
@@ -162,13 +204,18 @@ def score(f: Features) -> tuple[float, dict[str, float]]:
     the labels the whole system depends on.
     """
     terms = {
-        # A short cycle covering much of the candidate is the strongest single
-        # structural signal available.
+        "temporal_cycle": (0.6 * f.temporal_cycle_coverage
+                           + 0.4 * (1.0 if 0 < f.shortest_temporal_cycle <= 4
+                                    else 0.0))
+        if f.has_temporal_cycle else 0.0,
         "cycle": (0.6 * f.cycle_coverage
                   + 0.4 * (1.0 if 0 < f.shortest_cycle <= 4 else 0.0))
         if f.has_cycle else 0.0,
         "conservation": f.conservation,
         "scatter_gather": _norm(f.scatter_gather_width, 5),
+        "gather_scatter": _norm(f.gather_scatter_width, 5),
+        # The industry mule rule, applied at candidate level.
+        "fast_passthrough": f.fast_passthrough_ratio,
         "passthrough": f.passthrough_ratio,
         "cross_border": _norm(max(0, f.n_countries - 1), 4),
         "burstiness": _norm(f.burstiness, 20),
