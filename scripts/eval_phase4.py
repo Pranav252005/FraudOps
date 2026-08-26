@@ -28,6 +28,7 @@ from sentinel.cases.store import CaseStore
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
+from sentinel.eval.bootstrap import paired_bootstrap_delta, ratio_of_sums
 from sentinel.graph.window import WindowedGraph
 from sentinel.learn.analyst import SimulatedAnalyst
 from sentinel.learn.reranker import Reranker, time_split
@@ -141,15 +142,23 @@ def main() -> None:
 
     tally = {"v1_score": {k: [0, 0] for k in KS},
              "reranker": {k: [0, 0] for k in KS}}
+    # One record per held-out cycle, for the bootstrap CI below. The
+    # resampling unit is the cycle, exactly as in scripts/eval_funnel.py.
+    cycle_records: list[dict] = []
     for cy in held:
         cands = cy["cands"]
         by_score = sorted(cands, key=lambda c: -c.score)
         by_model, _ = ranker.rank(cands, key=lambda c: c.features)
+        rec = {}
         for k in KS:
             for name, ordered in (("v1_score", by_score), ("reranker", by_model)):
                 top = ordered[:k]
-                tally[name][k][0] += sum(1 for c in top if c._is_hit)
+                hit = sum(1 for c in top if c._is_hit)
+                tally[name][k][0] += hit
                 tally[name][k][1] += len(top)
+                rec[f"{name}_hit_{k}"] = hit
+                rec[f"{name}_tot_{k}"] = len(top)
+        cycle_records.append(rec)
 
     print(f"\n{'ranking':<12}" + "".join(f"{'p@'+str(k):>10}" for k in KS))
     out = {}
@@ -169,11 +178,33 @@ def main() -> None:
         row += f"{(b/a if a else float('inf')):>9.2f}x"
     print(row)
 
+    # --- does the lift survive its own confidence interval? ---
+    # A point estimate at this sample size (a few dozen held-out cycles) can
+    # be moved substantially by one or two cycles, so the headline "+lift"
+    # number is reported here paired with a 95% CI on the delta. If the CI
+    # includes zero, the lift is not distinguishable from noise at this
+    # sample size, and that is stated plainly rather than left implicit.
+    print(f"\n{'k':<6}{'delta':>10}{'lo':>10}{'hi':>10}  excludes 0?   (95% CI, "
+          f"n={len(cycle_records)} held-out cycles)")
+    ci_out = {}
+    for k in KS:
+        stat_v1 = ratio_of_sums(f"v1_score_hit_{k}", f"v1_score_tot_{k}")
+        stat_rr = ratio_of_sums(f"reranker_hit_{k}", f"reranker_tot_{k}")
+        result = paired_bootstrap_delta(cycle_records, stat_v1, stat_rr)
+        ci_out[k] = result
+        print(f"{k:<6}{result['point']:>10.3f}{result['lo']:>10.3f}"
+              f"{result['hi']:>10.3f}{str(result['excludes_zero']):>13}")
+    if 10 in ci_out:
+        verdict = ("survives" if ci_out[10]["excludes_zero"] else
+                    "does NOT survive -- indistinguishable from noise at this sample size")
+        print(f"\nThe p@10 lift {verdict} its own 95% CI.")
+
     (ROOT / "data" / "eval_phase4.json").write_text(json.dumps({
         "runs": runs, "split_t": split_t,
         "n_train": len(train_cases), "n_test": len(test_cases),
         "case_stats": store.stats(), "analyst_stats": analyst.stats,
         "precision": out, "importances": rep.importances,
+        "lift_ci": ci_out,
     }, indent=2, default=str))
     print("\nwritten to data/eval_phase4.json")
 
