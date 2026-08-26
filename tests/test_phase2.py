@@ -153,18 +153,22 @@ class TestFeatures:
 
 
 class TestScore:
+    def test_weights_sum_to_one(self):
+        """Adding a term without rebalancing silently inflates the whole queue."""
+        assert sum(F.WEIGHTS.values()) == pytest.approx(1.0)
+
     def test_score_is_bounded(self):
-        """Every term saturated must reach exactly the weight sum, never above."""
+        """Every term saturated must reach exactly 1.0, never above."""
         f = F.Features(has_cycle=True, shortest_cycle=3, cycle_coverage=1.0,
                        has_temporal_cycle=True, shortest_temporal_cycle=3,
                        temporal_cycle_coverage=1.0,
                        conservation=1.0, scatter_gather_width=9,
                        gather_scatter_width=9, fast_passthrough_ratio=1.0,
                        passthrough_ratio=1.0, n_countries=9,
-                       burstiness=1000.0, round_amount_ratio=1.0)
+                       burstiness=1000.0, round_amount_ratio=1.0,
+                       gargaml=1.0, bipartite_score=1.0, stack_score=1.0)
         s, _ = F.score(f)
-        assert 0.0 <= s <= 1.0
-        assert s == pytest.approx(sum(F.WEIGHTS.values()), abs=1e-9)
+        assert s == pytest.approx(1.0, abs=1e-9)
 
     def test_empty_features_score_zero(self):
         s, contrib = F.score(F.Features())

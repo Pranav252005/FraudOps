@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
+from sentinel.detect.layers import LayerProfile, profile as layer_profile
+
 # Above this the exact cycle enumeration is skipped. Neighbourhoods are median
 # 14 nodes and 99% sit under 60, so this bounds a tail case rather than the
 # common path.
@@ -56,6 +58,8 @@ class Motifs:
     fan_in_count: int = 0
     # pass-through nodes are the mule signature
     n_passthrough: int = 0
+    # GARG-AML layered read: block densities, bipartite and stack strength.
+    layers: LayerProfile = field(default_factory=LayerProfile)
     exact: bool = True
 
     def to_dict(self) -> dict:
@@ -75,6 +79,7 @@ class Motifs:
             "fan_out_count": self.fan_out_count,
             "fan_in_count": self.fan_in_count,
             "n_passthrough": self.n_passthrough,
+            **{f"layer_{k}": v for k, v in self.layers.to_dict().items()},
             "exact": self.exact,
         }
 
@@ -196,6 +201,11 @@ def detect(edges) -> Motifs:
 
     m.n_passthrough = sum(1 for n in G
                           if out_deg.get(n, 0) > 0 and in_deg.get(n, 0) > 0)
+
+    # Layered structure is cheap and does not need the exact-enumeration guard,
+    # so it is computed even for subgraphs too large for cycle enumeration --
+    # those are exactly the ones where a stack or bipartite shape is likeliest.
+    m.layers = layer_profile(G)
 
     if m.n_nodes > MAX_EXACT_NODES:
         # Too large for exact enumeration. Say so rather than reporting zeros

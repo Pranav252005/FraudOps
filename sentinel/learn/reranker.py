@@ -30,7 +30,7 @@ from sklearn.metrics import average_precision_score
 # `channel` never enters. 86.6% of laundering rows are ACH against an 11.8%
 # base rate -- a generator artifact worth 7.3x that would inflate every number
 # while teaching nothing transferable.
-EXCLUDED = frozenset({"channel", "exact"})
+EXCLUDED = frozenset({"channel", "exact", "dominant_entity_type"})
 
 
 def feature_names(features) -> list[str]:

@@ -24,19 +24,27 @@ from sentinel.detect.motifs import Motifs
 # drove the rank. The learned re-ranker replaces this in v2 -- it does not
 # replace the features.
 WEIGHTS = {
-    # A temporally valid cycle is worth far more than a structural one: in a
-    # 244k-node graph, triangles occur by chance constantly, but triangles whose
-    # timestamps let value actually travel the loop do not.
-    "temporal_cycle": 0.26,
-    "cycle": 0.10,
-    "conservation": 0.18,
-    "scatter_gather": 0.12,
-    "gather_scatter": 0.06,
-    "fast_passthrough": 0.14,
-    "passthrough": 0.05,
-    "cross_border": 0.05,
-    "burstiness": 0.02,
-    "round_amounts": 0.02,
+    # Rebalanced to sum to exactly 1.0 when the layered terms were added, so a
+    # saturated score is 1.0 and remains comparable across versions. A test
+    # asserts the sum; adding a term without rebalancing would silently inflate
+    # every score in the queue.
+    #
+    # A temporally valid cycle leads: in a 244k-node graph triangles arise by
+    # chance constantly, but triangles whose timestamps let value actually
+    # travel the loop do not.
+    "temporal_cycle": 0.22,
+    "conservation": 0.15,
+    "fast_passthrough": 0.12,
+    "scatter_gather": 0.10,
+    "gargaml": 0.09,
+    "cycle": 0.08,
+    "gather_scatter": 0.05,
+    "bipartite": 0.05,
+    "stack": 0.05,
+    "passthrough": 0.04,
+    "cross_border": 0.03,
+    "burstiness": 0.01,
+    "round_amounts": 0.01,
 }
 
 
@@ -68,6 +76,18 @@ class Features:
     passthrough_ratio: float = 0.0
     max_fan: int = 0
 
+    # Layered structure (GARG-AML). `gargaml` runs -1..1; the two typology
+    # scores are block densities in 0..1.
+    gargaml: float = 0.0
+    layer_high_density: float = 0.0
+    layer_low_density: float = 0.0
+    layer_depth: int = 0
+    n_senders: int = 0
+    n_mules: int = 0
+    n_receivers: int = 0
+    bipartite_score: float = 0.0
+    stack_score: float = 0.0
+
     # Behavioural family -- aggregated from per-account statistics. Absent
     # entirely from v1, which modelled structure only.
     fast_passthrough_ratio: float = 0.0   # share of members forwarding >=80% within 48h
@@ -88,6 +108,14 @@ class Features:
     n_banks: int = 0
     n_countries: int = 0
     cross_border: bool = False
+    # Registry context: loaded since phase 0 but unused until now. A cluster of
+    # sole proprietorships behaves differently from one of corporations, and
+    # entity-type uniformity is itself a signal that accounts were created for
+    # one purpose.
+    n_entities: int = 0
+    entity_reuse: float = 0.0        # members per distinct legal owner
+    dominant_entity_type: str = ""
+    entity_type_purity: float = 0.0
     span_minutes: int = 0
     burstiness: float = 0.0           # txns per hour
 
@@ -160,6 +188,15 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
     f.passthrough_ratio = motifs.n_passthrough / len(nodes)
     f.max_fan = max(motifs.max_out_degree, motifs.max_in_degree)
 
+    lp = motifs.layers
+    f.gargaml = lp.gargaml
+    f.layer_high_density = lp.high_density
+    f.layer_low_density = lp.low_density
+    f.layer_depth = lp.depth
+    f.n_senders, f.n_mules, f.n_receivers = lp.n_senders, lp.n_mules, lp.n_receivers
+    f.bipartite_score = lp.bipartite
+    f.stack_score = lp.stack
+
     # Behavioural family, from the per-account statistics the graph maintains.
     stats = getattr(graph, "account_stats", None)
     if stats:
@@ -192,6 +229,24 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
         f.n_countries = len(countries)
         f.cross_border = len(countries) > 1
 
+        ents, types = [], []
+        for n in nodes:
+            acct = registry.get(node_key(n))
+            if acct is not None:
+                ents.append(acct.entity_id)
+                types.append(acct.entity_type)
+        if ents:
+            distinct = len(set(ents))
+            f.n_entities = distinct
+            # Several accounts owned by one legal entity inside one cluster is
+            # a far stronger link than a shared transaction, because it is a
+            # fact about the world rather than an inference from behaviour.
+            f.entity_reuse = len(ents) / distinct if distinct else 0.0
+        if types:
+            top = max(set(types), key=types.count)
+            f.dominant_entity_type = top
+            f.entity_type_purity = types.count(top) / len(types)
+
     return f
 
 
@@ -220,6 +275,10 @@ def score(f: Features) -> tuple[float, dict[str, float]]:
         "cross_border": _norm(max(0, f.n_countries - 1), 4),
         "burstiness": _norm(f.burstiness, 20),
         "round_amounts": f.round_amount_ratio,
+        # gargaml is -1..1; only its positive half indicates smurfing.
+        "gargaml": max(0.0, f.gargaml),
+        "bipartite": f.bipartite_score,
+        "stack": f.stack_score,
     }
     contrib = {k: WEIGHTS[k] * v for k, v in terms.items()}
     return sum(contrib.values()), contrib
