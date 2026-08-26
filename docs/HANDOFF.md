@@ -126,8 +126,43 @@ community structure to detect.
 
 | top-k | precision | recall | F1 | lift |
 |---:|---:|---:|---:|---:|
-| 10 | 6.4% | 7.5% | **0.069** | 10× |
-| 100 | 1.7% | 15.9% | 0.031 | 3× |
+| 10 | 7.3% | 6.4% | **0.068** | 11× |
+| 20 | 4.3% | 7.2% | 0.054 | 6× |
+| 50 | 2.0% | 8.5% | 0.032 | 3× |
+| 100 | 1.3% | 10.7% | 0.023 | 2× |
+| 500 | 0.7% | 24.1% | 0.015 | 1× |
+
+**CORRECTION (later session) — this F1 is not comparable to the published
+baselines below, and the honest whole-population number is much weaker.**
+Two independent problems, found while checking whether the "0.069, roughly 6×
+worse" framing in the old §4 below was fair:
+
+1. **The F1 above is a fixed-cardinality-selection artifact**, the same
+   family of problem as the oracle's fixed-0.5-threshold pathology (§ above),
+   just via a different mechanism. "Flagged" is the union of edges inside the
+   top-*k* *candidates* that cycle — an arbitrary, uncalibrated operating
+   point, not a per-transaction decision boundary a classifier chose to
+   maximise F1. The published GNN baselines get to pick their own threshold
+   over the *entire* test set; this system's k=10/20/50/... numbers are five
+   different, all-uncalibrated slices, and the best of them (k=10) is the one
+   quoted.
+2. **The threshold-free number is far less flattering.** Scoring every one
+   of the 647,316 pairs in the evaluation window by the highest score any
+   candidate ever containing it received (0.0 if never flagged by anything)
+   and computing average precision against the true labels
+   (`scripts/eval_vs_published.py`, `average_precision_score`) gives
+   **AP = 0.0113 against a base rate of 0.0067 -- a 1.7× lift**, not the 10-11×
+   the top-10 table suggests. The gap between "11× at k=10" and "1.7× over
+   the whole population" is the funnel's built-stage recall ceiling made
+   visible at the transaction level: a large share of true positives are
+   never flagged by *any* candidate at *any* score, so they sit tied at 0.0
+   with most of the negative population, and AP correctly punishes that.
+
+**The right statement is not "roughly 6× worse than supervised baselines."**
+It is: this system's transaction-level ranking, honestly measured over the
+whole population, is barely above base rate (1.7×), and the top-k table above
+should not be quoted alongside the published F1 numbers as if they were the
+same measurement.
 
 ---
 
@@ -140,10 +175,16 @@ community structure to detect.
 | Standard GNN, no adaptations | 26.9% |
 | GNN + reverse MP + port numbering + ego IDs | 42.9% |
 | GIN, adapted | 57.2% |
-| **This project (unsupervised)** | **0.069** |
+| **This project (unsupervised), top-10 slice, uncalibrated** | 0.068 |
+| **This project (unsupervised), threshold-free, whole population** | **AP 0.011 (1.7× base rate)** |
 
-**Roughly 6× worse.** Theirs train on the labels; this uses none. Different
-task, but the gap is real and should not be explained away.
+**Not a clean "6× worse."** The top-10 row and the published rows are
+different measurements (a small uncalibrated slice vs. a calibrated
+whole-test-set decision); the threshold-free row is the fairer like-for-like
+view of ranking quality and it is considerably weaker than the top-10 number
+implies. Theirs train on the labels; this uses none -- that gap is real -- but
+the size of the gap should be read off the threshold-free row, not the top-10
+one.
 
 ### Razorpay Vulcan (launched 18 Aug 2026)
 
