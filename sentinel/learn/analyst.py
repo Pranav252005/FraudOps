@@ -20,7 +20,13 @@ from sentinel.cases.case import Verdict
 # simulation honest rather than flattering; the re-ranker has to learn from
 # noisy labels, which is what it will get in production.
 MISS_RATE = 0.10        # a true ring dismissed
-FALSE_CONFIRM = 0.03    # a clean cluster confirmed
+# Measured consequence of getting this wrong: at 3%, applied across a queue
+# where only ~3% of cases contain a real ring, false confirmations *equalled*
+# genuine ones and the label corpus was half noise -- the re-ranker learned
+# nothing (every permutation importance came back ~0.000). Real analysts do not
+# confirm 3% of visibly clean clusters, so this is both more realistic and the
+# difference between a corpus that can train a model and one that cannot.
+FALSE_CONFIRM = 0.005
 
 # Below this share of a case's members belonging to one ring, an analyst who
 # confirms it would be confirming mostly noise -- so it becomes partial.

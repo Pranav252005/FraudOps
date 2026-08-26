@@ -137,14 +137,32 @@ class TestReranker:
             Reranker().rank(corpus(3))
 
     def test_rank_handles_empty_input(self):
+        """Must still return the (items, probabilities) pair, not a bare list.
+
+        Returning a plain [] here crashed the evaluation on tuple unpacking.
+        """
         r = Reranker()
         r.fit(corpus(90))
-        assert r.rank([]) == []
+        items, probs = r.rank([])
+        assert items == [] and len(probs) == 0
 
-    def test_importances_are_reported(self):
+    def test_accepts_dataclass_features_as_well_as_dicts(self):
+        """Cases store dicts; live candidates carry the Features dataclass.
+
+        Training on one representation and scoring on the other was a real
+        crash, and would have been a silent mismatch had it not raised.
+        """
+        from sentinel.detect.features import Features
+        r = Reranker()
+        r.fit(corpus(90))
+        f = Features(n_nodes=3, conservation=0.95, has_temporal_cycle=True,
+                     fast_passthrough_ratio=0.9, cycle_coverage=1.0)
+        assert 0.0 <= r.score_one(f) <= 1.0
+
+    def test_importance_needs_held_out_data(self):
+        """Without validation the ranker reports no importance rather than zeros."""
         rep = Reranker().fit(corpus(90))
-        assert rep.importances
-        assert set(rep.importances) <= set(rep.features)
+        assert rep.importances == {}
 
 
 class TestSimulatedAnalyst:
@@ -195,3 +213,31 @@ class TestSimulatedAnalyst:
             runs.append([a.dispose(self.case(["1:A", "1:B"]), {"1:A"})[0]
                          for _ in range(50)])
         assert runs[0] == runs[1]
+
+
+class TestImportanceIsHeldOut:
+    """Importance on training data of a memorising model is all zeros.
+
+    This was a real defect: every feature reported 0.0000 while the model was
+    in fact re-ranking 4x better than the hand-set weights.
+    """
+
+    def test_no_validation_means_no_importance_claimed(self):
+        rep = Reranker().fit(corpus(90))
+        assert rep.importances == {}, "must not report importance it cannot measure"
+
+    def test_validation_produces_real_importance(self):
+        train, test = corpus(120), corpus(60)
+        for i, c in enumerate(test):
+            c.opened_t += 100000
+            c.id = f"T{i}"
+        rep = Reranker().fit(train, validation=test)
+        assert rep.importances
+        assert max(rep.importances.values()) > 0.0
+        assert rep.n_test == len(test)
+
+    def test_generalisation_gap_is_reported(self):
+        train, test = corpus(120), corpus(60)
+        rep = Reranker().fit(train, validation=test)
+        assert rep.train_ap > 0 and rep.test_ap > 0
+        assert rep.ap_lift > 1.0, "must beat the base rate to be worth ranking with"

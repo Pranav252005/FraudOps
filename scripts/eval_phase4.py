@@ -126,8 +126,11 @@ def main() -> None:
           f"{len(train_cases)} train / {len(test_cases)} test")
 
     ranker = Reranker()
-    rep = ranker.fit(train_cases)
+    rep = ranker.fit(train_cases, validation=test_cases)
     print(f"{rep}")
+    pos = rep.n_positive_train
+    print(f"positive class: {pos}/{rep.n_train} = {100*pos/max(1,rep.n_train):.1f}% "
+          f"of the training corpus")
     print("\ntop features by permutation importance:")
     for name, imp in list(rep.importances.items())[:12]:
         print(f"   {name:<32}{imp:+.4f}")
@@ -141,7 +144,7 @@ def main() -> None:
     for cy in held:
         cands = cy["cands"]
         by_score = sorted(cands, key=lambda c: -c.score)
-        by_model, _ = ranker.rank(cands)
+        by_model, _ = ranker.rank(cands, key=lambda c: c.features)
         for k in KS:
             for name, ordered in (("v1_score", by_score), ("reranker", by_model)):
                 top = ordered[:k]
