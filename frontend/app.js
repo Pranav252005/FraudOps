@@ -240,7 +240,15 @@ function renderCase() {
     <div class="sec">
       <h3>Timeline — immutable</h3>
       ${c.timeline.map((t) => `<div class="ev-d mono">${t.kind} · ${t.text}</div>`).join("")}
+    </div>
+
+    <div class="sec">
+      <h3>Investigation — auditable case file, STR narrative, bounded actions</h3>
+      <button class="more" id="bLoadInvestigation">Load case file &amp; STR narrative</button>
+      <div id="investigation"></div>
     </div>`;
+
+  $("bLoadInvestigation").onclick = () => loadInvestigation(c.id);
 
   document.querySelectorAll(".drop").forEach((el) => el.onclick = () => {
     const k = el.dataset.key;
@@ -270,6 +278,155 @@ async function dispose(verdict, reason) {
   state.detail = null;
   $("case").innerHTML = `<div class="empty">Select a case from the queue.</div>`;
   loadQueue();
+}
+
+/* ------------- investigation: case file, STR narrative, bounded actions -------------
+ *
+ * Deliberately a separate, explicit "load" step rather than fetched on every
+ * case selection: assembling the transaction ledger re-reads the compiled
+ * stream (see sentinel/cases/evidence.py), which is real work an analyst
+ * should ask for, not something that fires on every row click in the queue. */
+
+async function loadInvestigation(id) {
+  const box = $("investigation");
+  box.innerHTML = `<div class="ev-d mono">loading…</div>`;
+  const [fileRes, strRes, actionsRes, recsRes] = await Promise.all([
+    fetch(`/api/case/${id}/file`),
+    fetch(`/api/case/${id}/str`),
+    fetch(`/api/actions`),
+    fetch(`/api/case/${id}/recommendations`),
+  ]);
+  const file = fileRes.ok ? await fileRes.json() : null;
+  const strBody = await strRes.json();
+  const actions = (await actionsRes.json()).actions;
+  const recs = (await recsRes.json()).recommendations;
+
+  box.innerHTML = `
+    ${!file ? `<div class="ev-d mono">case file unavailable (${fileRes.status}) —
+      is data/stream built?</div>` : caseFileHtml(file)}
+    ${strNarrativeHtml(strRes.ok, strBody)}
+    ${actionsHtml(id, actions, file)}
+    <div style="margin-top:10px"><h3>Recommendation log</h3>
+      <div id="recLog">${recLogHtml(recs)}</div>
+    </div>`;
+
+  document.querySelectorAll(".recDecide").forEach((el) => el.onclick = async () => {
+    const approved = el.dataset.approved === "1";
+    const by = prompt("Your name/role, for the audit log:");
+    if (!by) return;
+    await fetch(`/api/recommendation/${el.dataset.id}/decide`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ approved, by }),
+    });
+    loadInvestigation(id);
+  });
+  document.querySelectorAll(".recExecute").forEach((el) => el.onclick = async () => {
+    await fetch(`/api/recommendation/${el.dataset.id}/execute`, { method: "POST" });
+    loadInvestigation(id);
+  });
+  $("bRecommend").onclick = async () => {
+    const action = $("recAction").value;
+    const rationale = $("recRationale").value.trim();
+    const evidenceIds = [...document.querySelectorAll(".evChk:checked")]
+      .map((el) => el.value);
+    if (!rationale) { toast("A recommendation needs a rationale."); return; }
+    if (!evidenceIds.length) { toast("Cite at least one piece of evidence."); return; }
+    const res = await fetch(`/api/case/${id}/recommend`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, evidence_ids: evidenceIds, rationale }),
+    });
+    if (!res.ok) { toast("Could not log that recommendation."); return; }
+    loadInvestigation(id);
+  };
+}
+
+function caseFileHtml(file) {
+  const rows = file.transactions.slice(0, 30).map((t) => `
+    <tr><td>${t.txn_id}</td><td>${t.ts.slice(0, 19).replace("T", " ")}</td>
+        <td>${t.src}</td><td>${t.dst}</td>
+        <td>${t.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+        <td>${t.channel || ""}</td></tr>`).join("");
+  return `
+    <h3>Case file — every claim traces to a transaction id or a feature</h3>
+    <div class="ev-d">purpose: <span class="mono">${file.purpose}</span>
+      · retention until: <span class="mono">${(file.retention_until || "").slice(0, 10)}</span>
+      · typology: <b>${file.typology}</b> (${file.typology_evidence.join("; ")})</div>
+    <details style="margin-top:8px">
+      <summary>▸ ${file.members.length} member role(s)</summary>
+      ${file.members.map((m) => `<div class="ev-d mono">${m.account} — ${m.role}
+        (in ${m.in_degree} / out ${m.out_degree}) ·
+        ${m.evidence.slice(0, 3).join(", ")}${m.evidence.length > 3 ? "…" : ""}</div>`).join("")}
+    </details>
+    <details open style="margin-top:8px">
+      <summary>▸ ${file.transactions.length} transaction(s) recovered from the compiled stream
+        ${file.transactions.length > 30 ? "(first 30 shown)" : ""}</summary>
+      <div class="scroll"><table class="tx">
+        <thead><tr><th>Txn id</th><th>Time</th><th>From</th><th>To</th>
+          <th>Amount</th><th>Channel</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+    </details>
+    <details style="margin-top:8px">
+      <summary>▸ provenance chain</summary>
+      ${file.provenance.map((p) => `<div class="ev-d mono">${p.stage} ·
+        detector ${p.detector_version} · run ${p.run_id} · ${p.generated_at}</div>`).join("")}
+    </details>`;
+}
+
+function strNarrativeHtml(ok, body) {
+  const failed = !ok;
+  const verification = body.verification || body;
+  const badge = failed
+    ? `<span class="tag" style="background:var(--crit-soft);color:var(--crit)">
+        VERIFICATION FAILED</span>`
+    : `<span class="tag" style="background:var(--ok-soft);color:var(--ok)">
+        CITATIONS VERIFIED</span>`;
+  return `
+    <h3 style="margin-top:16px">STR narrative ${badge}</h3>
+    ${failed ? `<div class="ev-d">${(verification.failures || []).map((f) =>
+        `<div>${f}</div>`).join("")}</div>` : ""}
+    ${body.narrative ? `<pre class="narr" style="white-space:pre-wrap;font-family:'IBM Plex Mono',monospace;font-size:12.5px">${body.narrative}</pre>` : ""}`;
+}
+
+function actionsHtml(id, actions, file) {
+  const evidenceOptions = file
+    ? file.transactions.slice(0, 20).map((t) => t.txn_id)
+        .concat(file.members.map((m) => m.account))
+    : [];
+  return `
+    <h3 style="margin-top:16px">Recommend a bounded action — nothing executes without human approval</h3>
+    <select id="recAction" class="mono">
+      ${actions.map((a) => `<option value="${a.action}">${a.description}</option>`).join("")}
+    </select>
+    <div style="margin:8px 0;max-height:110px;overflow-y:auto" class="ev-d">
+      ${evidenceOptions.map((e) => `<label style="display:block">
+        <input type="checkbox" class="evChk" value="${e}"> ${e}</label>`).join("")
+        || "no evidence ids available — load the case file first"}
+    </div>
+    <textarea id="recRationale" placeholder="Rationale, citing the evidence above"
+      style="width:100%;min-height:50px;background:var(--surface-2);color:var(--ink);
+      border:1px solid var(--line-2);border-radius:4px;padding:6px;font-family:inherit"></textarea>
+    <div class="acts"><button class="confirm" id="bRecommend">Log recommendation</button></div>`;
+}
+
+function recLogHtml(recs) {
+  if (!recs.length) return `<div class="ev-d">No recommendations logged for this case yet.</div>`;
+  return recs.map((r) => `
+    <div class="ev" style="grid-template-columns:1fr auto">
+      <div>
+        <b>${r.description}</b> — ${r.rationale}<br>
+        <span class="ev-d">evidence: ${r.evidence_ids.join(", ")} ·
+        status: <b>${r.status}</b>${r.decided_by ? ` by ${r.decided_by}` : ""}
+        ${r.executed ? " · EXECUTED" : ""}</span>
+      </div>
+      <div class="acts">
+        ${r.status === "pending" ? `
+          <button class="confirm recDecide" data-id="${r.id}" data-approved="1">Approve</button>
+          <button class="dismiss recDecide" data-id="${r.id}" data-approved="0">Reject</button>
+        ` : r.status === "approved" && !r.executed ? `
+          <button class="confirm recExecute" data-id="${r.id}">Execute</button>
+        ` : ""}
+      </div>
+    </div>`).join("");
 }
 
 /* keyboard: disposition must cost seconds, not a form */

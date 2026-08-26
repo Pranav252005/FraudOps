@@ -15,6 +15,7 @@ Two decisions carried over from the design work:
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -22,7 +23,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from sentinel.cases.case import REASONS, Lane, Verdict
+from sentinel.cases.evidence import build_case_file
+from sentinel.cases.recommendation_store import RecommendationStore
 from sentinel.cases.store import CaseStore
+from sentinel.compliance.purpose import ACCESS_SCOPES, Purpose, retention_until
+from sentinel.config import WINDOW_MINUTES
+from sentinel.escalation import ACTION_DESCRIPTIONS, Action, decide, execute, recommend
+from sentinel.narrative.citation import NarrativeVerificationError
+from sentinel.narrative.str_narrative import generate_and_verify
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 FRONTEND = ROOT / "frontend"
@@ -30,9 +38,21 @@ FRONTEND = ROOT / "frontend"
 # phase 4 corpus in data/cases is already disposed and is training data, not a
 # work queue.
 CASES = Path(os.environ.get("SENTINEL_CASES", ROOT / "data" / "queue"))
+RECOMMENDATIONS = Path(os.environ.get("SENTINEL_RECOMMENDATIONS",
+                                       ROOT / "data" / "recommendations"))
 
 app = FastAPI(title="Sentinel — ring investigation console")
 store = CaseStore(CASES).load()
+rec_store = RecommendationStore(RECOMMENDATIONS).load()
+_run_id = "console-session"
+
+
+def _stream():
+    """Lazy import: the case-file/STR endpoints are the only ones that need
+    the full compiled stream, and importing it at module load would make the
+    whole console fail to start without the licensed AMLworld data present."""
+    from sentinel.stream.replay import Stream
+    return Stream(ROOT / "data" / "stream")
 
 
 def summarise(case) -> dict:
@@ -241,6 +261,140 @@ async def stats():
         "accounts_per_decision": round(accounts / len(done), 2) if done else 0,
         "median_seconds": round(sorted(times)[len(times) // 2], 1) if times else None,
     }
+
+
+@app.get("/api/case/{case_id}/file")
+async def case_file(case_id: str, role: str = "compliance"):
+    """The auditable case file: member roles, the transaction ledger, the
+    typology and its evidence, and the provenance chain -- every element
+    traceable to a transaction id or a named feature value.
+
+    Access is scoped by the case's DPDP purpose tag (sentinel.compliance.
+    purpose): a caller outside the scope for this case's purpose is refused,
+    which is the access-scoping half of purpose limitation applied as an
+    enforced property rather than left in prose.
+    """
+    c = store.get(case_id)
+    if c is None:
+        raise HTTPException(404, "no such case")
+    try:
+        purpose = Purpose(c.purpose)
+    except ValueError:
+        purpose = Purpose.FRAUD_INVESTIGATION
+    if role not in ACCESS_SCOPES.get(purpose, frozenset()):
+        raise HTTPException(403, f"role {role!r} is not in scope for purpose "
+                                 f"{purpose.value!r}: allowed = "
+                                 f"{sorted(ACCESS_SCOPES.get(purpose, []))}")
+    try:
+        stream = _stream()
+    except FileNotFoundError:
+        raise HTTPException(503, "compiled stream not built -- "
+                                 "run scripts/build_stream.py")
+    until = retention_until(purpose, datetime.fromisoformat(c.opened_at))
+    cf = build_case_file(c, stream, WINDOW_MINUTES, _run_id,
+                         purpose=purpose.value, retention_until=until.isoformat())
+    return cf.to_dict()
+
+
+@app.get("/api/case/{case_id}/str")
+async def case_str_narrative(case_id: str, role: str = "compliance"):
+    """Generate and verify the STR narrative. A failed citation verification
+    is returned as a 422 with the specific failures, never as a narrative
+    that looks filed-ready but silently skipped its own check."""
+    c = store.get(case_id)
+    if c is None:
+        raise HTTPException(404, "no such case")
+    try:
+        purpose = Purpose(c.purpose)
+    except ValueError:
+        purpose = Purpose.FRAUD_INVESTIGATION
+    if role not in ACCESS_SCOPES.get(purpose, frozenset()):
+        raise HTTPException(403, f"role {role!r} is not in scope for purpose {purpose.value!r}")
+    try:
+        stream = _stream()
+    except FileNotFoundError:
+        raise HTTPException(503, "compiled stream not built -- "
+                                 "run scripts/build_stream.py")
+    cf = build_case_file(c, stream, WINDOW_MINUTES, _run_id,
+                         purpose=Purpose.REGULATORY_REPORTING.value)
+    try:
+        narrative, result = generate_and_verify(cf)
+    except NarrativeVerificationError as e:
+        raise HTTPException(422, {"error": "narrative failed citation verification",
+                                  **e.result.to_dict()})
+    return {"narrative": narrative, "verification": result.to_dict()}
+
+
+@app.get("/api/actions")
+async def actions():
+    """Every action this system may recommend. Bounded and enumerated --
+    nothing outside this list is ever proposed, and nothing here executes
+    without a human decision (see /api/case/{id}/recommend)."""
+    return {"actions": [{"action": a.value, "description": ACTION_DESCRIPTIONS[a]}
+                        for a in Action]}
+
+
+class RecommendBody(BaseModel):
+    action: str
+    evidence_ids: list[str]
+    rationale: str
+
+
+@app.post("/api/case/{case_id}/recommend")
+async def case_recommend(case_id: str, body: RecommendBody):
+    c = store.get(case_id)
+    if c is None:
+        raise HTTPException(404, "no such case")
+    try:
+        action = Action(body.action)
+    except ValueError:
+        raise HTTPException(400, f"unknown action {body.action!r}")
+    try:
+        rec = recommend(case_id, action, body.evidence_ids, body.rationale)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    rec_id = rec_store.add(rec)
+    return {"id": rec_id, **rec.to_dict()}
+
+
+@app.get("/api/case/{case_id}/recommendations")
+async def case_recommendations(case_id: str):
+    return {"recommendations": [{"id": i, **r.to_dict()}
+                                for i, r in rec_store.for_case(case_id)]}
+
+
+class DecideBody(BaseModel):
+    approved: bool
+    by: str
+    note: str = ""
+
+
+@app.post("/api/recommendation/{rec_id}/decide")
+async def recommendation_decide(rec_id: str, body: DecideBody):
+    """The human gate. No recommendation reaches `executed=True` without a
+    call here first, and this endpoint records who decided and when."""
+    rec = rec_store.get(rec_id)
+    if rec is None:
+        raise HTTPException(404, "no such recommendation")
+    try:
+        decide(rec, approved=body.approved, by=body.by, note=body.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    rec_store.update(rec_id, "decide")
+    return {"id": rec_id, **rec.to_dict()}
+
+
+@app.post("/api/recommendation/{rec_id}/execute")
+async def recommendation_execute(rec_id: str):
+    rec = rec_store.get(rec_id)
+    if rec is None:
+        raise HTTPException(404, "no such recommendation")
+    try:
+        execute(rec)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    rec_store.update(rec_id, "execute")
+    return {"id": rec_id, **rec.to_dict()}
 
 
 @app.get("/app.js")

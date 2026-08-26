@@ -121,6 +121,12 @@ class Case:
     timeline: list = field(default_factory=list)
     narrative: dict = field(default_factory=dict)
     disposition: Disposition = field(default_factory=Disposition)
+    # DPDP Act 2023 purpose limitation (sentinel.compliance.purpose): the
+    # lawful purpose this case's personal data is being processed for, which
+    # bounds both its retention and who may read it. Defaults to the
+    # investigation purpose every case is opened for; a case only carries
+    # "regulatory_reporting" once an STR is actually being prepared.
+    purpose: str = "fraud_investigation"
 
     # Ground truth, populated only in evaluation. Never shown to a scorer -- it
     # exists so the simulated-analyst experiment can stand in for verdicts.
@@ -144,6 +150,7 @@ class Case:
             "narrative": self.narrative,
             "disposition": self.disposition.to_dict(),
             "truth_rings": self.truth_rings,
+            "purpose": self.purpose,
         }
 
     def to_json(self) -> str:
@@ -163,6 +170,7 @@ class Case:
             absorbed=d.get("absorbed", 0), timeline=d.get("timeline", []),
             narrative=d.get("narrative", {}), disposition=disp,
             truth_rings=d.get("truth_rings", []),
+            purpose=d.get("purpose", "fraud_investigation"),
         )
 
 
