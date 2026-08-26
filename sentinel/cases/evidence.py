@@ -195,6 +195,22 @@ def build_transactions(members: list[str], opened_t: int, window_minutes: int,
     left = int(np.searchsorted(stream.ts, lo, side="left"))
     right = int(np.searchsorted(stream.ts, hi, side="right"))
 
+    # currency/channel are stored as int8 codes into the compiled stream's own
+    # lookup tables (meta.json), not strings -- resolve them here so a
+    # narrative reads "USD 500.00 via ACH" rather than "0 500.00 via 3".
+    meta = getattr(stream, "meta", {}) or {}
+    currencies = meta.get("currencies") or []
+    channels = meta.get("channels") or []
+
+    def _lookup(table: list[str], raw) -> str:
+        # Real Stream columns are int8 codes; a duck-typed test fixture may
+        # already hand over the resolved string. Accept either.
+        try:
+            code = int(raw)
+        except (TypeError, ValueError):
+            return str(raw)
+        return table[code] if 0 <= code < len(table) else str(code)
+
     out: list[Transaction] = []
     for i in range(left, right):
         s_key = stream.key(int(stream.src[i]))
@@ -205,8 +221,8 @@ def build_transactions(members: list[str], opened_t: int, window_minutes: int,
                 ts=stream.when(int(stream.ts[i])).isoformat(),
                 src=s_key, dst=d_key,
                 amount=float(stream.amount[i]),
-                currency=str(stream.currency[i]),
-                channel=str(stream.channel[i]),
+                currency=_lookup(currencies, stream.currency[i]),
+                channel=_lookup(channels, stream.channel[i]),
             ))
     return out
 
