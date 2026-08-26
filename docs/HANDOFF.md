@@ -86,6 +86,30 @@ Hit = candidate contains ≥50% of a ring **and** Jaccard ≥ 0.3.
 
 Held-out average precision **0.2704 vs 0.0412 base = 6.57×**.
 
+**CORRECTION (later session) — the lift above does not survive its own
+confidence interval.** `scripts/eval_phase4.py` now reports a paired
+bootstrap 95% CI on the v1-vs-reranker delta at each k, resampled over the 17
+held-out cycles (`sentinel/eval/bootstrap.py`):
+
+| k | delta (reranker − v1) | 95% CI | excludes zero? |
+|---:|---:|---|---|
+| 5 | 0.000 | [-0.094, 0.094] | no |
+| 10 | 0.018 | [-0.035, 0.071] | no |
+| 20 | 0.024 | [-0.018, 0.068] | no |
+| 50 | 0.018 | [-0.002, 0.039] | no |
+
+**At every k, the interval includes zero.** With only 17 held-out cycles, the
+lift reported above is not distinguishable from noise — this is the direct
+answer to "does the reported improvement survive its own CI": **no.** The
+held-out average precision figure (0.2704 vs 0.0412 = 6.57×) is a single
+aggregate number over the same 17 cycles and carries the same fragility,
+though it was not itself bootstrapped. This does not mean the re-ranker is
+useless — the permutation-importance ranking (below) is still informative
+about which features carry signal — but the precision-at-k lift specifically
+should not be quoted as a settled result at this sample size. More held-out
+cycles (a longer eval window, or a shorter tick spacing) would narrow this
+before it is worth trusting either way.
+
 ### Per typology
 
 | Typology | Recall | | Typology | Recall |
@@ -222,6 +246,70 @@ Then, in order: rebalance weights by measured prevalence (`gather_scatter` fires
 on 50% of candidates and `cross_border` on 61% — near-constants that cannot
 discriminate); re-run Phase 2 and Phase 4; consider raising
 `find_gather_scatter` min_width from 2 to 3.
+
+### 5b. CORRECTION (later session) — the 26%/0% diagnosis above does not hold
+
+**This is wrong, and loudly:** `scripts/eval_funnel.py`, run over the full
+10-day eval window with an explicit *seeded* stage between seed-reachable and
+built, measures something materially different from §5 above:
+
+| typology | seed-reachable | seeded | built | ranked (top-50) |
+|---|---:|---:|---:|---:|
+| BIPARTITE | 31 (100%) | 28 (90%) | **1 (3%)** | 0 (0%) |
+| CYCLE | 37 (100%) | 31 (84%) | 21 (57%) | 3 (8%) |
+| FAN-IN | 30 (100%) | 26 (87%) | 23 (77%) | 5 (17%) |
+| FAN-OUT | 36 (100%) | 30 (83%) | 23 (64%) | 5 (14%) |
+| GATHER-SCATTER | 38 (100%) | 35 (92%) | 29 (76%) | 8 (21%) |
+| RANDOM | 26 (100%) | 22 (85%) | 13 (50%) | 3 (12%) |
+| SCATTER-GATHER | 31 (100%) | 28 (90%) | 26 (84%) | 8 (26%) |
+| STACK | 30 (100%) | **30 (100%)** | **4 (13%)** | 2 (7%) |
+| **TOTAL** | **259 (100%)** | **230 (89%)** | **140 (54%)** | **34 (13%)** |
+
+Not 26% built, not four typologies at 0%. **Seeding reaches 89% of active
+rings overall, and BIPARTITE/FAN-OUT/RANDOM/STACK are seeded at 83-100%, not
+0%.** The reason §5's diagnosis was wrong: the seed rule (`gen.seeds`) checks
+whether an account is pass-through **against its whole position in the
+window's graph**, not against its role inside one specific ring. An account
+that is a receive-only sink *within* a FAN-OUT ring can easily be
+pass-through *overall*, because AMLworld's background traffic gives almost
+every active account both inbound and outbound edges from unrelated,
+non-ring activity. §5 apparently measured seed recall in a way that didn't
+capture this — restated here rather than silently corrected, per this
+project's own rule about reporting when a result overturns a prior belief.
+
+**Where the loss actually is**, per this measurement:
+
+1. **Candidate-build for BIPARTITE and STACK specifically.** Both are
+   seeded almost perfectly (90-100%) but collapse to 3% and 13% built. The
+   seed fires, but two-hop expansion from that seed apparently does not
+   assemble a candidate whose node set clears the hit floor (50% containment,
+   0.3 Jaccard) against the ring — plausibly the hub guard (`EXPAND_MAX_DEGREE
+   = 50`) or `EXPAND_MAX_NODES = 200` truncating before the far side of a
+   2-layer/3-layer structure is reached. This is a candidate-generation
+   problem, not a seeding problem, and needs its own instrumentation before
+   the widened-seed-rule plan in §5 is worth building.
+2. **A severe built→ranked drop, in every typology.** 54% built → 13% ranked
+   overall is worse than the built→ranked drop for any single typology in
+   isolation, meaning candidates that structurally cover a ring are
+   routinely present but not scored into the top 50. This re-supports the
+   **original Phase 2 conclusion that §5 says it overturned** ("the loss is
+   in ranking, not generation") — which the Phase 4 re-ranker was built to
+   address, and did measurably improve (§3), so that work was not wasted;
+   it just was not the whole story either time.
+
+Bootstrap 95% CIs (resampled over the 34 generation cycles;
+`sentinel/eval/bootstrap.py`) on the headline numbers: p@10 = 0.085 [0.059,
+0.115], p@20 = 0.049 [0.032, 0.065], p@50 = 0.024 [0.016, 0.032]. The re-ranker
+lift CI is in `data/eval_phase4.json` under `lift_ci`, computed the same way
+(paired, so it answers "does the lift survive resampling" directly rather than
+via two separately-wide intervals).
+
+**Practical implication for the next task:** do not implement the
+union-of-seed-triggers fix in §5 as scoped — it targets a stage (seeding)
+that is not actually where BIPARTITE/STACK are lost. Instrument the
+candidate-build stage specifically (log why a seeded ring's expansion
+produces no covering candidate: hub-guard truncation, node-cap truncation, or
+genuine Jaccard failure) before changing the seed rule.
 
 ---
 
