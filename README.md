@@ -210,6 +210,46 @@ python scripts/eval_phase2.py
 python -m pytest tests/ -q
 ```
 
+### Funnel instrumentation, the oracle diagnostic, and Elliptic2
+
+Three follow-on diagnostics, run after the base pipeline above:
+
+```bash
+python scripts/eval_funnel.py     # per-typology stage recall + bootstrap CIs
+                                   # -> data/funnel.json, data/funnel.csv
+python scripts/eval_oracle.py     # supervised LightGBM ceiling on candidate features
+                                   # -> data/eval_oracle.json
+python scripts/eval_elliptic2.py  # second dataset: real labels, real data
+                                   # -> data/eval_elliptic2.json
+```
+
+`eval_funnel.py` breaks ring recall into four stages -- seed-reachable,
+seeded, built (candidate generated), ranked (top-k) -- broken out by
+typology, because a single ring-recall number cannot tell you whether the
+loss is in seeding, candidate generation, or ranking. Every headline metric
+it reports carries a bootstrap 95% CI (resampled over generation cycles),
+not a bare point estimate.
+
+`eval_oracle.py` trains LightGBM on the existing candidate features against
+the *true* ring labels (not the simulated-analyst labels Phase 4 uses) to
+measure the feature set's ceiling, with a second "oracle-on-all-rings" run
+using a cheat-seed diagnostic to separate seeding loss from feature loss.
+Needs `lightgbm` (in requirements.txt); `snapml` (IBM's Graph Feature
+Preprocessor) has no build for Python 3.14 and is documented as skipped
+rather than silently omitted.
+
+`eval_elliptic2.py` adds [Elliptic2](https://github.com/MITIBMxGraph/Elliptic2)
+([paper](https://arxiv.org/abs/2404.19109)) as a second, real-labelled
+dataset: 122K labelled Bitcoin laundering subgraphs, with a published SOTA
+baseline (GLASS) to compare against. **The dataset requires a manual,
+licensed download from http://elliptic.co/elliptic2** -- there is no
+automatable bulk endpoint, so this is a real step you have to do by hand.
+Without it, the script validates the loader and the dataset-agnostic
+evaluation path (`sentinel/eval/dataset.py`) against a small synthetic
+sample in `tests/fixtures/elliptic2_sample/` instead, so the plumbing is
+provably correct even before the real files are in hand. See
+`sentinel/data/elliptic2.py` for the exact files and layout expected.
+
 ---
 
 ## Data

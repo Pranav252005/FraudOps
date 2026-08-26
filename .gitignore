@@ -9,8 +9,11 @@ venv/
 data/amlworld/
 data/stream/
 data/cases/
+data/recommendations/
 data/*.json
 data/*.log
+data/*.csv
+data/elliptic2/
 
 .pytest_cache/
 .DS_Store
