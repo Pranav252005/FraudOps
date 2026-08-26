@@ -8,3 +8,4 @@ python-igraph>=0.11
 leidenalg>=0.10
 scikit-learn>=1.5
 pyarrow>=17.0
+lightgbm>=4.5

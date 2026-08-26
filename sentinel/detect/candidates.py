@@ -93,13 +93,21 @@ class CandidateGenerator:
     # -- generation -----------------------------------------------------------
 
     def generate(self, batch, seen: set[str] | None = None,
-                 merge_threshold: float | None = DEFAULT_THRESHOLD) -> list[Candidate]:
-        """Produce scored candidates for one tick, overlap-suppressed."""
+                 merge_threshold: float | None = DEFAULT_THRESHOLD,
+                 seed_override: set[int] | None = None) -> list[Candidate]:
+        """Produce scored candidates for one tick, overlap-suppressed.
+
+        `seed_override` replaces the pass-through seed rule entirely when
+        given. It exists for the oracle diagnostic in
+        `scripts/eval_oracle.py`, which measures the ceiling if seeding were
+        perfect by seeding on every active ring's own members -- never used
+        by the real detection path, which always calls `self.seeds(batch)`.
+        """
         g = self.graph
         seen = set() if seen is None else seen
         out: list[Candidate] = []
 
-        seeds = self.seeds(batch)
+        seeds = self.seeds(batch) if seed_override is None else set(seed_override)
         self.stats["seeds"] += len(seeds)
 
         for seed in seeds:
