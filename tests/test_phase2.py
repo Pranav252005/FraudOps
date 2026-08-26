@@ -54,11 +54,22 @@ class TestMotifs:
         assert m.shortest_cycle == 4
         assert m.nodes_in_cycles == 4
 
-    def test_two_node_cycle(self):
+    def test_mutual_pair_is_not_a_cycle(self):
+        """A<->B is ordinary commerce, not a laundering loop.
+
+        91% of queued cases contained one and 100% of those were length 2, so
+        counting them made the highest-weighted feature a constant.
+        """
         g = graph_from([(0, 1, 10.0), (1, 0, 10.0)])
         m = motifs_of(g, [0, 1])
+        assert m.n_cycles == 0
+        assert m.n_mutual_pairs == 1
+
+    def test_three_node_cycle_is_a_cycle(self):
+        g = graph_from([(0, 1, 10.0), (1, 2, 10.0), (2, 0, 10.0)])
+        m = motifs_of(g, [0, 1, 2])
         assert m.n_cycles == 1
-        assert m.shortest_cycle == 2
+        assert m.shortest_cycle == 3
 
     def test_acyclic_chain_has_no_cycle(self):
         g = graph_from([(0, 1, 10.0), (1, 2, 10.0), (2, 3, 10.0)])

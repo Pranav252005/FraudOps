@@ -60,6 +60,12 @@ class TestTemporalCycles:
         G.add_edge(2, 0, first_t=60, last_t=60, count=1, amount=1.0)
         assert is_temporally_valid(G, [0, 1, 2])
 
+    def test_mutual_pairs_never_count_as_temporal_cycles(self):
+        g = timed_graph([(10, 0, 1, 5.0), (20, 1, 0, 5.0)])
+        m = detect(g.subgraph_edges({0, 1}))
+        assert m.n_temporal_cycles == 0 and m.n_cycles == 0
+        assert m.n_mutual_pairs == 1
+
     def test_detect_separates_temporal_from_structural(self):
         good = timed_graph([(10, 0, 1, 5.0), (20, 1, 2, 5.0), (30, 2, 0, 5.0)])
         bad = timed_graph([(30, 0, 1, 5.0), (20, 1, 2, 5.0), (10, 2, 0, 5.0)])

@@ -25,6 +25,16 @@ MAX_EXACT_NODES = 120
 MAX_CYCLE_LEN = 8
 MAX_CYCLES = 200
 
+# A "cycle" of length 2 is A->B->A: a mutual payment pair, which is ordinary
+# commerce (refunds, trade between two businesses) and passes temporal validity
+# trivially in either order.
+#
+# Measured: 91% of queued cases contained one, and 100% of those were length 2.
+# The feature was effectively a constant carrying no information, while holding
+# the single largest score weight. AMLworld's CYCLE typology has a median of 4
+# accounts, so genuine laundering loops are length 3 or more.
+MIN_CYCLE_LEN = 3
+
 
 @dataclass
 class Motifs:
@@ -58,6 +68,9 @@ class Motifs:
     fan_in_count: int = 0
     # pass-through nodes are the mule signature
     n_passthrough: int = 0
+    # Mutual A<->B pairs. Retained as a separate, unweighted count because they
+    # are ordinary commerce and must not be reported as laundering loops.
+    n_mutual_pairs: int = 0
     # GARG-AML layered read: block densities, bipartite and stack strength.
     layers: LayerProfile = field(default_factory=LayerProfile)
     exact: bool = True
@@ -79,6 +92,7 @@ class Motifs:
             "fan_out_count": self.fan_out_count,
             "fan_in_count": self.fan_in_count,
             "n_passthrough": self.n_passthrough,
+            "n_mutual_pairs": self.n_mutual_pairs,
             **{f"layer_{k}": v for k, v in self.layers.to_dict().items()},
             "exact": self.exact,
         }
@@ -94,7 +108,8 @@ def build_digraph(edges) -> nx.DiGraph:
 
 
 def find_cycles(G: nx.DiGraph, max_len: int = MAX_CYCLE_LEN,
-                limit: int = MAX_CYCLES) -> list[list[int]]:
+                limit: int = MAX_CYCLES,
+                min_len: int = MIN_CYCLE_LEN) -> list[list[int]]:
     """Simple directed cycles up to `max_len`, capped at `limit`.
 
     Capped because a dense subgraph can contain combinatorially many cycles and
@@ -103,6 +118,8 @@ def find_cycles(G: nx.DiGraph, max_len: int = MAX_CYCLE_LEN,
     """
     out: list[list[int]] = []
     for cyc in nx.simple_cycles(G, length_bound=max_len):
+        if len(cyc) < min_len:
+            continue
         out.append(cyc)
         if len(out) >= limit:
             break
@@ -206,6 +223,7 @@ def detect(edges) -> Motifs:
     # so it is computed even for subgraphs too large for cycle enumeration --
     # those are exactly the ones where a stack or bipartite shape is likeliest.
     m.layers = layer_profile(G)
+    m.n_mutual_pairs = sum(1 for a, b in G.edges() if a < b and G.has_edge(b, a))
 
     if m.n_nodes > MAX_EXACT_NODES:
         # Too large for exact enumeration. Say so rather than reporting zeros

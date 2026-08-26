@@ -1,0 +1,1 @@
+{"case":"CASE-00037","verdict":"confirmed_partial","reason":"subset_confirmed","note":"","at":"2022-09-04T01:00:00","analyst":"console","confirmed_members":["152416:814890831","154043:81462BEC1","154043:814890791","154148:81488CB91","154518:8148C5521","254595:81488FEF1","254958:81488C391","256496:8148C5611","54348:81488FA51"],"dropped_members":[],"seconds_to_decide":41.2}
