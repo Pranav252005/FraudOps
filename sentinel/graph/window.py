@@ -172,27 +172,50 @@ class WindowedGraph:
         garbage cluster that discredits this whole class of system, so such
         nodes are included but not traversed *through*.
         """
+        return self.expand_traced(seeds, hops=hops, max_nodes=max_nodes,
+                                   max_degree=max_degree)[0]
+
+    def expand_traced(self, seeds, hops: int = 2, max_nodes: int = 200,
+                      max_degree: int = 50) -> tuple[set[int], dict]:
+        """`expand`, plus a record of *why* it stopped where it did.
+
+        The funnel measurement (scripts/eval_funnel.py) showed BIPARTITE and
+        STACK rings are seeded at 90-100% but produce a covering candidate
+        only 3% and 13% of the time -- the loss is here, in expansion, not in
+        seeding. Distinguishing "the hub guard refused to traverse", "the node
+        cap truncated", and "expansion simply ran out of graph" is what turns
+        that into an actionable change, so the trace is produced by the real
+        expansion path rather than by a reimplementation that could drift
+        from it.
+        """
         seen: set[int] = set(seeds)
         frontier: set[int] = set(seeds)
+        trace = {"hops_completed": 0, "hub_blocked": 0, "truncated": False,
+                 "exhausted": False, "hit_node_cap": False}
         for _ in range(hops):
             nxt: set[int] = set()
             for node in frontier:
                 nbrs = self.neighbours(node)
                 if len(nbrs) > max_degree:
+                    trace["hub_blocked"] += 1
                     continue
                 nxt |= nbrs - seen
             if not nxt:
+                trace["exhausted"] = True
                 break
             room = max_nodes - len(seen)
             if room <= 0:
+                trace["hit_node_cap"] = True
                 break
             if len(nxt) > room:
                 # Prefer the tightest-connected candidates rather than an
                 # arbitrary slice, so truncation degrades gracefully.
                 nxt = set(sorted(nxt, key=lambda n: len(self.neighbours(n)))[:room])
+                trace["truncated"] = True
             seen |= nxt
             frontier = nxt
-        return seen
+            trace["hops_completed"] += 1
+        return seen, trace
 
     def subgraph_edges(self, nodes: set[int]) -> list[tuple[int, int, PairAgg]]:
         """Edges with both endpoints inside `nodes`."""

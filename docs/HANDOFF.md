@@ -352,6 +352,93 @@ candidate-build stage specifically (log why a seeded ring's expansion
 produces no covering candidate: hub-guard truncation, node-cap truncation, or
 genuine Jaccard failure) before changing the seed rule.
 
+### 5c. Build-stage diagnosis — and a third correction
+
+`scripts/diagnose_build.py` does exactly what 5b asked for: for every seeded
+ring it expands from each seed member, records the best containment and
+Jaccard achieved, and classifies the failure using a trace produced by the
+*real* expansion path (`WindowedGraph.expand_traced`, which `expand` now
+delegates to, so the trace cannot drift from the code it describes).
+
+Over the same 34 cycles, 230 seeded rings, at the shipped settings
+(hops=2, max_nodes=200, max_degree=50):
+
+| outcome | rings | share |
+|---|---:|---:|
+| **BUILT** (clears containment ≥50% *and* Jaccard ≥0.3) | 115 | 50% |
+| **DILUTION_FAIL** (≥50% of the ring found, then Jaccard <0.3) | 88 | **38%** |
+| **CONTAINMENT_FAIL** (never reached ≥50% of the ring) | 27 | 12% |
+| **FOUND at containment alone** | **203** | **88%** |
+
+| typology | seeded | built | contain-fail | dilute-fail | mean cont. | mean Jacc. | ring | cand |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| BIPARTITE | 28 | **0** | 12 | 16 | 0.43 | 0.14 | 6.4 | 15.2 |
+| CYCLE | 31 | 17 | 0 | 14 | 0.90 | 0.32 | 4.4 | 14.5 |
+| FAN-IN | 26 | 19 | 0 | 7 | 1.00 | 0.49 | 7.3 | 16.1 |
+| FAN-OUT | 30 | 20 | 0 | 10 | 1.00 | 0.38 | 6.9 | 19.6 |
+| GATHER-SCATTER | 35 | 23 | 0 | 12 | 1.00 | 0.51 | 7.4 | 17.7 |
+| RANDOM | 22 | 10 | 1 | 11 | 0.91 | 0.31 | 4.4 | 17.3 |
+| SCATTER-GATHER | 28 | 24 | 0 | 4 | 1.00 | 0.63 | 10.0 | 16.3 |
+| STACK | 30 | **2** | 14 | 14 | 0.52 | 0.15 | 5.7 | 19.1 |
+
+**Correction to 5b, which is the third reversal on this question.** 5b said
+"the real loss is candidate-build for BIPARTITE/STACK". That is only
+one-third right:
+
+- **Expansion is not broken for six of the eight typologies.** CYCLE,
+  FAN-IN, FAN-OUT, GATHER-SCATTER, SCATTER-GATHER and RANDOM all reach
+  **mean containment 0.90–1.00** — expansion routinely recovers the *entire*
+  ring. They "fail to build" only because the neighbourhood dragged in
+  alongside (mean candidate ~15–20 nodes around a ~4–10 node ring) pushes
+  Jaccard under the 0.3 floor.
+- **38% of all seeded rings are found and then rejected by the metric**, vs
+  12% genuinely not reached. The dominant term in the built-stage loss is
+  **dilution, not discovery.**
+- BIPARTITE and STACK *do* have a real containment problem (mean 0.43 and
+  0.52), and they are the only two that do.
+
+**All three expansion knobs are ruled out as the fix, by experiment:**
+
+| config | BUILT | BIPARTITE found | STACK found | mean cand size |
+|---|---:|---:|---:|---:|
+| hops=2, deg=50 (shipped) | **115** | 16 | 16 | ~17 |
+| hops=3, deg=50 | 48 | 16 | 16 | ~44 |
+| hops=2, deg=500 | 112 | 16 | 16 | ~17 |
+
+- **node_cap: 0 occurrences.** `EXPAND_MAX_NODES` is never the binding
+  constraint. The 5b guess that it might be was wrong.
+- **hub_guard: 4 occurrences**, and relaxing it 10× (deg 50→500) moves
+  nothing — BIPARTITE and STACK stay at 16 found, total BUILT drops slightly.
+  The 5b guess that the hub guard was "plausibly" the cause was also wrong.
+- **hops=3 does not improve containment for BIPARTITE or STACK at all**
+  (both still 16 found) while **more than halving total BUILT (115→48)**,
+  because candidate size jumps ~17→~44 and Jaccard collapses everywhere.
+
+So the 23 `hop_limit` containment failures are not "needs one more hop" —
+given another hop, expansion still does not reach those members. BIPARTITE
+and STACK members are genuinely not reachable from a *pass-through* seed
+within the window. That is a structural property of seed-and-expand on those
+two shapes, not a tuning parameter.
+
+### What this actually implies
+
+1. **The single highest-value change is candidate pruning, not wider
+   expansion.** 88 rings are already inside a candidate and are being thrown
+   away for carrying passengers. Pruning a candidate to its structurally
+   connected core before scoring raises Jaccard *legitimately* — it makes the
+   candidate genuinely tighter rather than moving the goalposts.
+2. **Do not simply lower the Jaccard floor.** That would convert 88 rings to
+   "built" overnight and inflate every headline number without improving the
+   detector at all. The floor exists because a containment-only metric let a
+   node-count baseline tie the score (bug #8). Any change to it must re-run
+   the `size`/`degree`/`random` baselines to show they do not re-tie —
+   otherwise it is the same mistake a second time.
+3. **BIPARTITE and STACK need a different generator, not a tuned one.**
+   Seed-and-expand from a pass-through account cannot reach them. A
+   bipartite/stack-specific construction (e.g. seeding on a *pair* of layers,
+   or building from the GARG-AML layer decomposition directly) is the honest
+   path; more hops is not.
+
 ---
 
 ## 6. Bugs found and fixed — the portfolio
