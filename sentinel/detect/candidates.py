@@ -18,10 +18,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sentinel.config import (EXPAND_HOPS, EXPAND_MAX_DEGREE, EXPAND_MAX_NODES)
+from sentinel.config import (EXPAND_HOPS, EXPAND_MAX_DEGREE, EXPAND_MAX_NODES,
+                             PRUNE_STRATEGY)
 from sentinel.detect import features as F
 from sentinel.detect.merge import DEFAULT_THRESHOLD, suppress
 from sentinel.detect.motifs import Motifs, detect
+from sentinel.detect.prune import prune as prune_candidate
 
 MIN_NODES = 3          # two accounts have no structure to detect
 MIN_EDGES = 2
@@ -59,7 +61,8 @@ class CandidateGenerator:
                  hops: int = EXPAND_HOPS,
                  max_nodes: int = EXPAND_MAX_NODES,
                  max_degree: int = EXPAND_MAX_DEGREE,
-                 min_nodes: int = MIN_NODES):
+                 min_nodes: int = MIN_NODES,
+                 prune_strategy: str = PRUNE_STRATEGY):
         self.graph = graph
         self.registry = registry
         self.node_key = node_key
@@ -67,9 +70,11 @@ class CandidateGenerator:
         self.max_nodes = max_nodes
         self.max_degree = max_degree
         self.min_nodes = min_nodes
+        self.prune_strategy = prune_strategy
         self.stats = {
             "seeds": 0, "expanded": 0, "deduped": 0,
             "too_small": 0, "emitted": 0, "suppressed": 0,
+            "pruned_nodes": 0,
         }
 
     # -- seeding --------------------------------------------------------------
@@ -115,6 +120,18 @@ class CandidateGenerator:
                              max_nodes=self.max_nodes,
                              max_degree=self.max_degree)
             self.stats["expanded"] += 1
+
+            # Prune the expansion by-products before anything downstream sees
+            # the candidate. Deliberately ahead of the dedup key: two seeds
+            # whose raw neighbourhoods differed only by passengers collapse to
+            # the same member set once pruned, which is a real dedup win
+            # rather than a coincidence.
+            if self.prune_strategy and self.prune_strategy != "none":
+                before = len(nodes)
+                nodes = prune_candidate(nodes, seed, g, self.prune_strategy,
+                                         min_nodes=self.min_nodes)
+                self.stats["pruned_nodes"] += before - len(nodes)
+
             if len(nodes) < self.min_nodes:
                 self.stats["too_small"] += 1
                 continue

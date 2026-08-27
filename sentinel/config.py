@@ -45,6 +45,32 @@ EXPAND_MAX_NODES = 200
 # unrelated crowd and produces the giant cluster that discredits the queue.
 EXPAND_MAX_DEGREE = 50
 
+# --- Candidate pruning ------------------------------------------------------
+
+# Expansion recovers the ring and then buries it. Measured over 230 seeded
+# rings (scripts/diagnose_build.py): mean containment is 0.85 but 88 of them
+# (38%) are rejected because the ~17-node neighbourhood around a ~7-node ring
+# puts Jaccard under the 0.3 hit floor. Pruning the expansion by-products is
+# the honest fix -- it tightens the candidate rather than lowering the bar.
+#
+# `leaf2` was chosen by measurement, not taste (scripts/sweep_prune.py):
+#
+#   strategy        BUILT  FOUND   cont   jacc   cand
+#   none              115    203  0.846  0.369   17.0
+#   leaf2             159    190  0.743  0.485    8.2
+#   kcore2            144    148  0.568  0.445    4.4
+#   near_or_linked    159    190  0.743  0.485    8.2
+#
+# leaf2 improves BUILT for *every* typology (BIPARTITE 0->6, STACK 2->9,
+# GATHER-SCATTER 23->31) and, unlike kcore2, does not dismantle FAN shapes
+# whose sinks are legitimately degree-1. near_or_linked is indistinguishable
+# from leaf2 on this data, so the simpler rule wins.
+#
+# The cost is real and is not hidden: containment falls 0.846 -> 0.743 and 13
+# rings that were reachable stop clearing the containment floor. The trade is
+# +44 built against -13 found.
+PRUNE_STRATEGY = "leaf2"
+
 # --- Features excluded on purpose -------------------------------------------
 
 # 86.6% of laundering rows are ACH against an 11.8% base rate -- a 7.3x lift
