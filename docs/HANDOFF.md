@@ -420,6 +420,68 @@ and STACK members are genuinely not reachable from a *pass-through* seed
 within the window. That is a structural property of seed-and-expand on those
 two shapes, not a tuning parameter.
 
+### 5d. Pruning shipped — it worked, and it broke something else
+
+`sentinel/detect/prune.py` (`leaf2`, chosen by sweep, see §5c implications)
+is now wired into `CandidateGenerator`. End-to-end re-runs of
+`scripts/eval_funnel.py` and `scripts/eval_phase2.py`:
+
+| funnel stage | before | after |
+|---|---:|---:|
+| seeded | 230 (89%) | 230 (89%) |
+| **built** | 140 (54%) | **162 (63%)** |
+| **ranked (top-50)** | 34 (13%) | **49 (19%)** |
+| BIPARTITE built | 1 (3%) | 5 (16%) |
+| STACK built | 4 (13%) | 9 (30%) |
+| CYCLE built | 21 (57%) | 28 (76%) |
+
+| metric | before (95% CI) | after (95% CI) | CIs overlap? |
+|---|---|---|---|
+| p@10 | 0.085 [0.059, 0.115] | 0.097 [0.068, 0.126] | yes — not distinguishable |
+| p@20 | 0.049 [0.032, 0.065] | 0.079 [0.059, 0.100] | barely |
+| **p@50** | 0.024 [0.016, 0.032] | **0.043 [0.033, 0.054]** | **no — real** |
+| ring recall | 15.4% | **20.1%** | — |
+
+**But the baselines re-tied, which is bug #8's exact pattern returning.**
+`scripts/eval_phase2.py` runs `size` / `degree` / `random` alongside the
+score. Before pruning the score dominated them completely. After:
+
+| ranking | p@10 | p@20 | p@50 | ring recall |
+|---|---:|---:|---:|---:|
+| **score** | **0.097** | **0.079** | 0.043 | **20.1%** |
+| size | 0.088 | 0.074 | **0.049** | 18.5% |
+| degree | 0.062 | 0.071 | 0.047 | 16.6% |
+| random | 0.000 | 0.001 | 0.002 | 5.0% |
+
+The score's margin over a baseline that just counts nodes has collapsed from
+roughly **7×** (ring recall 15.4% vs 2.3%) to **1.09×** (20.1% vs 18.5%) —
+and **at p@50 the size baseline now beats the score outright** (0.049 vs
+0.043).
+
+Read honestly: **pruning is a real improvement to candidate generation and a
+real problem for the scoring function.** More rings are reachable (recall
+15.4% → 20.1%, and that part is genuine), but almost all of that gain is
+available to a trivial ranker. The v1 hand-set score is no longer doing
+meaningful discriminative work on the pruned candidate set.
+
+Two readings, not yet separated:
+1. Pruning normalised candidate size (mean 17 → 8.2 nodes), so node count
+   went from an anti-signal (huge candidates trivially failed Jaccard) to a
+   real one, and the score simply is not exploiting the tighter candidates.
+2. The v1 score was always partly a size proxy, and pruning removed the
+   noise that was hiding it.
+
+Either way the conclusion is the same and it is not optional: **any headline
+that quotes the pruned p@k must quote the size baseline next to it.**
+"p@20 improved 61%" is true and misleading on its own; the size baseline
+improved more, from 0.000 to 0.074.
+
+**Next task is the scorer, not the generator.** The re-ranker CI result (§3)
+already said the learned ranker's lift was noise at n=17; this says the
+hand-set score is now barely above node-count. Those are the same finding
+from two directions: ranking is where the remaining loss lives, and neither
+current ranker is earning its place.
+
 ### What this actually implies
 
 1. **The single highest-value change is candidate pruning, not wider
