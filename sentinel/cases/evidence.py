@@ -51,6 +51,16 @@ ROLE_SINK = "SINK"
 ROLE_PASS_THROUGH = "PASS_THROUGH"
 ROLE_ISOLATED = "ISOLATED"
 
+# Regulatory instruments a narrative may cite for a claim about the law, as
+# opposed to a claim about this case's transaction evidence. Kept as a closed
+# set so an invented statute is rejected exactly like an invented
+# transaction id. See sentinel/compliance/fiu_ind.py for the primary text and
+# for which of these are verified against it.
+REG_RBI_PA_2025 = "RBI-PA-DIRECTIONS-2025-PARA-13i"
+REG_PMLA_MOR_2005 = "PMLA-MAINTENANCE-OF-RECORDS-RULES-2005"
+REG_DPDP_2023 = "DPDP-ACT-2023"
+REGULATORY_CITATIONS = frozenset({REG_RBI_PA_2025, REG_PMLA_MOR_2005, REG_DPDP_2023})
+
 
 @dataclass
 class Transaction:
@@ -96,10 +106,21 @@ class CaseFile:
 
     def valid_citation_ids(self) -> set[str]:
         """Every id a narrative may cite: the case id, every transaction id,
-        and every member account key. Anything else is unverifiable."""
+        every member account key, and the fixed set of regulatory authorities
+        below. Anything else is unverifiable.
+
+        Regulatory ids are included because a narrative makes two different
+        kinds of factual claim, and both must be sourced: claims about *this
+        case's evidence* ("account X forwarded Y"), which cite a transaction,
+        and claims about *the law* ("the filing clock is N days"), which must
+        cite the instrument they come from. Without these, a statutory claim
+        would either fail verification or -- worse -- be propped up with a
+        transaction id that does not actually support it.
+        """
         ids = {self.case_id}
         ids.update(t.txn_id for t in self.transactions)
         ids.update(m.account for m in self.members)
+        ids.update(REGULATORY_CITATIONS)
         return ids
 
     def to_dict(self) -> dict:

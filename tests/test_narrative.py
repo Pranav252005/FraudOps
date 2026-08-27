@@ -8,8 +8,8 @@ LLM-drafted narrative is exactly the case this exists to catch.
 """
 from __future__ import annotations
 
-from sentinel.cases.evidence import (CaseFile, MemberRole, Provenance,
-                                     ROLE_PASS_THROUGH, ROLE_SINK,
+from sentinel.cases.evidence import (REG_PMLA_MOR_2005, CaseFile, MemberRole,
+                                     Provenance, ROLE_PASS_THROUGH, ROLE_SINK,
                                      ROLE_SOURCE, Transaction)
 from sentinel.narrative.citation import NarrativeVerificationError, verify
 from sentinel.narrative.str_narrative import generate, generate_and_verify
@@ -78,6 +78,22 @@ class TestCitationVerifier:
 
     def test_empty_narrative_is_trivially_ok(self):
         result = verify("", {"1:A"})
+        assert result.ok
+
+    def test_rejects_an_invented_statute(self):
+        """A claim about the law must cite a real instrument from the closed
+        regulatory set, exactly as a claim about evidence must cite a real
+        transaction. An invented Act is a hallucinated fact like any other."""
+        cf = make_case_file()
+        text = ("The filing clock is 30 days [FAKE-BANKING-ACT-1999].")
+        result = verify(text, cf.valid_citation_ids())
+        assert not result.ok
+        assert "FAKE-BANKING-ACT-1999" in result.unverifiable_citations
+
+    def test_accepts_a_known_regulatory_citation(self):
+        cf = make_case_file()
+        text = f"The filing clock is seven working days [{REG_PMLA_MOR_2005}]."
+        result = verify(text, cf.valid_citation_ids())
         assert result.ok
 
 

@@ -23,13 +23,22 @@ stop, never a warning that gets filed anyway.
 """
 from __future__ import annotations
 
-from sentinel.cases.evidence import ROLE_PASS_THROUGH, CaseFile
+from sentinel.cases.evidence import (REG_PMLA_MOR_2005, REG_RBI_PA_2025,
+                                     ROLE_PASS_THROUGH, CaseFile)
 from sentinel.narrative.citation import (NarrativeVerificationError,
                                          VerificationResult, verify)
 
+# The seven-working-day clock derives from the PML (Maintenance of Records)
+# Rules, 2005, NOT from the RBI PA Directions 2025 -- and its primary text has
+# not been checked in this repo. See sentinel/compliance/fiu_ind.py. Hedged
+# wording is deliberate: a filing deadline stated flatly and wrongly inside a
+# compliance artifact is precisely the plausible-looking error this project
+# keeps a bug catalogue for.
 FILING_CLOCK_NOTE = (
-    "Per FIU-IND requirements, this report must be filed within seven "
-    "working days of the date suspicion was formed."
+    "Filing timeline: the applicable STR filing clock, understood to be seven "
+    "working days from the date suspicion is formed "
+    f"[{REG_PMLA_MOR_2005}], should be confirmed against the current Rules "
+    f"before this report is filed [{REG_PMLA_MOR_2005}]."
 )
 
 
@@ -113,7 +122,11 @@ def _conclusion(cf: CaseFile) -> str:
     return (
         f"This report and its supporting transaction ledger are retained in "
         f"case file {cf.case_id} for the purpose of {cf.purpose.replace('_', ' ')} "
-        f"[{cf.case_id}]."
+        f"[{cf.case_id}]. "
+        f"The filing obligation arises under RBI Master Direction on Regulation "
+        f"of Payment Aggregator, Chapter IV paragraph 13(i), which directs a "
+        f"non-bank PA to register with FIU-IND and meet its reporting "
+        f"requirements [{REG_RBI_PA_2025}]."
     )
 
 
