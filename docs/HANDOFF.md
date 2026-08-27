@@ -6,7 +6,9 @@ session can pick up without re-deriving anything.
 **Repo:** https://github.com/Pranav252005/FraudOps
 **Target:** Razorpay AI Buildathon, AI Risk Manager track. One class of loss:
 money-movement / mule rings. Defence only.
-**Tests:** 192, all passing.
+**Tests:** 308, all passing (stale count corrected here — was 192 as of the
+first version of this document; multiple sessions since then added coverage,
+most recently for candidate pruning).
 
 ---
 
@@ -481,6 +483,95 @@ already said the learned ranker's lift was noise at n=17; this says the
 hand-set score is now barely above node-count. Those are the same finding
 from two directions: ranking is where the remaining loss lives, and neither
 current ranker is earning its place.
+
+### 5e. Correction to 5d — the p@50 "size beats score" claim does not survive its own CI
+
+5d's before/after CIs were computed from two **separate** runs (old stored
+`funnel.json` vs a fresh one), which is the same weakness §3 already called
+out for the re-ranker lift. `scripts/eval_prune_impact.py` redoes it properly:
+both `prune_strategy=none` and `leaf2` are run over the **identical** 34
+cycles, so the delta is a paired bootstrap (`sentinel/eval/bootstrap.py`,
+resampled on matched pairs) rather than two independently-noisy intervals.
+
+**Headline, paired (leaf2 − none), 2000 resamples:**
+
+| k | none | leaf2 | delta | 95% CI | excludes 0? |
+|---:|---:|---:|---:|---|---|
+| 10 | 0.085 | 0.097 | +0.012 | [-0.021, +0.044] | no — 5d was right to hedge this one |
+| 20 | 0.049 | 0.079 | +0.031 | [+0.010, +0.053] | **yes — real** |
+| 50 | 0.024 | 0.043 | +0.019 | [+0.009, +0.029] | **yes — real** |
+| 100 | 0.015 | 0.026 | +0.011 | [+0.006, +0.016] | **yes — real** |
+
+So the generation-side gain is confirmed at k=20/50/100, not just claimed.
+
+**Re-tie check, paired (score − size), same cycles:**
+
+| k | under `none` (pre-prune) | under `leaf2` (post-prune) |
+|---:|---|---|
+| 10 | +0.085 [+0.059,+0.115] real | +0.009 [-0.027,+0.041] **gone — not proven either way** |
+| 20 | +0.049 [+0.032,+0.065] real | +0.006 [-0.021,+0.031] **gone** |
+| 50 | +0.023 [+0.015,+0.031] real | -0.007 [-0.019,+0.005] **gone** (point favours size, CI includes 0 — 5d's "size beats score at p@50" is *not* statistically established) |
+| 100 | +0.012 [+0.007,+0.017] real | -0.009 [-0.016,-0.002] **size significantly beats score, confirmed** |
+
+**Correction to 5d:** the p@50 reversal it reported as a fact is a point
+estimate whose own CI includes zero — by this project's own rule (§3, "a
+gain whose interval includes zero is not a gain"), that rule cuts both ways
+and the same discipline applies to a claimed *loss*. What paired resampling
+actually confirms is narrower and arguably worse: **score's entire margin
+over a trivial node-count ranker has collapsed to statistical noise at
+k=10/20/50**, and at k=100 the reversal is real. 5d's practical conclusion
+stands regardless of this correction — the scorer is the next task — but the
+evidence for it is "the score no longer clearly beats size," not "size now
+clearly beats score."
+
+**Per-typology built, corrected to the distinct-ring funnel (`eval_funnel.py`
+semantics — a ring counts once if built in *any* cycle it was active, not
+once per cycle; an earlier per-cycle-instance version of this table produced
+misleading swings and was discarded):**
+
+| typology | seeded | built before | built after | delta |
+|---|---:|---:|---:|---:|
+| BIPARTITE | 28 | 1 | 5 | +4 |
+| CYCLE | 31 | 21 | 28 | +7 |
+| **FAN-IN** | 26 | 23 | **21** | **-2** |
+| FAN-OUT | 30 | 23 | 24 | +1 |
+| GATHER-SCATTER | 35 | 29 | 31 | +2 |
+| RANDOM | 22 | 13 | 17 | +4 |
+| SCATTER-GATHER | 28 | 26 | 27 | +1 |
+| STACK | 30 | 4 | 9 | +5 |
+| **TOTAL** | 230 | 140 | 162 | +22 |
+
+**FAN-IN got slightly worse, and this was not caught before shipping.**
+`scripts/sweep_prune.py`'s own diagnostic (the one the ship decision was made
+from) measures best-containment/best-jaccard per ring across every seed
+attempt in isolation, ignoring the generator's real dedup and
+overlap-suppression pipeline (`sentinel/detect/merge.py`). The full pipeline
+disagrees with it for FAN-IN: 23→21 distinct rings built, and ranked drops
+5→4 with it. Plausible mechanism, not yet confirmed: FAN-IN's ring members
+are receive-only sinks around a hub, and `leaf2`'s far-leaf rule keeps
+1-hop-from-seed nodes unconditionally but can still drop a legitimate
+far-side sink whose only path back into the candidate is a single edge —
+the same shape the shipped commit message worried about for FAN-OUT (which
+did *not* regress) but did not check for FAN-IN specifically. **Flagged, not
+fixed.** Every other typology matches sweep_prune's directional claim
+(BIPARTITE, CYCLE, GATHER-SCATTER, RANDOM, SCATTER-GATHER, STACK all
+improved in the full pipeline too), so this is a one-typology exception, not
+a reason to distrust the strategy overall — but "improves BUILT for *every*
+typology" (0b3157f's commit message) is not quite true and is corrected here.
+
+**Why BIPARTITE and STACK improved — checked, not assumed.** Pruning only
+removes nodes, so it cannot raise containment; it can only be *found and then
+rescued* on rings that already reached ≥50% containment pre-prune and were
+purely Jaccard-rejected. `data/build_diagnosis_h2_d50.json` shows exactly
+that pool: 16 of 28 seeded BIPARTITE rings and 14 of 30 seeded STACK rings
+were `dilution_fail` (containment cleared, Jaccard didn't) before pruning
+shipped. BIPARTITE's 1→5 and STACK's 4→9 built counts are drawn from those
+pools and are smaller than the pools' ceiling, consistent with a partial,
+legitimate rescue rather than a scoring artifact.
+
+Reproduce: `python scripts/eval_prune_impact.py` (writes
+`data/prune_impact.json`; ~40 min, runs both strategies over the same 34
+cycles).
 
 ### What this actually implies
 
