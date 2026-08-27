@@ -253,6 +253,27 @@ class TestCandidateGenerator:
         gen = CandidateGenerator(g)
         assert gen.generate(batch(0, 60, [(1, 0, 1, 10.0, 0)])) == []
 
+    def test_prune_strategy_is_actually_applied(self):
+        """The wiring, not just the function: `prune_strategy` on the
+        generator must reach every emitted candidate, not only be accepted
+        and ignored."""
+        g = graph_from([(0, 1, 10.0), (1, 2, 10.0), (2, 0, 10.0), (2, 9, 10.0)])
+        b = batch(0, 60, [(1, s, d, 10.0, 0) for s, d in
+                          [(0, 1), (1, 2), (2, 0), (2, 9)]])
+        gen_none = CandidateGenerator(g, prune_strategy="none")
+        gen_leaf2 = CandidateGenerator(g, prune_strategy="leaf2")
+        none_cands = gen_none.generate(b)
+        leaf2_cands = gen_leaf2.generate(b)
+
+        assert any(9 in c.nodes for c in none_cands), \
+            "unpruned candidates keep the passenger"
+        assert all(9 not in c.nodes for c in leaf2_cands), \
+            "leaf2 must actually drop it from every emitted candidate"
+        assert any({0, 1, 2} <= c.nodes for c in leaf2_cands), \
+            "the cycle must survive"
+        assert gen_none.stats["pruned_nodes"] == 0
+        assert gen_leaf2.stats["pruned_nodes"] > 0
+
 
 # --------------------------------------------------------------------------
 # Overlap suppression
