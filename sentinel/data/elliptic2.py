@@ -79,8 +79,34 @@ PUBLISHED_BASELINES = {
 
 
 def _read_csv(path: Path) -> list[dict]:
+    """Materialise a whole CSV. Only safe for the SMALL files.
+
+    Deliberately not used for `background_nodes.csv` (49.3M rows) or
+    `background_edges.csv` (196.2M rows) -- see `_stream_csv` and the
+    scale note in the module docstring.
+    """
     with open(path, "r", encoding="utf-8", newline="") as fh:
         return list(csv.DictReader(fh))
+
+
+def _stream_csv(path: Path):
+    """Yield (header, row_iterator) using csv.reader, never materialising.
+
+    csv.reader rather than DictReader: at 196M rows the per-row dict alone
+    is tens of gigabytes, and every column but two is discarded anyway.
+    """
+    fh = open(path, "r", encoding="utf-8", newline="")
+    reader = csv.reader(fh)
+    try:
+        header = next(reader, [])
+    except Exception:
+        fh.close()
+        raise
+    return fh, header, reader
+
+
+def _col_index(header: list[str], preferred: str, fallback: int) -> int:
+    return header.index(preferred) if preferred in header else fallback
 
 
 @dataclass
@@ -104,8 +130,31 @@ def missing_files(root: str | Path) -> list[str]:
     return [f for f in REQUIRED_FILES if not (root / f).exists()]
 
 
-def load(root: str | Path) -> Elliptic2Data:
+def load(root: str | Path, induced: bool = True,
+         max_background_edges: int | None = None,
+         progress_every: int = 0) -> Elliptic2Data:
     """Parse the five Elliptic2 files into the normalised Edge/LabeledRing shape.
+
+    **Scale.** The real background graph is 49,299,864 nodes and 196,215,606
+    edges. Materialising either file as a list of dicts needs tens of
+    gigabytes and will not complete on an ordinary machine -- an earlier
+    version of this function did exactly that, and would have died on the
+    first real run. The two big files are therefore streamed with
+    `csv.reader`, never held whole.
+
+    `induced=True` (the default) keeps only background edges with at least
+    one endpoint inside a labelled subgraph. That is the *evaluation-relevant*
+    neighbourhood: the labelled components total roughly 122K subgraphs of
+    ~3.7 nodes, so the retained graph is orders of magnitude smaller than the
+    full background while still carrying the immediate context around every
+    ring the metrics are scored against. It is a deliberate reduction, not a
+    silent one -- `stats` reports edges scanned vs retained, so the ratio is
+    always visible. Pass `induced=False` for the literal full graph, which is
+    honest but is not expected to fit in memory on this hardware.
+
+    `max_background_edges` caps retained edges (for a quick smoke run);
+    `progress_every` prints scan progress, since a 196M-row pass is slow
+    enough that silence is indistinguishable from a hang.
 
     Raises FileNotFoundError with the manual-download instructions if any
     file is missing, rather than silently returning an empty dataset --
@@ -123,14 +172,11 @@ def load(root: str | Path) -> Elliptic2Data:
             "for the exact files and layout expected."
         )
 
-    bg_nodes = _read_csv(root / "background_nodes.csv")
-    bg_edges = _read_csv(root / "background_edges.csv")
+    # --- small files: safe to materialise -------------------------------
     cc_rows = _read_csv(root / "connected_components.csv")
     node_rows = _read_csv(root / "nodes.csv")
     edge_rows = _read_csv(root / "edges.csv")
 
-    if not bg_nodes:
-        raise ValueError("background_nodes.csv is empty")
     if not cc_rows:
         raise ValueError("connected_components.csv is empty")
     if "ccLabel" not in cc_rows[0]:
@@ -145,20 +191,44 @@ def load(root: str | Path) -> Elliptic2Data:
         raise ValueError("nodes.csv needs at least a node-id and a component-id column")
     node_id_field, node_cc_field = node_cols[0], node_cols[1]
     node_to_cc = {row[node_id_field]: row[node_cc_field] for row in node_rows}
+    labelled_nodes = set(node_to_cc)
 
     def is_licit(label: str) -> bool:
         return label in LICIT_LABELS
 
+    # --- background_nodes.csv: streamed, counted only -------------------
+    # 49.3M rows and 43 anonymised pre-binned feature columns. Nothing
+    # downstream consumes those features yet, so only the row count is kept.
+    fh, _header, reader = _stream_csv(root / "background_nodes.csv")
+    try:
+        n_background_nodes = sum(1 for _ in reader)
+    finally:
+        fh.close()
+    if n_background_nodes == 0:
+        raise ValueError("background_nodes.csv is empty")
+
+    # --- background_edges.csv: streamed, filtered -----------------------
     edges: list[Edge] = []
-    if bg_edges:
-        edge_cols = list(bg_edges[0].keys())
-        if "clId1" in bg_edges[0] and "clId2" in bg_edges[0]:
-            c1_col, c2_col = "clId1", "clId2"
-        else:
-            c1_col, c2_col = edge_cols[0], edge_cols[1]
-        for row in bg_edges:
-            edges.append(Edge(ts=EPOCH, src=str(row[c1_col]), dst=str(row[c2_col]),
-                               amount=1.0, currency="BTC"))
+    scanned = 0
+    fh, header, reader = _stream_csv(root / "background_edges.csv")
+    try:
+        c1 = _col_index(header, "clId1", 0)
+        c2 = _col_index(header, "clId2", 1)
+        for row in reader:
+            scanned += 1
+            if progress_every and scanned % progress_every == 0:
+                print(f"  background_edges: scanned {scanned:,}, "
+                      f"retained {len(edges):,}", flush=True)
+            if len(row) <= max(c1, c2):
+                continue
+            src, dst = str(row[c1]), str(row[c2])
+            if induced and src not in labelled_nodes and dst not in labelled_nodes:
+                continue
+            edges.append(Edge(ts=EPOCH, src=src, dst=dst, amount=1.0, currency="BTC"))
+            if max_background_edges is not None and len(edges) >= max_background_edges:
+                break
+    finally:
+        fh.close()
 
     by_cc: dict[str, list[Edge]] = defaultdict(list)
     if edge_rows:
@@ -187,14 +257,23 @@ def load(root: str | Path) -> Elliptic2Data:
         ))
 
     stats = {
-        "n_background_nodes_file": len(bg_nodes),
-        "n_background_edges_file": len(bg_edges),
+        "n_background_nodes_file": n_background_nodes,
+        "background_edges_scanned": scanned,
+        "background_edges_retained": len(edges),
+        # The reduction this load applied, stated rather than implied. At
+        # full scale this should be a very small fraction; if it is close to
+        # 1.0 the induced filter is not actually reducing anything and the
+        # run is about to behave like a full load.
+        "background_edge_retention_ratio": (len(edges) / scanned) if scanned else 0.0,
+        "induced": induced,
+        "max_background_edges": max_background_edges,
+        "n_labelled_nodes": len(labelled_nodes),
         "n_components_labelled": len(cc_rows),
         "n_components_with_edges": len(by_cc),
     }
     return Elliptic2Data(
         edges=edges, rings=rings,
-        n_background_nodes=len(bg_nodes), n_background_edges=len(bg_edges),
+        n_background_nodes=n_background_nodes, n_background_edges=len(edges),
         n_licit_components=n_licit, n_suspicious_components=n_suspicious,
         stats=stats,
     )

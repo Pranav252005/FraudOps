@@ -67,6 +67,43 @@ class TestLoad:
         assert elliptic2.PUBLISHED_BASELINES["n_suspicious"] == 2_763
 
 
+class TestScaleHandling:
+    """The real background graph is 49.3M nodes / 196.2M edges. These pin the
+    behaviours that make that survivable; an earlier version materialised
+    both files as lists of dicts and would have died on the first real run."""
+
+    def test_reports_scan_vs_retention_so_the_reduction_is_visible(self):
+        data = elliptic2.load(FIXTURE)
+        assert data.stats["background_edges_scanned"] == 8
+        assert data.stats["background_edges_retained"] == data.n_background_edges
+        assert 0.0 <= data.stats["background_edge_retention_ratio"] <= 1.0
+
+    def test_induced_filter_drops_edges_far_from_any_labelled_node(self, tmp_path):
+        """An edge touching no labelled subgraph carries no evaluation signal
+        and must not be retained under the default induced load."""
+        for name in elliptic2.REQUIRED_FILES:
+            (tmp_path / name).write_text((FIXTURE / name).read_text())
+        # n90->n91 touches nothing labelled (labelled = n1,n2,n3,n6,n7,n8)
+        with open(tmp_path / "background_edges.csv", "a") as fh:
+            fh.write("n90,n91\n")
+        induced = elliptic2.load(tmp_path, induced=True)
+        full = elliptic2.load(tmp_path, induced=False)
+        assert induced.stats["background_edges_scanned"] == 9
+        assert induced.n_background_edges == 8, "the far edge must be dropped"
+        assert full.n_background_edges == 9, "induced=False keeps everything"
+
+    def test_max_background_edges_caps_a_smoke_run(self):
+        data = elliptic2.load(FIXTURE, max_background_edges=3)
+        assert data.n_background_edges == 3
+
+    def test_node_count_is_streamed_not_materialised(self):
+        """Only the row count of background_nodes.csv is kept -- its 43
+        anonymised feature columns are not consumed by anything yet."""
+        data = elliptic2.load(FIXTURE)
+        assert data.n_background_nodes == 10
+        assert data.stats["n_background_nodes_file"] == 10
+
+
 class TestDatasetAdapter:
     def test_build_node_ids_is_stable_and_dense(self):
         edges = [Edge(ts=None, src="a", dst="b", amount=1.0, currency="BTC"),
