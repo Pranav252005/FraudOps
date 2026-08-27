@@ -265,10 +265,23 @@ def main() -> None:
         import snapml  # noqa: F401
         gfp_note = "snapml imported but the GFP comparison run was not implemented"
     except ImportError:
-        gfp_note = ("snapml has no build for Python 3.14 (confirmed via "
-                     "`pip index versions snapml`); GFP control run skipped. "
-                     "This project's own feature set already covers GFP's "
-                     "published feature families -- see docs/HANDOFF.md section 4.")
+        # Correction to an earlier, softer claim: snapml is NOT unobtainable.
+        # `pip download snapml --only-binary=:all: --platform win_amd64` finds
+        # snapml 1.15.6 wheels for cp310 and cp311; it is 3.12+ that has no
+        # build, and this machine only has 3.14. So the GFP control is blocked
+        # on provisioning a Python 3.11 environment, not on the package being
+        # unavailable -- a materially smaller obstacle than "no build exists",
+        # and worth doing, because GFP+LightGBM is the *direct* architectural
+        # comparator for this project (hand-engineered subgraph features plus
+        # gradient boosting) and reports 62.86 minority-class F1 on AML
+        # HI-Small (arXiv:2402.08593 Table 4).
+        gfp_note = ("GFP control NOT run. snapml 1.15.6 ships cp310/cp311 "
+                     "win_amd64 wheels but none for 3.12+; this machine has "
+                     "only Python 3.14. Unblock = provision a Python 3.11 env "
+                     "and `pip install snapml`. Until then the 'feature parity "
+                     "with GFP' claim in docs/HANDOFF.md section 4 remains "
+                     "UNMEASURED -- it is a claim about feature-family "
+                     "coverage, not a measured F1 comparison.")
     print(f"\nGFP control: {gfp_note}")
 
     interpretation = None
