@@ -726,3 +726,121 @@ is the actual product.
 6. Final benchmark comparison **after** the architecture is complete (deferred
    deliberately; measuring a half-built system against a finished one is
    meaningless)
+
+---
+
+## 11. Economics, drafting, and calibration (added this session)
+
+Three components built after the §10 list was written, each aimed at a clause
+of the track's bar that nothing in the repo previously answered.
+
+### 11a. Cost model — `sentinel/economics/`
+
+The bar names false-positive cost explicitly and there was no cost model
+anywhere in the codebase. There is now.
+
+**The headline is a break-even precision, not a rupee figure**, and the design
+reason matters: an absolute expected-loss number needs the value at risk behind
+an average ring, which nobody building on a public benchmark knows. Quoting one
+would be bug #8's category — a confident number resting on an unchecked
+assumption.
+
+Better, the model **inverts**. `CostModel.required_value_at_risk(p)` solves for
+the ring value at which a queue of precision `p` breaks even:
+
+| depth | measured p@k | pays if the average ring has more than |
+|---|---:|---:|
+| top 10 | 0.097 | 66,384 at risk |
+| top 20 | 0.079 | 82,324 at risk |
+| top 50 | 0.043 | 154,236 at risk |
+
+Nobody has to accept the cost inputs to check that claim. Every default is a
+labelled placeholder; `unsourced()` names the ones still resting on nothing and
+`scripts/eval_cost.py` prints that warning above the results. `sensitivity()`
+sweeps each input so a conclusion that survives an order of magnitude can be
+identified as not depending on that input.
+
+One genuine architectural finding fell out of building it: **because actions are
+human-gated, the false-positive cost is mostly labour, not merchant harm.** The
+gate converts customer harm into analyst time. The residual is modelled
+explicitly with an analyst-false-approval rate rather than assumed to zero.
+
+**Still to do:** ground the six placeholder inputs. Until then the absolute
+rupee figures must not be quoted — only the break-even and the inversion.
+
+### 11b. LLM drafting under the existing citation contract — `sentinel/llm/`, `sentinel/narrative/`
+
+`str_narrative.py`'s docstring had pre-committed to this contract while the
+module was still template-only: *"If narrative drafting is ever routed through
+an LLM instead, the contract does not change."* It now is, and it doesn't.
+
+`draft_and_verify` tries a model draft, runs the **identical** `verify()` over
+it, and on failure discards the draft whole and falls back to the template. A
+rejected draft is never partially salvaged and never filed. Provenance —
+source, model, failure reason, the rejected text and its specific failures —
+goes into the response so a filed narrative always says who wrote it.
+
+**Why this was worth building at all:** the template's sentences carry citations
+by construction, so the verifier could never reject anything. A check that
+cannot fail is not evidence. LLM output can fail it, which makes the rejection
+rate a real metric — tracked in `sentinel/narrative/metrics.py`, exposed at
+`/api/llm/status`, persisted to `data/draft_ledger.jsonl`.
+
+Two properties are locked by tests: with no key the behaviour is byte-identical
+to before, and nothing in `sentinel/detect` or `sentinel/eval` may import
+`sentinel.llm` — a non-deterministic component inside a measured path would
+contaminate every reported interval.
+
+OpenRouter was chosen over a vendor SDK because the endpoint is
+OpenAI-compatible, so `OPENROUTER_BASE_URL` repoints the whole path at a
+self-hosted vLLM or Ollama instance with no code change. That is the answer to
+"does data leave the box" — demonstrated, not promised.
+
+### 11c. Calibration loop — `sentinel/learn/calibrate.py`
+
+Online reweighting from analyst verdicts, reading **aggregate counts only**. The
+transaction graph is never an input, and a test verifies that against the
+transitive import set in a subprocess (a direct-import check would pass while a
+dependency dragged pyarrow in behind it).
+
+The design turns on three things:
+
+1. **The control arm makes the estimate valid.** A loop fed only by verdicts on
+   surfaced cases learns only about the top of its own queue and converges onto
+   its own blind spots. `CONTROL_FRACTION = 0.10` random draws from below the
+   cut are the unbiased sample; both lanes combine by inverse-propensity
+   weighting. **Caveat:** the control propensity is approximated as
+   `1/CONTROL_FRACTION`. The true value is `n_control/len(rest)` per cycle and
+   is not recorded on the case. Recording it at `CaseManager.select` time would
+   make this exact — a small change, flagged not done.
+2. **The evidence gate.** No weight moves until a bootstrap CI on that term's
+   lift excludes 1.0, plus a minimum-observations floor per arm. Given how wide
+   the intervals already are at n = 17 to 34, an ungated update rule would chase
+   noise confidently — bug #14 waiting to happen.
+3. **Shrinkage and renormalisation**, preserving the sum-to-1.0 invariant
+   `features.py` asserts.
+
+Every term is written to the audit record including the ones that did **not**
+move and the reason — a log listing only changes cannot be audited.
+
+`insufficient_evidence` is excluded from both arms rather than counted negative;
+treating "the analyst could not tell" as "not a ring" would bias every term
+toward zero lift.
+
+**Still to do:** the replay demo — run the loop across the 10-day stream and
+show weights moving with the cost curve alongside. Needs the compiled stream.
+
+### 11d. Corrections to §10's premises
+
+- **Tests: 363**, not 192 and no longer 308.
+- **The working tree was clean**, not carrying CRLF churn — but 15 commits were
+  unpushed, so the public repo was missing the entire pruning workstream and
+  every correction in §5b to §5e. `.gitattributes` added regardless.
+- **Elliptic2 is publicly available on Kaggle**, not licence-gated. The §10
+  framing that it required a manual licensed request is wrong about
+  availability; `sentinel/data/elliptic2.py`'s docstring should be corrected
+  when the real files are loaded.
+- **Do not shorten `every_ticks` to widen the cycle count.** The window is 72h;
+  cycles 6h apart already overlap heavily, and at 2h they are near-duplicates.
+  Resampling near-duplicates narrows the interval spuriously. The honest route
+  to a narrower interval is more independent data.

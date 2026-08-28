@@ -13,15 +13,29 @@ evidence" requirement, but with no published prose template of its own. So
 the FinCEN structure is used here as the narrative template, and FIU-IND's
 own field/timeline requirements are layered on top rather than invented.
 
-This generator is template-based, not an LLM call, specifically so every
-sentence it produces already carries its citation by construction -- the
-citation verifier (`sentinel.narrative.citation`) should never actually have
-anything to reject here. If narrative drafting is ever routed through an LLM
-instead, the contract does not change: `generate_and_verify` still runs the
-same verifier over the LLM's output, and a failed verification is a hard
-stop, never a warning that gets filed anyway.
+There are two drafting paths and one contract.
+
+`generate` / `generate_and_verify` are the **template** path: every sentence
+carries its citation by construction, so the citation verifier
+(`sentinel.narrative.citation`) has nothing to reject here, and a failure
+would mean a bug in this file rather than a bad draft. That is why it raises.
+
+`draft_and_verify` is the **drafted** path, added later. It routes through an
+LLM (`sentinel.narrative.llm_draft`) when one is configured, and honours the
+contract this docstring pre-committed to before that path existed: the same
+verifier runs over the model's output, and a failed verification is a hard
+stop, never a warning that gets filed anyway. What the model path adds is only
+what happens after the stop -- the draft is discarded whole, never partially
+salvaged, and the template runs instead so the queue keeps moving. With no key
+configured it is the template path, byte for byte.
+
+The rejection rate is the point, not a side effect: a guardrail over text that
+cannot fail it measures nothing, so `sentinel.narrative.metrics` counts what
+the verifier stopped.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass, field
 
 from sentinel.cases.evidence import (REG_PMLA_MOR_2005, REG_RBI_PA_2025,
                                      ROLE_PASS_THROUGH, CaseFile)
@@ -146,9 +160,111 @@ def generate_and_verify(case_file: CaseFile) -> tuple[str, VerificationResult]:
     rather than returning a narrative that failed verification -- the
     contract this module exists to hold, whether the text came from this
     template or, in a future version, an LLM.
+
+    This is the template path specifically, and it raises because a template
+    that fails its own citation contract is a bug in this file. For the path
+    that may route through a model and fall back, see `draft_and_verify`.
     """
     narrative = generate(case_file)
     result = verify(narrative, case_file.valid_citation_ids())
     if not result.ok:
         raise NarrativeVerificationError(result)
     return narrative, result
+
+
+# --- the drafted path -------------------------------------------------------
+
+SOURCE_TEMPLATE = "template"
+SOURCE_LLM = "llm"
+
+
+@dataclass
+class NarrativeOutcome:
+    """A narrative plus the full provenance of how it came to be.
+
+    `source` records which generator produced the filed text, and
+    `rejected_draft` preserves the verification failure of a model draft that
+    was stopped. Both go into the case record: a filed narrative that does not
+    say whether a model wrote it is not auditable, and a rejected draft that
+    leaves no trace makes the guardrail unfalsifiable.
+    """
+    narrative: str
+    verification: VerificationResult
+    source: str
+    outcome: str
+    model: str = ""
+    llm_failure: str | None = None
+    llm_detail: str = ""
+    rejected_draft: str | None = None
+    rejected_reasons: list[str] = field(default_factory=list)
+
+
+def draft_and_verify(case_file: CaseFile, *, source: str = "auto",
+                     ledger=None, draft_fn=None) -> NarrativeOutcome:
+    """Produce a verified narrative, preferring a model draft when available.
+
+    The contract is the one this module's docstring pre-committed to and it is
+    unchanged: whatever wrote the text, `verify` runs over it, and a failure
+    is a hard stop. The only thing the model path adds is what happens *after*
+    the stop -- the draft is discarded and the template runs instead, so the
+    queue keeps moving. A rejected draft is never filed and never partially
+    salvaged.
+
+    `source="template"` forces the deterministic path. `source="auto"` tries
+    the model first and falls back on any failure, including no key being
+    configured, which is why an install with no `.env` behaves exactly as it
+    did before this function existed.
+    """
+    from sentinel.narrative import metrics as _metrics
+
+    if source not in ("auto", SOURCE_TEMPLATE, SOURCE_LLM):
+        raise ValueError(f"unknown narrative source: {source!r}")
+
+    valid_ids = case_file.valid_citation_ids()
+
+    def _record(outcome: str, detail: str = "", model: str = "") -> None:
+        if ledger is not None:
+            ledger.record(outcome, case_id=case_file.case_id, detail=detail,
+                          model=model)
+
+    llm_failure = llm_detail = None
+    rejected_draft = None
+    rejected_reasons: list[str] = []
+    model = ""
+
+    if source in ("auto", SOURCE_LLM):
+        if draft_fn is None:
+            from sentinel.narrative.llm_draft import draft as draft_fn
+        attempt = draft_fn(case_file)
+        model = attempt.model
+        if not attempt.ok:
+            llm_failure, llm_detail = attempt.failure, attempt.detail
+            _record(_metrics.LLM_UNAVAILABLE, detail=attempt.detail or "",
+                    model=model)
+        else:
+            result = verify(attempt.text, valid_ids)
+            if result.ok:
+                _record(_metrics.LLM_FILED, model=model)
+                return NarrativeOutcome(narrative=attempt.text,
+                                        verification=result,
+                                        source=SOURCE_LLM,
+                                        outcome=_metrics.LLM_FILED,
+                                        model=model)
+            # Rejected. Keep the draft and the reasons for the audit trail,
+            # then fall through to the template.
+            rejected_draft = attempt.text
+            rejected_reasons = result.failures
+            outcome = (_metrics.LLM_REJECTED_UNVERIFIABLE
+                       if result.unverifiable_citations
+                       else _metrics.LLM_REJECTED_UNCITED)
+            _record(outcome, detail="; ".join(rejected_reasons)[:500],
+                    model=model)
+
+    narrative, result = generate_and_verify(case_file)
+    _record(_metrics.TEMPLATE_FILED, model="")
+    return NarrativeOutcome(narrative=narrative, verification=result,
+                            source=SOURCE_TEMPLATE,
+                            outcome=_metrics.TEMPLATE_FILED, model=model,
+                            llm_failure=llm_failure, llm_detail=llm_detail or "",
+                            rejected_draft=rejected_draft,
+                            rejected_reasons=rejected_reasons)

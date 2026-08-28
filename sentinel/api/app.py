@@ -30,7 +30,10 @@ from sentinel.compliance.purpose import ACCESS_SCOPES, Purpose, retention_until
 from sentinel.config import WINDOW_MINUTES
 from sentinel.escalation import ACTION_DESCRIPTIONS, Action, decide, execute, recommend
 from sentinel.narrative.citation import NarrativeVerificationError
-from sentinel.narrative.str_narrative import generate_and_verify
+from sentinel.llm import config as llm_config
+from sentinel.narrative import metrics as draft_metrics
+from sentinel.narrative.str_narrative import (draft_and_verify,
+                                              generate_and_verify)
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 FRONTEND = ROOT / "frontend"
@@ -40,6 +43,12 @@ FRONTEND = ROOT / "frontend"
 CASES = Path(os.environ.get("SENTINEL_CASES", ROOT / "data" / "queue"))
 RECOMMENDATIONS = Path(os.environ.get("SENTINEL_RECOMMENDATIONS",
                                        ROOT / "data" / "recommendations"))
+
+# Drafting outcomes for this process, appended to disk so the rejection rate
+# survives a restart and can be quoted from a file rather than a screenshot.
+DRAFT_LEDGER = draft_metrics.DraftLedger(
+    path=Path(os.environ.get("SENTINEL_DRAFT_LOG",
+                             ROOT / "data" / "draft_ledger.jsonl")))
 
 app = FastAPI(title="Sentinel — ring investigation console")
 store = CaseStore(CASES).load()
@@ -297,7 +306,8 @@ async def case_file(case_id: str, role: str = "compliance"):
 
 
 @app.get("/api/case/{case_id}/str")
-async def case_str_narrative(case_id: str, role: str = "compliance"):
+async def case_str_narrative(case_id: str, role: str = "compliance",
+                             source: str = "auto"):
     """Generate and verify the STR narrative. A failed citation verification
     is returned as a 422 with the specific failures, never as a narrative
     that looks filed-ready but silently skipped its own check."""
@@ -318,11 +328,35 @@ async def case_str_narrative(case_id: str, role: str = "compliance"):
     cf = build_case_file(c, stream, WINDOW_MINUTES, _run_id,
                          purpose=Purpose.REGULATORY_REPORTING.value)
     try:
-        narrative, result = generate_and_verify(cf)
+        outcome = draft_and_verify(cf, source=source, ledger=DRAFT_LEDGER)
     except NarrativeVerificationError as e:
+        # Only reachable from the template path, which raising is correct for:
+        # a template that fails its own citation contract is a bug, not a bad
+        # draft. A rejected model draft never reaches here -- it falls back.
         raise HTTPException(422, {"error": "narrative failed citation verification",
                                   **e.result.to_dict()})
-    return {"narrative": narrative, "verification": result.to_dict()}
+    return {
+        "narrative": outcome.narrative,
+        "verification": outcome.verification.to_dict(),
+        # Provenance is part of the artifact, not debug output: a filed
+        # narrative that does not say whether a model wrote it is not
+        # auditable, and a draft the verifier stopped must leave a trace or
+        # the guardrail is unfalsifiable.
+        "source": outcome.source,
+        "model": outcome.model,
+        "llm_failure": outcome.llm_failure,
+        "rejected_draft": outcome.rejected_draft,
+        "rejected_reasons": outcome.rejected_reasons,
+    }
+
+
+@app.get("/api/llm/status")
+async def llm_status():
+    """Whether the drafted path is available, and what the verifier has
+    stopped so far this run. Safe to display -- `describe()` reports only the
+    last four characters of the key."""
+    return {"config": llm_config.describe(), "drafting": DRAFT_LEDGER.to_dict(),
+            "summary": DRAFT_LEDGER.summary()}
 
 
 @app.get("/api/actions")
