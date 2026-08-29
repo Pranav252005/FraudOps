@@ -858,6 +858,127 @@ profile: `deduped: 9`).
    cannot be reproduced, the control is uninformative and must be reported as
    such rather than partially quoted.
 
+### 12. Measured this session — and what it does and does not move
+
+Written after the runs, against the pre-registrations above rather than
+instead of them.
+
+#### 12.1 LambdaMART (item 1.3): does not beat what it would replace
+
+`scripts/eval_ranker.py`, 18 held-out cycles, 164 positive candidates, paired
+bootstrap over cycles. Candidate-level p@k:
+
+| ranking | p@10 | p@20 | p@50 |
+|---|---:|---:|---:|
+| pointwise (LGBMClassifier, all features) | **0.2778** | 0.1500 | 0.0689 |
+| lambdamart (LGBMRanker, group = cycle) | 0.2611 | **0.1611** | **0.0811** |
+| pointwise_intensive (size-blind) | 0.1556 | 0.0944 | 0.0456 |
+| lambdamart_intensive (size-blind) | 0.1500 | 0.0861 | 0.0478 |
+| blend (shipped v1) | 0.0500 | 0.0389 | 0.0244 |
+| size | 0.0333 | 0.0389 | 0.0233 |
+| best single feature (`scatter_gather_width`) | 0.0667 | 0.0417 | 0.0211 |
+
+The comparison that decides item 1.3 — listwise against the **pointwise model
+it is proposed to replace**, not against the baselines it easily beats:
+
+| k | lambdamart − pointwise | 95% CI | verdict |
+|---:|---:|---|---|
+| 10 | −0.0167 | [−0.0611, +0.0222] | includes zero |
+| 20 | +0.0111 | [−0.0139, +0.0361] | includes zero |
+| 50 | +0.0122 | [+0.0022, +0.0244] | REAL |
+
+**LambdaMART buys a real gain only at k=50, where the alert budget matters
+least.** Item 1.3 does not deliver. Two defects had to be fixed before this
+could be measured at all, both recorded in commit `1af9516`: LightGBM's
+lambdarank refuses query groups above 10,000 rows (cycles here reach 24,533),
+and `ring_time_split` hands the listwise objective 18 all-positive remnant
+groups that generate zero gradient, so LambdaMART trains on 164 of 321
+positives while the pointwise model sees all 321 — a confound in the pointwise
+model's favour that is now printed on every run.
+
+**Contradicts the pre-registration in item 1.3, in both directions.** It
+predicted "+0.02 to +0.05 at p@20 over v1, CI expected to include zero at
+n=17". Against v1 the delta is +0.1222 [+0.0694, +0.1778] — larger than
+predicted *and* excluding zero. The prediction was made in the Phase 4
+re-ranker's frame; this pool has more positives and gradient-boosted models on
+the full feature block are simply far stronger than the hand-set blend. It does
+not rescue LambdaMART, because beating v1 was never the question.
+
+#### 12.2 The headroom is real, and the constraint is NOT sample size
+
+The framing this work started from was: *the oracle reaches p@10 0.2667 where
+the blend reaches 0.0500, LambdaMART is step one, and if its CI includes zero
+at n=17 then the constraint is sample size.* **The measurement says otherwise.**
+The CI against the shipped blend does not include zero — it excludes it
+decisively at every k. A plain supervised pointwise model already extracts the
+headroom: 0.2778 vs 0.0500, and `pointwise − blend` is +0.2278 [+0.1167,
++0.3500] at k=10.
+
+So the gap is not waiting on more held-out cycles and not waiting on a better
+ranking objective. **It is the hand-set blend that is leaving 5× on the table,
+and a supervised model on the same features closes it.** That is a more
+actionable finding than "we need a bigger sample", and it reverses the
+diagnosis this phase was scoped around.
+
+The result also survives the analyst's own denominator. Candidate-level p@k
+pays twice when the generator emits several surviving candidates for one ring;
+counting each ring at most once per cut gives pointwise 0.2500 / 0.1306 /
+0.0600 against candidate-level 0.2778 / 0.1500 / 0.0689. The duplication is
+real but small, and it does not carry the result.
+
+#### 12.3 What would actually give more held-out cycles — and the ceiling on that
+
+Recorded because the question will be asked again. HANDOFF §11d already ruled
+out shortening `every_ticks`: at a 72 h window, cycles 6 h apart overlap
+heavily and 2 h apart are near-duplicates, so resampling them narrows the
+interval spuriously. The remaining routes, measured:
+
+1. **Use more of the stream.** `EVAL_END` is day 10 of a **17.7-day** stream —
+   **56.6% of it**, with 7.7 days unused. Extending to the full span would add
+   roughly 26 generation cycles to the current 34, so ~30 held-out instead of
+   18. That narrows a CI by about √1.7 ≈ 1.3×. Real, cheap, and independent.
+2. **Rolling-origin cross-validated CIs.** Several train/test cut points
+   instead of one. Narrows the *nominal* interval, but every fold reuses the
+   same rings, so it does not add information about unseen rings — it should be
+   reported as what it is.
+3. **A larger dataset.** This is the binding constraint, and it is worth being
+   blunt about: **HI-Small labels 370 rings, and 363 of them are already inside
+   the current eval window.** Extending to day 17.7 buys ~26 more cycles and
+   **seven more rings.** More cycles of the same rings are not independent
+   observations for a ring-level metric. The honest ceiling on route 1 is
+   therefore much lower than the cycle count suggests, and the only route that
+   adds genuinely new rings is a different dataset — the larger AMLworld
+   variants, or Elliptic2.
+
+So: route 1 is worth doing and is nearly free. Nobody should expect it to
+settle a question that route 3 is the real answer to.
+
+#### 12.4 The defended ceiling stands, and here is why 0.25 does not raise it
+
+The estimate below (p@10 ≈ 0.13–0.16, ring recall ≈ 25–30%) is explicitly for
+a **no-label system**. The 0.2778 / 0.2500 measured in §12.1 is a **true-label
+oracle**: it trains on the actual ring identities, which a production system
+does not have. Phase 4's re-ranker, trained on *simulated analyst verdicts*
+rather than truth, reached p@10 0.124 with a CI including zero.
+
+**The two numbers are different quantities and the higher one must not be
+quoted as a forecast.** The ceiling estimate is NOT revised upward.
+
+What the measurement does change is *where the remaining loss sits*. It is not
+in the feature set — the features support 0.25 given good labels — and not in
+the ranking objective. It is in **label quality**: the distance between 0.2500
+(true labels) and 0.124 (simulated verdicts) is the label pipeline's tax. That
+makes the label corpus the highest-value target, which is consistent with
+HANDOFF §9's claim that the label pipeline is the actual product, and it is now
+supported by a measurement rather than asserted.
+
+Downward revision, stated explicitly: **nothing measured this session supports
+GFP parity, and the control that would test it has not run** (§2.1 — GFP is
+Linux/macOS-only and this machine cannot run it). If the control does run and
+GFP's block beats sentinel's, this estimate comes down, not up.
+
+---
+
 ### The realistic ceiling
 
 The highest number anywhere in this project's measurements is the
@@ -868,6 +989,11 @@ cheating seeds. The structural recall ceiling is 73.3%.
 of the above: p@10 ≈ 0.13–0.16, p@20 ≈ 0.10–0.12, ring recall ≈ 25–30%, with a
 size-baseline margin that is positive and CI-clear at k=10 and k=20 only if item
 0.5 lands.**
+
+**STILL STANDS after the §12 measurements, and §12.4 explains why.** The
+true-label oracle reaching p@10 0.2500 does not raise this estimate: it is a
+different quantity, measured with labels a deployed system does not have. Do
+not let the oracle number migrate into this sentence.
 
 That is roughly 2–3× industry alert-to-SAR conversion, which is a defensible
 claim honestly stated. It is **not** parity with GFP's supervised numbers, not
