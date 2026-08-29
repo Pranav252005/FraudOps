@@ -172,6 +172,17 @@ def compare(export_dir: Path = EXPORT_DIR, gfp_path: Path = GFP_FEATURES,
     exp = load_export(export_dir)
     g = np.load(gfp_path, allow_pickle=False)
 
+    # A smoke run (`--limit`) produces a real-looking file over a fraction of
+    # the pool. Refused explicitly, because a p@k over a subset of cycles is
+    # not comparable to any other number in this project and would be
+    # indistinguishable from a full run once it is written down.
+    if "n_ticks_processed" in g.files and \
+            int(g["n_ticks_processed"]) != int(g["manifest_ticks"]):
+        raise SystemExit(
+            f"{gfp_path} covers {int(g['n_ticks_processed'])} of "
+            f"{int(g['manifest_ticks'])} ticks -- a smoke run, not a result. "
+            f"Re-run `gfp-features` without --limit.")
+
     # Join on (key, t). Both stages emit candidates in the same per-tick order,
     # but the join is done by identity rather than by position so a silent
     # reordering cannot misalign two feature blocks against one label vector.

@@ -300,8 +300,35 @@ ranking:
 - snapml **1.17.x ships no Windows wheels at all**; 1.15.6 is the last Windows
   release.
 
-**GFP is Linux/macOS-only.** The interpreter was never the obstacle. Options,
-re-ranked against the real one:
+**GFP is Linux/macOS-only.** The interpreter was never the obstacle.
+
+### How to actually run it (the repo owner has a Fedora dual boot)
+
+```bash
+git pull
+./scripts/gfp_setup_linux.sh --limit 2     # smoke test, ~minutes
+./scripts/gfp_setup_linux.sh               # the real run
+```
+
+The script provisions a venv on the newest Python snapml has a wheel for
+(3.9-3.12; **Fedora 41+ defaults to 3.13, which has no build**), pins
+`numpy<2` because snapml 1.15.6 is compiled against numpy 1.x and dies with
+`_ARRAY_API not found` otherwise, verifies `GraphFeaturePreprocessor()`
+actually constructs, then runs stages 2 and 3.
+
+The **export is ~700 MB and gitignored**, so it is not in the clone. Point at
+the Windows partition's copy rather than regenerating:
+
+```bash
+EXPORT_DIR=/run/media/$USER/<windows>/Users/Pranav/Documents/PayopsAnalyst/data/gfp_export   ./scripts/gfp_setup_linux.sh
+```
+
+That guarantees byte-identical candidates instead of a replay that ought to be
+identical. `data/eval_gfp.json` is small — commit it back, and treat its
+`verdict` string as the only thing that licenses any GFP statement anywhere in
+the repo.
+
+Options, re-ranked against the real obstacle:
 
 1. ~~**`py -3.11 -m venv .venv311 && pip install snapml lightgbm pandas`.**~~
    **RULED OUT BY EXPERIMENT.** No Python version helps on Windows.

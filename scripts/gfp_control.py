@@ -253,8 +253,17 @@ def export(out_dir: Path = EXPORT_DIR) -> None:
 # stage 2: GFP features (Linux/macOS only)
 # --------------------------------------------------------------------------
 
-def gfp_features(in_dir: Path = EXPORT_DIR, out: Path = GFP_FEATURES) -> None:
-    """Run GraphFeaturePreprocessor per tick, pooled up to candidate level."""
+def gfp_features(in_dir: Path = EXPORT_DIR, out: Path = GFP_FEATURES,
+                 limit: int | None = None) -> None:
+    """Run GraphFeaturePreprocessor per tick, pooled up to candidate level.
+
+    `limit` processes only the first N ticks. It exists so the expensive run
+    can be smoke-tested before it is committed to in full: the windows here
+    carry 0.9-1.6M edges each and GFP searches 10-hop cycles over every one of
+    them, so a full pass is not something to discover is misconfigured at
+    tick 30. A limited run writes a file that `compare` will REFUSE, because a
+    partial pool is not the pool every other number is computed on.
+    """
     try:
         from snapml import GraphFeaturePreprocessor
     except ImportError as e:                                # pragma: no cover
@@ -268,6 +277,15 @@ def gfp_features(in_dir: Path = EXPORT_DIR, out: Path = GFP_FEATURES) -> None:
     ticks = sorted(in_dir.glob("tick_*.npz"))
     if not ticks:
         raise SystemExit(f"no exported ticks in {in_dir}; run `export` first")
+    n_total = len(ticks)
+    if limit:
+        ticks = ticks[:limit]
+        print(f"SMOKE RUN: {len(ticks)} of {n_total} ticks. The output will be "
+              f"rejected by `compare` -- this is for checking the pipeline "
+              f"works, not for producing a result.")
+    print(f"{len(ticks)} ticks, {sum(x['n_edges'] for x in manifest['ticks']):,} "
+          f"edges total. GFP searches 10-hop cycles over every window; this is "
+          f"the long stage.")
 
     all_keys, all_t, all_ring, all_X = [], [], [], []
     col_names: list[str] | None = None
@@ -334,6 +352,7 @@ def gfp_features(in_dir: Path = EXPORT_DIR, out: Path = GFP_FEATURES) -> None:
         n_raw_gfp_features=len(col_names),
         gfp_params=json.dumps(GFP_PARAMS),
         platform=platform.platform(),
+        n_ticks_processed=len(ticks),
         manifest_ticks=len(manifest["ticks"]))
     print(f"\nwrote {len(all_X):,} candidate rows x {len(pooled_names)} "
           f"pooled GFP features to {out}")
@@ -342,16 +361,24 @@ def gfp_features(in_dir: Path = EXPORT_DIR, out: Path = GFP_FEATURES) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("stage", choices=("export", "gfp-features", "compare"))
-    ap.add_argument("--export-dir", type=Path, default=EXPORT_DIR)
+    ap.add_argument("--export-dir", type=Path, default=EXPORT_DIR,
+                    help="per-tick export. On a dual boot, point this at the "
+                         "other OS's mounted copy rather than re-running the "
+                         "10-minute replay to reproduce it byte for byte.")
+    ap.add_argument("--gfp-features", type=Path, default=GFP_FEATURES)
+    ap.add_argument("--out", type=Path, default=COMPARE_OUT)
+    ap.add_argument("--limit", type=int, default=None,
+                    help="gfp-features: process only the first N ticks, as a "
+                         "smoke test. `compare` rejects the result.")
     args = ap.parse_args()
 
     if args.stage == "export":
         export(args.export_dir)
     elif args.stage == "gfp-features":
-        gfp_features(args.export_dir)
+        gfp_features(args.export_dir, args.gfp_features, args.limit)
     else:
         from scripts.gfp_compare import compare
-        compare()
+        compare(args.export_dir, args.gfp_features, args.out)
 
 
 if __name__ == "__main__":
