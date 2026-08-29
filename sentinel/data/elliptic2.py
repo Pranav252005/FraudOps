@@ -105,6 +105,25 @@ def _read_csv(path: Path) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
+class _ClosingText(io.TextIOWrapper):
+    """A text stream that also closes the ZipFile it came out of.
+
+    Without this, each per-file archive stays open for the process lifetime.
+    That is a leaked handle on a 24.5 GB file, and on Windows it also keeps the
+    file locked against being moved or deleted.
+    """
+
+    def __init__(self, zf, raw):
+        self._zf = zf
+        super().__init__(raw, encoding="utf-8", newline="")
+
+    def close(self) -> None:
+        try:
+            super().close()
+        finally:
+            self._zf.close()
+
+
 class Source:
     """Resolves the five file names to text handles, from a directory OR a zip.
 
@@ -138,20 +157,46 @@ class Source:
             for name in self._zf.namelist():
                 self._members.setdefault(name.rsplit("/", 1)[-1], name)
 
+    def _per_file_zip(self, name: str) -> Path | None:
+        """`<name>.zip` sitting next to the extracted files, if present.
+
+        This is the layout `kaggle datasets download -f <file>` produces: one
+        zip per requested file, rather than one archive for the dataset. It is
+        the layout `scripts/download_elliptic2.bat` now uses for the two large
+        files, so they never need extracting.
+        """
+        if self.root is None:
+            return None
+        z = self.root / f"{name}.zip"
+        return z if z.exists() else None
+
     def has(self, name: str) -> bool:
         if self.root is not None and (self.root / name).exists():
+            return True
+        if self._per_file_zip(name) is not None:
             return True
         return name in self._members
 
     def open(self, name: str):
-        """A text handle for `name`. Directory first, archive as fallback.
+        """A text handle for `name`, from whichever of three layouts has it.
 
-        The directory wins when both have it, so a caller who has extracted
-        the three SMALL files and left the two huge ones in the zip gets the
-        fast path where it is available and the streamed path where it is not.
+        Order: extracted file, then `<name>.zip` beside it, then the
+        whole-dataset archive. Extracted wins so a caller who unpacked the
+        three SMALL files gets the fast path there and the streamed path for
+        the two huge ones -- which is the recommended layout, since
+        background_edges.csv is 82.9 GB extracted and 24.5 GB packed.
         """
         if self.root is not None and (self.root / name).exists():
             return open(self.root / name, "r", encoding="utf-8", newline="")
+        z = self._per_file_zip(name)
+        if z is not None:
+            zf = zipfile.ZipFile(z)
+            member = next((m for m in zf.namelist()
+                           if m.rsplit("/", 1)[-1] == name), None)
+            if member is None:
+                zf.close()
+                raise FileNotFoundError(f"{name} not found inside {z}")
+            return _ClosingText(zf, zf.open(member))
         if name in self._members:
             raw = self._zf.open(self._members[name])
             return io.TextIOWrapper(raw, encoding="utf-8", newline="")

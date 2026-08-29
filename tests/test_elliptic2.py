@@ -248,3 +248,44 @@ class TestArchiveStreaming:
             OneShot(["clId1,clId2\n", "1,2\n", "3,4\n"]))
         assert header == ["clId1", "clId2"]
         assert next(reader) == ["1", "2"]      # lazy: nothing consumed early
+
+    def test_per_file_zips_beside_extracted_files(self, tmp_path):
+        """The layout `kaggle datasets download -f <file>` produces.
+
+        One zip per requested file, sitting next to the extracted small ones.
+        This is what download_elliptic2.bat now writes for the two large files,
+        so background_edges.csv is never unpacked.
+        """
+        import shutil
+        import zipfile
+
+        for f in ("connected_components.csv", "nodes.csv", "edges.csv"):
+            shutil.copy(FIXTURE / f, tmp_path / f)
+        for f in ("background_nodes.csv", "background_edges.csv"):
+            with zipfile.ZipFile(tmp_path / f"{f}.zip", "w",
+                                 zipfile.ZIP_DEFLATED) as zf:
+                zf.write(FIXTURE / f, f)
+
+        assert elliptic2.missing_files(tmp_path if False
+                                       else elliptic2.Source(tmp_path)) == []
+        mixed = elliptic2.load(tmp_path)
+        whole = elliptic2.load(FIXTURE)
+        assert mixed.n_background_nodes == whole.n_background_nodes
+        assert mixed.n_background_edges == whole.n_background_edges
+        assert [(e.src, e.dst) for e in mixed.edges] ==             [(e.src, e.dst) for e in whole.edges]
+
+    def test_per_file_zip_handle_releases_the_archive(self, tmp_path):
+        """Closing the stream must close the ZipFile too.
+
+        A leaked handle on a 24.5 GB archive also locks the file on Windows,
+        so this is not merely tidiness.
+        """
+        import zipfile
+
+        with zipfile.ZipFile(tmp_path / "nodes.csv.zip", "w") as zf:
+            zf.write(FIXTURE / "nodes.csv", "nodes.csv")
+        src = elliptic2.Source(tmp_path)
+        h = src.open("nodes.csv")
+        h.read()
+        h.close()
+        (tmp_path / "nodes.csv.zip").unlink()   # fails if still held open
