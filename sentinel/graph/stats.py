@@ -97,14 +97,27 @@ class AccountStats:
 
     inflow: Moments = field(default_factory=Moments)
     outflow: Moments = field(default_factory=Moments)
+    # Moments over the transaction TIMESTAMPS themselves, both directions
+    # pooled. IBM's Graph Feature Preprocessor computes its vertex-statistic
+    # family over amounts *and* timestamps; docs/HANDOFF.md section 4 claimed
+    # "essentially at parity" with GFP while this half was absent entirely.
+    # `span_minutes` and `burstiness` are related but are not the moment set:
+    # a span says how wide the activity is, and only the higher moments say
+    # whether it is one burst, two, or a uniform trickle -- which is what
+    # separates a mule cycling value from an ordinary business paying weekly.
+    #
+    # Timestamps are fed in minutes, the same unit the rest of the system uses.
+    times: Moments = field(default_factory=Moments)
     # Counterparties are tracked as counts only; the sets live in the graph.
     quiet_before_first: int = 0
 
     def add_in(self, amount: float, t: int) -> None:
         self.inflow.add(amount, t)
+        self.times.add(float(t), t)
 
     def add_out(self, amount: float, t: int) -> None:
         self.outflow.add(amount, t)
+        self.times.add(float(t), t)
 
     # -- behavioural measures -------------------------------------------------
 
@@ -166,10 +179,26 @@ class AccountStats:
         h = self.active_hours
         return n / h if h > 0 else float(n)
 
+    @property
+    def time_std_hours(self) -> float:
+        """Spread of this account's activity in time, in hours."""
+        return self.times.std / 60.0
+
+    @property
+    def time_skewness(self) -> float:
+        """Positive means activity is back-loaded, negative front-loaded."""
+        return self.times.skewness
+
+    @property
+    def time_kurtosis(self) -> float:
+        """High excess kurtosis means activity concentrates in a few bursts."""
+        return self.times.kurtosis
+
     def to_dict(self) -> dict:
         return {
             "in": self.inflow.to_dict(),
             "out": self.outflow.to_dict(),
+            "times": self.times.to_dict(),
             "passthrough_ratio": round(self.passthrough_value_ratio, 4),
             "passthrough_latency_h": (
                 round(self.passthrough_latency, 2)

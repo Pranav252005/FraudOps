@@ -82,15 +82,22 @@ def main() -> None:
                         for a, b in zip(src.tolist(), dst.tolist())])
     idx = np.flatnonzero(touches)
     if len(idx) > args.max_edges:
-        # Deterministic thinning: keep every ring edge, then take the earliest
-        # background edges up to the cap. Earliest rather than random so the
-        # fixture is reproducible from the source without carrying a seed.
+        # Deterministic thinning: keep every ring edge, then take a fixed
+        # stride over the background. A stride rather than a prefix, because
+        # the edges are time-ordered and taking the earliest would leave the
+        # later cycles reading a stale window; a stride preserves the temporal
+        # spread. A stride rather than a random sample, because the fixture
+        # must be reproducible from the source without carrying a seed.
         is_ring = ring[idx] >= 0
         ring_idx = idx[is_ring]
-        bg_idx = idx[~is_ring][: max(0, args.max_edges - len(ring_idx))]
+        bg = idx[~is_ring]
+        room = max(0, args.max_edges - len(ring_idx))
+        stride = max(1, len(bg) // room) if room else len(bg) + 1
+        bg_idx = bg[::stride][:room]
         idx = np.sort(np.concatenate([ring_idx, bg_idx]))
         print(f"thinned to {len(idx):,} edges "
-              f"({len(ring_idx):,} labelled kept in full)")
+              f"({len(ring_idx):,} labelled kept in full, "
+              f"background stride {stride})")
 
     # Remap node ids to a dense range, ordered by original id so the mapping is
     # a pure function of the selection.

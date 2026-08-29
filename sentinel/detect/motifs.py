@@ -60,6 +60,10 @@ class Motifs:
     nodes_in_temporal_cycles: int = 0
     # scatter-gather: A distributes to S, S reconverges on B
     scatter_gather: int = 0
+    # The same shape bounded at GFP's 6h AML window. Kept alongside the
+    # unbounded count rather than replacing it, so the difference between the
+    # two is measurable instead of asserted.
+    scatter_gather_windowed: int = 0
     sg_pairs: list[tuple[int, int, int]] = field(default_factory=list)
     # The reverse shape: many collect into one, which then disperses again.
     gather_scatter: int = 0
@@ -88,6 +92,7 @@ class Motifs:
             "shortest_temporal_cycle": self.shortest_temporal_cycle,
             "nodes_in_temporal_cycles": self.nodes_in_temporal_cycles,
             "scatter_gather": self.scatter_gather,
+            "scatter_gather_windowed": self.scatter_gather_windowed,
             "gather_scatter": self.gather_scatter,
             "fan_out_count": self.fan_out_count,
             "fan_in_count": self.fan_in_count,
@@ -177,12 +182,51 @@ def find_gather_scatter(G: nx.DiGraph, min_width: int = 2) -> int:
     return best
 
 
-def find_scatter_gather(G: nx.DiGraph, min_width: int = 2) -> list[tuple[int, int, int]]:
+# GFP's AML configuration bounds the scatter-gather shape at 6 hours
+# (arXiv:2402.08593). sentinel bounded it not at all, which is one of the three
+# real gaps behind docs/HANDOFF.md section 4's "essentially at parity" claim: a
+# scatter-gather spread over 72 hours is a different object from one completed
+# in an afternoon, and only the second is evidence of a single coordinated
+# movement of value.
+SCATTER_GATHER_WINDOW_MINUTES = 6 * 60
+
+
+def _leg_pair_fits(e1: dict, e2: dict, window: int) -> bool:
+    """Can value have gone a -> mid -> b within `window` minutes?
+
+    Each pair carries an interval (first_t..last_t) rather than one timestamp,
+    because the window aggregates repeated transactions on a pair. So the
+    question is whether SOME choice t1 in [f1,l1], t2 in [f2,l2] satisfies
+    0 <= t2 - t1 <= window. That is feasible exactly when the second leg can
+    happen at or after the first (l2 >= f1) and can happen soon enough
+    (f2 <= l1 + window).
+
+    Using the intervals rather than, say, the midpoints is deliberate: choosing
+    a representative timestamp would make the answer depend on an arbitrary
+    convention, and this project has a bug in its catalogue for exactly that
+    class of quiet choice.
+    """
+    return e2["last_t"] >= e1["first_t"] and e2["first_t"] <= e1["last_t"] + window
+
+
+def find_scatter_gather(G: nx.DiGraph, min_width: int = 2,
+                        window_minutes: int | None = None
+                        ) -> list[tuple[int, int, int]]:
     """A -> S -> B where |S| >= min_width and A != B.
 
     This is the layering shape: split a payment across intermediaries and
     recombine it, so no single hop carries the whole amount. Returns
     (source, sink, width) triples.
+
+    `window_minutes` bounds the shape in time, matching GFP. An intermediary
+    counts toward the width only if its own two legs are individually feasible
+    within the window; the width is then the number of intermediaries that
+    qualify. Per-intermediary rather than a single span across all of them,
+    because the shape's meaning is "each strand of this split-and-recombine
+    completed quickly", and a span test would let one slow strand veto a
+    genuine pattern. `None` (the default) keeps the original unbounded
+    behaviour, so the two are measurable against each other rather than one
+    silently replacing the other.
     """
     found: list[tuple[int, int, int]] = []
     for a in G:
@@ -192,8 +236,12 @@ def find_scatter_gather(G: nx.DiGraph, min_width: int = 2) -> list[tuple[int, in
         sinks: dict[int, int] = {}
         for mid in succ:
             for b in G.successors(mid):
-                if b != a and b not in succ:
-                    sinks[b] = sinks.get(b, 0) + 1
+                if b == a or b in succ:
+                    continue
+                if window_minutes is not None and not _leg_pair_fits(
+                        G[a][mid], G[mid][b], window_minutes):
+                    continue
+                sinks[b] = sinks.get(b, 0) + 1
         for b, width in sinks.items():
             if width >= min_width:
                 found.append((a, b, width))
@@ -248,6 +296,8 @@ def detect(edges) -> Motifs:
     sg = find_scatter_gather(G)
     m.sg_pairs = sg[:20]
     m.scatter_gather = max((w for _, _, w in sg), default=0)
+    sg_w = find_scatter_gather(G, window_minutes=SCATTER_GATHER_WINDOW_MINUTES)
+    m.scatter_gather_windowed = max((w for _, _, w in sg_w), default=0)
     m.gather_scatter = find_gather_scatter(G)
 
     # Pattern counts: how many accounts act as a fan hub at all, not just the

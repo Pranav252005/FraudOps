@@ -70,6 +70,9 @@ class Features:
     shortest_temporal_cycle: int = 0
     temporal_cycle_coverage: float = 0.0
     scatter_gather_width: int = 0
+    # The same shape bounded at GFP's 6h AML window (see motifs.py). Present
+    # alongside the unbounded width, not instead of it.
+    scatter_gather_width_6h: int = 0
     gather_scatter_width: int = 0
     fan_out_count: int = 0
     fan_in_count: int = 0
@@ -95,6 +98,31 @@ class Features:
     median_dormancy_h: float = 0.0
     max_amount_skew: float = 0.0
     mean_velocity: float = 0.0
+
+    # GFP's vertex-statistic family over AMOUNTS, aggregated across members.
+    # `AccountStats` has computed these per account since the behavioural axis
+    # was added; until now only `max_amount_skew` and `mean_velocity` reached
+    # the feature vector, so the rest were paid for and thrown away. That is
+    # the second of the three real gaps behind the "essentially at parity with
+    # GFP" claim in docs/HANDOFF.md section 4.
+    #
+    # Not closed, and stated rather than glossed: GFP also reports a per-account
+    # MEDIAN amount. Welford moments cannot produce a median without retaining
+    # samples, which would defeat the O(1)-per-edge design. `median_passthrough
+    # _value` is a median across members, which is a different quantity.
+    mean_out_amount: float = 0.0
+    mean_in_amount: float = 0.0
+    min_member_amount: float = 0.0
+    max_member_amount: float = 0.0
+    mean_amount_std: float = 0.0
+    max_amount_kurtosis: float = 0.0
+
+    # GFP's vertex-statistic family over TIMESTAMPS, which was absent entirely.
+    # span_minutes and burstiness say how wide and how busy; these say what
+    # SHAPE the activity has in time -- one burst, two, or a steady trickle.
+    mean_time_std_h: float = 0.0
+    mean_time_skew: float = 0.0
+    max_time_kurtosis: float = 0.0
 
     # money
     inflow: float = 0.0               # value entering the candidate
@@ -260,6 +288,7 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
     f.temporal_cycle_coverage = (
         motifs.nodes_in_temporal_cycles / len(nodes) if nodes else 0.0)
     f.scatter_gather_width = motifs.scatter_gather
+    f.scatter_gather_width_6h = motifs.scatter_gather_windowed
     f.gather_scatter_width = motifs.gather_scatter
     f.fan_out_count = motifs.fan_out_count
     f.fan_in_count = motifs.fan_in_count
@@ -289,6 +318,32 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
             f.max_amount_skew = max(
                 (abs(a.outflow.skewness) for a in members), default=0.0)
             f.mean_velocity = _st.fmean(a.velocity for a in members)
+
+            # Amount moments, aggregated across members. Accounts with no
+            # transactions in that direction are skipped rather than counted as
+            # zero -- a mean over "no outflow = 0.0" would report a candidate of
+            # pure receivers as having small outflows rather than none.
+            outs = [a.outflow for a in members if a.outflow.n]
+            ins = [a.inflow for a in members if a.inflow.n]
+            if outs:
+                f.mean_out_amount = _st.fmean(m.mean for m in outs)
+                f.mean_amount_std = _st.fmean(m.std for m in outs)
+                f.max_amount_kurtosis = max(abs(m.kurtosis) for m in outs)
+            if ins:
+                f.mean_in_amount = _st.fmean(m.mean for m in ins)
+            both = outs + ins
+            if both:
+                f.min_member_amount = min(m.lo for m in both)
+                f.max_member_amount = max(m.hi for m in both)
+
+            # Timestamp moments. Members with fewer than the moment's minimum
+            # sample count return 0.0 from the property, which is the honest
+            # "no information" value rather than a fabricated one.
+            times = [a for a in members if a.times.n]
+            if times:
+                f.mean_time_std_h = _st.fmean(a.time_std_hours for a in times)
+                f.mean_time_skew = _st.fmean(a.time_skewness for a in times)
+                f.max_time_kurtosis = max(abs(a.time_kurtosis) for a in times)
 
     # Timing.
     if first_t is not None and last_t is not None:

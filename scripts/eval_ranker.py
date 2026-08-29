@@ -101,6 +101,13 @@ INTENSIVE = frozenset({
     "bipartite_score", "stack_score", "fast_passthrough_ratio",
     "median_passthrough_value", "median_dormancy_h", "max_amount_skew",
     "mean_velocity", "has_cycle", "has_temporal_cycle", "cross_border",
+    # GFP vertex statistics, added when the three parity gaps were closed.
+    # A mean across members does not grow with member count; a max over members
+    # does, weakly, because the maximum of more samples trends upward. So the
+    # means are intensive and every max is classified extensive -- the
+    # conservative direction for a subset whose entire purpose is size-blindness.
+    "mean_out_amount", "mean_in_amount", "mean_amount_std",
+    "mean_time_std_h", "mean_time_skew",
 })
 EXTENSIVE = frozenset({
     "n_nodes", "n_edges", "n_txns", "total_amount", "inflow", "outflow",
@@ -108,6 +115,9 @@ EXTENSIVE = frozenset({
     "fan_out_count", "fan_in_count", "max_fan", "n_senders", "n_mules",
     "n_receivers", "layer_depth", "n_banks", "n_countries", "n_entities",
     "span_minutes", "burstiness", "shortest_cycle", "shortest_temporal_cycle",
+    "scatter_gather_width_6h",
+    "min_member_amount", "max_member_amount", "max_amount_kurtosis",
+    "max_time_kurtosis",
 })
 
 
