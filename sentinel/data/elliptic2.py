@@ -9,10 +9,14 @@ one -- is exactly this project's premise, and unlike AMLworld it carries real
 labels on real data plus a published SOTA baseline (GLASS: test F1 0.933,
 PR-AUC 0.208, ROC-AUC 0.889; see PUBLISHED_BASELINES below).
 
-**Manual step, required and not automatable here.** The dataset is only
-available after requesting it at http://elliptic.co/elliptic2 -- there is no
-public bulk-download endpoint, so no script can fetch it unattended. Download,
-unzip, and place these five files into a directory (default `data/elliptic2/`):
+**Public on Kaggle; the download is automatable.** An earlier revision of
+this docstring claimed the dataset was licence-gated behind a request form at
+http://elliptic.co/elliptic2 and that "no script can fetch it unattended".
+That is wrong. Elliptic2 is published openly by Elliptic Co. at
+https://www.kaggle.com/datasets/ellipticco/elliptic2-data-set and
+`scripts/download_elliptic2.bat` fetches and extracts it via the Kaggle CLI
+(one-time manual step: a Kaggle API token at `%USERPROFILE%/.kaggle/kaggle.json`).
+The archive extracts to these five files, expected in `data/elliptic2/`:
 
     background_nodes.csv       one row per wallet cluster; first column is
                                 the cluster id; remaining 43 columns are
