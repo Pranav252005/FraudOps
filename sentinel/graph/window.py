@@ -80,6 +80,19 @@ class WindowedGraph:
         # account's whole observed history, and re-deriving them from a 72h
         # window would erase the signal they exist to capture.
         self.account_stats: dict[int, AccountStats] = defaultdict(AccountStats)
+        # Per-node total in/out value *inside the window*, maintained
+        # incrementally at O(1) per edge. These exist so candidate boundary
+        # flow can be computed by an identity rather than by walking every
+        # member's whole adjacency:
+        #
+        #   external_inflow(C) = sum_{n in C} total_in[n] - sum_{internal} amt
+        #
+        # which is exact because every edge into a member is either internal to
+        # C (counted once in the internal sum) or external. Unlike
+        # `account_stats`, these ARE expired with the window: they describe the
+        # window's graph, which is what boundary flow is a property of.
+        self.total_in: dict[int, float] = defaultdict(float)
+        self.total_out: dict[int, float] = defaultdict(float)
         self.now: int = 0
         self.n_added = 0
         self.n_expired = 0
@@ -102,6 +115,8 @@ class WindowedGraph:
                     self.in_adj[d].add(s)
                 agg.add(int(ts[i]), float(amount[i]), int(lab[i]))
                 a_t, a_amt = int(ts[i]), float(amount[i])
+                self.total_out[s] += a_amt
+                self.total_in[d] += a_amt
                 so = self.account_stats[s]
                 if so.outflow.n == 0 and so.inflow.n == 0:
                     so.quiet_before_first = a_t
@@ -125,6 +140,16 @@ class WindowedGraph:
                 if agg is None:
                     continue
                 agg.remove(float(amount[i]), int(lab[i]))
+                # Kept strictly paired with `agg.remove` -- inside the same
+                # `agg is not None` branch as the add side is paired with
+                # `agg.add` -- so the totals can never drift from what `pairs`
+                # actually holds. A drift here would not raise; it would
+                # silently return a wrong inflow, which is this codebase's
+                # characteristic failure mode. `check_invariants()` asserts the
+                # pairing directly.
+                a_amt = float(amount[i])
+                self.total_out[s] -= a_amt
+                self.total_in[d] -= a_amt
                 if agg.count <= 0:
                     del self.pairs[k]
                     self.out_adj[s].discard(d)
@@ -133,6 +158,19 @@ class WindowedGraph:
                     self.in_adj[d].discard(s)
                     if not self.in_adj[d]:
                         del self.in_adj[d]
+                    # Reset the running total to an exact zero whenever the
+                    # node empties, keyed on adjacency rather than on the float
+                    # being == 0.0. Incremental float accumulation leaves a
+                    # residue (a+b-a-b is not exactly 0 in binary floating
+                    # point); without this reset that residue would persist on
+                    # a node with no edges left and be reported as boundary
+                    # flow. Bounding it to nodes that stay continuously live is
+                    # the difference between a rounding artifact and a wrong
+                    # answer that never raises.
+                    if s not in self.out_adj:
+                        self.total_out.pop(s, None)
+                    if d not in self.in_adj:
+                        self.total_in.pop(d, None)
             self.n_expired += src.shape[0]
 
     # -- inspection -----------------------------------------------------------
@@ -225,6 +263,47 @@ class WindowedGraph:
                 if d in nodes:
                     out.append((s, d, self.pairs[pair_key(s, d)]))
         return out
+
+    def check_invariants(self, sample: int | None = None) -> None:
+        """Assert the incrementally maintained state still matches `pairs`.
+
+        `total_in` / `total_out` are maintained by O(1) deltas on every add and
+        expire. That is fast and it is also exactly the shape of defect this
+        codebase keeps a catalogue of: if the two sides ever stop being paired,
+        nothing raises -- candidates simply get a wrong boundary flow. So the
+        pairing is checkable, and the check runs in the test suite and in CI.
+
+        Floating-point accumulation means the running total will not be
+        bit-identical to a fresh sum over `pairs`, so the comparison is a
+        relative tolerance, not equality. `sample` limits the check to the
+        first N nodes for use on a large live window.
+        """
+        from_pairs_out: dict[int, float] = defaultdict(float)
+        from_pairs_in: dict[int, float] = defaultdict(float)
+        for k, agg in self.pairs.items():
+            s, d = unpair(k)
+            from_pairs_out[s] += agg.amount
+            from_pairs_in[d] += agg.amount
+
+        assert set(self.total_out) == set(from_pairs_out), (
+            "total_out node set diverged from pairs: "
+            f"{len(self.total_out)} vs {len(from_pairs_out)}")
+        assert set(self.total_in) == set(from_pairs_in), (
+            "total_in node set diverged from pairs: "
+            f"{len(self.total_in)} vs {len(from_pairs_in)}")
+
+        for name, running, fresh in (("out", self.total_out, from_pairs_out),
+                                      ("in", self.total_in, from_pairs_in)):
+            for i, (n, want) in enumerate(fresh.items()):
+                if sample is not None and i >= sample:
+                    break
+                got = running[n]
+                scale = max(abs(want), abs(got), 1.0)
+                assert abs(got - want) <= 1e-6 * scale, (
+                    f"total_{name}[{n}] drifted: running={got!r} "
+                    f"recomputed={want!r}")
+
+        assert self.n_added - self.n_expired == sum(a.count for a in self.pairs.values()),             "window conservation broken: added - expired != sum of pair counts"
 
     def stats(self) -> dict:
         return {

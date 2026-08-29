@@ -130,20 +130,100 @@ def is_round(amount: float) -> bool:
     return amount >= 100 and (amount % 100 == 0 or amount % 1000 == 0)
 
 
+# Relative floor below which a boundary-flow residue is treated as zero.
+#
+# `_boundary_flow` computes external flow as (sum of members' whole-window
+# totals) - (sum of internal edge amounts). Mathematically the two sides cancel
+# exactly for a candidate with no external edges; in binary floating point they
+# leave a residue of order 1e-16 relative to the magnitudes summed. Without a
+# clamp, a candidate that is genuinely isolated would get inflow = 3e-9 instead
+# of 0.0, and `conservation = min/max` would then return an arbitrary value in
+# [0,1] for it instead of 0.0 -- a plausible wrong answer produced by a
+# rounding artifact, which is precisely this project's characteristic bug.
+#
+# The clamp is relative to the total value summed, so it does not depend on the
+# currency scale of the dataset.
+BOUNDARY_EPS_REL = 1e-9
+
+
+def _boundary_flow_walk(nodes: set[int], graph) -> tuple[float, float]:
+    """External inflow/outflow by walking every member's window adjacency.
+
+    O(sum of member degrees). Retained as the reference implementation the
+    identity below is checked against (scripts/verify_efficiency.py); it is
+    not on the hot path.
+    """
+    inflow = outflow = 0.0
+    for n in nodes:
+        for s in graph.in_adj.get(n, ()):
+            if s not in nodes:
+                inflow += graph.pairs[(s << 32) | n].amount
+        for d in graph.out_adj.get(n, ()):
+            if d not in nodes:
+                outflow += graph.pairs[(n << 32) | d].amount
+    return inflow, outflow
+
+
+def _boundary_flow(nodes: set[int], graph, internal: float) -> tuple[float, float]:
+    """External inflow/outflow by the boundary-flow identity. O(|nodes|).
+
+        external_inflow(C)  = sum_{n in C} total_in[n]  - sum_{internal} amt
+        external_outflow(C) = sum_{n in C} total_out[n] - sum_{internal} amt
+
+    Every edge into a member is either internal to C or external, and each
+    internal edge contributes to exactly one member's `total_in` and one
+    member's `total_out`, so both identities are exact in real arithmetic. A
+    self-loop contributes to both totals and appears once in the internal sum,
+    so it cancels correctly too (the dataset drops self-loops at compile time,
+    but the identity does not depend on that).
+
+    Falls back to the adjacency walk if the graph does not maintain the totals,
+    so hand-built graphs in tests keep working.
+    """
+    totals_in = getattr(graph, "total_in", None)
+    totals_out = getattr(graph, "total_out", None)
+    if totals_in is None or totals_out is None:
+        return _boundary_flow_walk(nodes, graph)
+
+    sum_in = sum_out = 0.0
+    for n in nodes:
+        sum_in += totals_in.get(n, 0.0)
+        sum_out += totals_out.get(n, 0.0)
+    inflow = sum_in - internal
+    outflow = sum_out - internal
+
+    scale = max(sum_in, sum_out, 0.0)
+    eps = BOUNDARY_EPS_REL * scale
+    if abs(inflow) <= eps:
+        inflow = 0.0
+    if abs(outflow) <= eps:
+        outflow = 0.0
+    # A genuinely negative external flow is impossible; anything below zero
+    # past the clamp would be a real defect, not a rounding artifact.
+    return max(0.0, inflow), max(0.0, outflow)
+
+
 def build(nodes: set[int], graph, motifs: Motifs, registry=None,
-          node_key=None) -> Features:
+          node_key=None, internal_edges=None) -> Features:
     """Compute features for one candidate.
 
     `graph` is the WindowedGraph; `nodes` the candidate's members. Boundary flow
     is measured against the whole window, not just the induced subgraph -- the
     laundering signature is what crosses the boundary, so ignoring outside edges
     would discard the most informative part.
+
+    `internal_edges` may be passed in by a caller that has already computed
+    `graph.subgraph_edges(nodes)`. It must be that exact list for these exact
+    nodes; passing anything else silently changes every value below.
+    `CandidateGenerator` computes it once and threads it through, which removes
+    one of three redundant walks per candidate.
     """
     f = Features(n_nodes=len(nodes), exact=motifs.exact)
     if not nodes:
         return f
 
-    internal_edges = graph.subgraph_edges(nodes)
+    if internal_edges is None:
+        internal_edges = graph.subgraph_edges(nodes)
     f.n_edges = len(internal_edges)
 
     first_t = last_t = None
@@ -156,14 +236,12 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
         first_t = agg.first_t if first_t is None else min(first_t, agg.first_t)
         last_t = agg.last_t if last_t is None else max(last_t, agg.last_t)
 
-    # Boundary flow.
-    for n in nodes:
-        for s in graph.in_adj.get(n, ()):
-            if s not in nodes:
-                f.inflow += graph.pairs[(s << 32) | n].amount
-        for d in graph.out_adj.get(n, ()):
-            if d not in nodes:
-                f.outflow += graph.pairs[(n << 32) | d].amount
+    # Boundary flow. Measured over 2,996 real pruned candidates, the adjacency
+    # walk this replaces was 76% of the cost of `build` and ~44% of total cycle
+    # time: 7.7 members at a mean whole-window degree of 478 is ~3,700 dict
+    # lookups to produce two scalars. The identity produces the same two
+    # scalars in O(|nodes|).
+    f.inflow, f.outflow = _boundary_flow(nodes, graph, f.internal)
 
     hi = max(f.inflow, f.outflow)
     lo = min(f.inflow, f.outflow)

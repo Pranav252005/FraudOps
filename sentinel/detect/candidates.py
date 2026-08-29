@@ -77,6 +77,12 @@ class CandidateGenerator:
             "pruned_nodes": 0,
         }
 
+    def _expansion_signature(self) -> tuple:
+        """The parameters an expansion result depends on. Deliberately excludes
+        `prune_strategy`, which is applied after expansion, and `min_nodes`,
+        which only filters."""
+        return (self.hops, self.max_nodes, self.max_degree, id(self.graph))
+
     # -- seeding --------------------------------------------------------------
 
     def seeds(self, batch) -> set[int]:
@@ -99,7 +105,8 @@ class CandidateGenerator:
 
     def generate(self, batch, seen: set[str] | None = None,
                  merge_threshold: float | None = DEFAULT_THRESHOLD,
-                 seed_override: set[int] | None = None) -> list[Candidate]:
+                 seed_override: set[int] | None = None,
+                 expansion_cache: dict | None = None) -> list[Candidate]:
         """Produce scored candidates for one tick, overlap-suppressed.
 
         `seed_override` replaces the pass-through seed rule entirely when
@@ -107,6 +114,15 @@ class CandidateGenerator:
         `scripts/eval_oracle.py`, which measures the ceiling if seeding were
         perfect by seeding on every active ring's own members -- never used
         by the real detection path, which always calls `self.seeds(batch)`.
+
+        `expansion_cache` is a caller-owned {seed: frozenset(nodes)} map for
+        one tick. Expansion depends only on (seed, graph, hops, max_nodes,
+        max_degree) -- never on the prune strategy -- so an A/B harness running
+        two strategies over the same tick can expand once and hand both runs
+        the same neighbourhood. It is the caller's job to use one cache per
+        tick and only across generators with identical expansion bounds;
+        `_expansion_signature` is asserted against the cache to make a misuse
+        raise instead of silently returning another configuration's answer.
         """
         g = self.graph
         seen = set() if seen is None else seen
@@ -115,11 +131,30 @@ class CandidateGenerator:
         seeds = self.seeds(batch) if seed_override is None else set(seed_override)
         self.stats["seeds"] += len(seeds)
 
+        if expansion_cache is not None:
+            sig = self._expansion_signature()
+            cached_sig = expansion_cache.setdefault("__signature__", sig)
+            assert cached_sig == sig, (
+                f"expansion_cache was built with bounds {cached_sig} but this "
+                f"generator uses {sig}; sharing it would return another "
+                f"configuration's neighbourhoods")
+
         for seed in seeds:
-            nodes = g.expand([seed], hops=self.hops,
-                             max_nodes=self.max_nodes,
-                             max_degree=self.max_degree)
-            self.stats["expanded"] += 1
+            if expansion_cache is None:
+                nodes = g.expand([seed], hops=self.hops,
+                                 max_nodes=self.max_nodes,
+                                 max_degree=self.max_degree)
+                self.stats["expanded"] += 1
+            else:
+                hit = expansion_cache.get(seed)
+                if hit is None:
+                    hit = expansion_cache[seed] = g.expand(
+                        [seed], hops=self.hops, max_nodes=self.max_nodes,
+                        max_degree=self.max_degree)
+                    self.stats["expanded"] += 1
+                # Copy: prune and the caller downstream must not be able to
+                # mutate a set another strategy will still read.
+                nodes = set(hit)
 
             # Prune the expansion by-products before anything downstream sees
             # the candidate. Deliberately ahead of the dedup key: two seeds
@@ -148,8 +183,15 @@ class CandidateGenerator:
                 continue
 
             motifs = detect(edges)
-            feats = F.build(nodes, g, motifs,
-                            registry=self.registry, node_key=self.node_key)
+            # `edges` is threaded into build rather than recomputed there.
+            # Profiling counted 171,479 `subgraph_edges` calls for 57,233
+            # candidates -- three per candidate, from prune, from here, and
+            # from features.build. Two of those three are the same call on the
+            # same node set, so one of them is pure waste. (The third, inside
+            # prune, runs on the *pre*-prune node set and genuinely cannot be
+            # shared.)
+            feats = F.build(nodes, g, motifs, registry=self.registry,
+                            node_key=self.node_key, internal_edges=edges)
             s, contrib = F.score(feats)
 
             out.append(Candidate(

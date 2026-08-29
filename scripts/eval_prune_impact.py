@@ -93,9 +93,16 @@ def main() -> None:
         for r in rings:
             typ_seen_total[stream.ring_typology(r)] += 1
 
+        # One expansion per seed, shared by both strategies. Expansion depends
+        # only on the seed and the graph -- never on the prune strategy, which
+        # is applied to its result -- so this is exact, and it halves the
+        # dominant cost of this A/B (docs/ARCHITECTURE_UPLIFT.md 5.2 item 5).
+        # `generate` asserts the cache's expansion bounds match the generator's
+        # rather than trusting the caller.
+        expansion_cache: dict = {}
         for strat in STRATS:
             gen = gens[strat]
-            cands = gen.generate(b)
+            cands = gen.generate(b, expansion_cache=expansion_cache)
             rec = {"k": {}, "found": {}, "seen": set(rings.keys())}
             if not cands:
                 for name in ("score", "random", "degree", "size"):
