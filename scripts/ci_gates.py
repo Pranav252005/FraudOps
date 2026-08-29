@@ -244,20 +244,101 @@ def gate_regression() -> int:
     return 0 if ok else 1
 
 
+# The measured operating point the cost conclusion is quoted at
+# (data/eval_phase2.json, score p@10, post-prune).
+REPORTED_PRECISION = 0.0971
+
+
 def gate_cost() -> int:
-    """An unsourced cost input must not reach an absolute headline figure."""
+    """No REPORTED CONCLUSION may depend on an input `unsourced()` flags.
+
+    An earlier version of this gate checked a flag that nothing ever set, so it
+    could not fail -- the same defect as the citation verifier that could never
+    reject a template narrative. Rewritten to test the property the cost model
+    actually claims for itself: *"if the break-even holds across an order of
+    magnitude of an input, the conclusion does not depend on that input's exact
+    value."*
+
+    So: for every unsourced input, scale it by 0.1x and 10x and ask whether the
+    QUALITATIVE conclusion at the reported operating point flips -- does the
+    queue still pay for itself, or not. An input that can flip the answer is
+    decision-critical and must be sourced before any conclusion resting on it
+    is reported. An input that cannot is a placeholder the conclusion is robust
+    to, which is exactly what the design intends.
+    """
+    from dataclasses import replace
+
     from sentinel.economics.cost import CostModel
+
     m = CostModel()
     missing = m.unsourced()
-    print(f"unsourced cost inputs: {missing}")
-    # The break-even precision and the inversion are the figures this project
-    # is allowed to quote, because they do not depend on the unsourced inputs
-    # being right. An absolute expected-loss figure would.
-    if missing and getattr(m, "quotes_absolute_headline", False):
-        print("cost gate: FAIL -- an absolute figure rests on an unsourced input")
+    base_pays = m.net_benefit_per_case(REPORTED_PRECISION) > 0
+    print(f"{len(missing)} unsourced inputs: {missing}")
+    print(f"at the reported p@10 = {REPORTED_PRECISION}, base model says the "
+          f"queue {'pays' if base_pays else 'does NOT pay'} for itself")
+    print(f"break-even precision = {m.break_even_precision():.4f}")
+
+    critical = []
+    for name in missing:
+        base = getattr(m, name)
+        for factor in (0.1, 10.0):
+            value = base * factor
+            if name in ("recovery_rate", "analyst_false_approval_rate"):
+                value = min(1.0, value)
+            other = replace(m, **{name: value})
+            if (other.net_benefit_per_case(REPORTED_PRECISION) > 0) != base_pays:
+                critical.append((name, factor))
+                print(f"  {name:<32} x{factor:<5} FLIPS the conclusion "
+                      f"(break-even {other.break_even_precision():.4f})")
+                break
+        else:
+            print(f"  {name:<32} conclusion robust across 0.1x - 10x")
+
+    # One-at-a-time sensitivity understates risk: the inputs can move together.
+    # The joint worst case pushes every unsourced input in the direction that
+    # hurts, simultaneously, which is the honest bound on "the conclusion does
+    # not depend on these placeholders".
+    worst = replace(
+        m,
+        analyst_minutes_per_case=m.analyst_minutes_per_case * 10,
+        analyst_cost_per_hour=m.analyst_cost_per_hour * 10,
+        value_at_risk_per_ring=m.value_at_risk_per_ring * 0.1,
+        recovery_rate=m.recovery_rate * 0.1,
+        analyst_false_approval_rate=min(1.0, m.analyst_false_approval_rate * 10),
+        harm_per_wrong_action=m.harm_per_wrong_action * 10,
+    )
+    joint_pays = worst.net_benefit_per_case(REPORTED_PRECISION) > 0
+    print()
+    print(f"JOINT worst case, all six inputs adverse at once: "
+          f"break-even {worst.break_even_precision():.4f}, queue "
+          f"{'still pays' if joint_pays == base_pays else 'DOES NOT PAY'}")
+    if joint_pays != base_pays:
+        # Reported, not gated on, and the distinction is argued rather than
+        # convenient. The enforced condition is exactly the claim
+        # sentinel/economics/cost.py makes for itself -- `sensitivity()` varies
+        # ONE input at a time and concludes robustness from that. This line
+        # says plainly that the one-at-a-time claim does not extend to the
+        # joint case, which is a real limitation of that method and is the
+        # standing reason HANDOFF 11a forbids quoting the absolute rupee
+        # figures. Gating on a 10x/0.1x simultaneous adverse move would make
+        # the build permanently red for a scenario nobody argues is likely,
+        # and a permanently red gate teaches people to ignore red gates.
+        print("  NOTE: one-at-a-time robustness does NOT extend to the joint "
+              "case. cost.py's `sensitivity()` varies a single input and "
+              "concludes from that; this is the bound it cannot see. The "
+              "absolute rupee figures stay unquotable until the inputs are "
+              "grounded (HANDOFF 11a, uplift plan 3.6).")
+
+    if critical:
+        names = sorted({n for n, _ in critical})
+        print()
+        print(f"cost gate: FAIL -- {len(names)} unsourced input(s) can flip the "
+              f"reported conclusion and must be grounded before any figure "
+              f"resting on them is quoted: {names}")
         return 1
-    print(f"cost gate: PASS ({len(missing)} inputs remain unsourced and are "
-          f"reported as such, no absolute headline depends on them)")
+    print()
+    print("cost gate: PASS -- no unsourced input can flip the reported "
+          "conclusion across an order of magnitude")
     return 0
 
 
