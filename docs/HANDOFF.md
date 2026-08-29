@@ -239,12 +239,49 @@ fan-in from unrelated senders.
 GFP reports **higher minority-class F1 than standard GNNs** using hand-
 engineered subgraph features plus gradient boosting, on CPU. **This is the
 architecture class this project is already in**, which means the ceiling here is
-far above current numbers. `snapml` has no Python 3.14 build, so its feature set
-was implemented directly.
+far above current numbers.
 
-Coverage vs GFP: fan-in/out ✅, degree ✅, scatter-gather ✅, gather-scatter ✅,
-simple cycle ✅, temporal cycle ✅, vertex statistics with skew/kurtosis ✅.
-Essentially at parity.
+**CORRECTION (later session) — the parity claim that stood here is withdrawn,
+and the reason it could not be checked was misdiagnosed twice.**
+
+The original text read: *"Coverage vs GFP: fan-in/out ✅, degree ✅,
+scatter-gather ✅, gather-scatter ✅, simple cycle ✅, temporal cycle ✅, vertex
+statistics with skew/kurtosis ✅. Essentially at parity."* Two things are wrong
+with it.
+
+**It was never a measurement.** It is a checklist made by reading two feature
+lists and comparing names. `docs/ARCHITECTURE_UPLIFT.md` §2.2 already found
+three of those ticks to be false — un-windowed scatter-gather, absent timestamp
+moments, amount moments computed but never propagated — and commit `cc8a68a`
+closed them. Closing a coverage gap still does not measure anything: two
+implementations of "scatter-gather" can agree on the name and disagree on every
+value.
+
+**The blocker was not the Python version.** This document said "`snapml` has no
+Python 3.14 build"; commit `d7dba2f` refined that to "snapml is obtainable,
+just not on 3.14"; `ARCHITECTURE_UPLIFT.md` §2.1 costed the fix at "~30
+minutes, lowest risk". All three are wrong. Measured directly:
+
+- Python 3.11 was provisioned and `snapml==1.15.6` installed cleanly.
+- `from snapml import GraphFeaturePreprocessor` succeeds — the wrapper module
+  is in the Windows wheel.
+- Constructing it raises `module 'snapml.libsnapmllocal3_avx2' has no
+  attribute 'gf_allocate'`.
+- **None of the six `.pyd` binaries in the Windows wheel export any `gf_*`
+  symbol.** The manylinux wheel of the *identical version* exports all eight.
+- snapml 1.17.x, the current release, ships **no Windows wheels at all**.
+  1.15.6 is the last Windows release, and it is one without GFP.
+
+**IBM's Graph Feature Preprocessor is not built for Windows, at any snapml
+version or any Python version.** A 3.11 venv cannot fix that. The real
+requirement is a Linux or macOS host, which is why `scripts/gfp_control.py` is
+split at a file boundary: `export` and `compare` run here, `gfp-features` does
+not run here at all.
+
+Until that middle stage has been run, **there is no measured comparison against
+GFP and no parity claim of any kind belongs in this repo.**
+`scripts/gfp_compare.py` refuses to emit a verdict without it, and
+`tests/test_gfp_control.py` pins that refusal.
 
 ### Industry reality — the comparison that flatters most, and is fair
 

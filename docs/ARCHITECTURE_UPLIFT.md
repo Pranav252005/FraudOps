@@ -282,17 +282,34 @@ plus gradient boosting, on CPU, beating a PNA GNN on the same dataset
 
 ### 2.1 The blocker, and how to clear it
 
-`snapml` ships `cp310` and `cp311` win_amd64 wheels for 1.15.6; there is no
-build for 3.12+; this machine has only 3.14 (established in commit `d7dba2f`).
-So the control run is blocked on **provisioning an interpreter, not on the
-package existing**. Options, ranked:
+**THIS SECTION WAS WRONG AND THE CORRECTION IS THE USEFUL PART.** It read:
+*"`snapml` ships cp310 and cp311 win_amd64 wheels for 1.15.6; there is no build
+for 3.12+; this machine has only 3.14. So the control run is blocked on
+provisioning an interpreter, not on the package existing"* — and ranked
+option 1 below as "~30 minutes, lowest risk, **do this one**".
 
-1. **`py -3.11 -m venv .venv311 && pip install snapml lightgbm pandas`.** ~30
-   minutes, lowest risk, and the AMLworld CSVs are already on disk. **Do this
-   one.**
-2. **A `python:3.11-slim` container.** Slightly more setup, better
-   reproducibility, and a container is wanted for CI (§6) anyway — so this is
-   the right answer if §6 lands first.
+Option 1 was done. It does not work, and the reason invalidates the whole
+ranking:
+
+- `py -3.11 -m venv .venv311` and `pip install snapml==1.15.6` both succeed.
+- `from snapml import GraphFeaturePreprocessor` succeeds.
+- `GraphFeaturePreprocessor()` raises `module
+  'snapml.libsnapmllocal3_avx2' has no attribute 'gf_allocate'`.
+- **No `.pyd` in the Windows wheel exports any `gf_*` symbol** (checked against
+  all six). The manylinux wheel of the same version exports all eight.
+- snapml **1.17.x ships no Windows wheels at all**; 1.15.6 is the last Windows
+  release.
+
+**GFP is Linux/macOS-only.** The interpreter was never the obstacle. Options,
+re-ranked against the real one:
+
+1. ~~**`py -3.11 -m venv .venv311 && pip install snapml lightgbm pandas`.**~~
+   **RULED OUT BY EXPERIMENT.** No Python version helps on Windows.
+2. **A Linux environment — WSL, a container, or a CI runner.** This is now the
+   *only* local route. WSL needs Administrator to install, which is why this
+   is a decision for the repo owner rather than something a session can just
+   do. The AMLworld CSVs are already on disk and WSL reads them through
+   `/mnt/c`, so no data has to move.
 3. **Reimplement GFP's families natively.** **Not worth doing as a control.** A
    reimplementation of GFP compared against `sentinel/` measures your
    reimplementation, not GFP. Reimplementing the *missing* families into

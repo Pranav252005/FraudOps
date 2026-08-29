@@ -21,3 +21,7 @@ payops-sentinel.zip
 
 # GFP control venv (Python 3.11); see docs/ARCHITECTURE_UPLIFT.md 2.1
 .venv311/
+
+data/gfp_export/
+data/gfp_features.npz
+data/ranker_pool.npz

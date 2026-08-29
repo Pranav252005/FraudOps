@@ -3,6 +3,19 @@
 Derived from four systems that solve this problem better than v1 does, with the
 specific mechanism taken from each and mapped onto existing code.
 
+> **"GFP parity" in this document is a DESIGN TARGET, never a measured result.**
+> It appears below as "extend to GFP parity" and "cheap GFP parity" — phrasings
+> written while planning which feature families to build. None of them assert
+> that parity was reached, and none should be quoted as if they did.
+>
+> The only honest status: **there is no measured comparison against IBM's Graph
+> Feature Preprocessor.** The coverage checklist that once claimed "essentially
+> at parity" is struck from `HANDOFF.md` §4, the control harness is
+> `scripts/gfp_control.py`, and its middle stage cannot run on Windows at all —
+> GFP is a Linux/macOS-only component at every snapml version. See
+> `ARCHITECTURE_UPLIFT.md` §2.1 for the measurement that overturned the
+> previously recorded blocker.
+
 ## What the reference architectures actually do
 
 ### IBM Graph Feature Preprocessor (ICAIF 2024) — the most important one

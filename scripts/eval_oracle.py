@@ -367,22 +367,27 @@ def main() -> None:
         gfp_note = "snapml imported but the GFP comparison run was not implemented"
     except ImportError:
         # Correction to an earlier, softer claim: snapml is NOT unobtainable.
-        # `pip download snapml --only-binary=:all: --platform win_amd64` finds
-        # snapml 1.15.6 wheels for cp310 and cp311; it is 3.12+ that has no
-        # build, and this machine only has 3.14. So the GFP control is blocked
-        # on provisioning a Python 3.11 environment, not on the package being
-        # unavailable -- a materially smaller obstacle than "no build exists",
-        # and worth doing, because GFP+LightGBM is the *direct* architectural
-        # comparator for this project (hand-engineered subgraph features plus
-        # gradient boosting) and reports 62.86 minority-class F1 on AML
-        # HI-Small (arXiv:2402.08593 Table 4).
-        gfp_note = ("GFP control NOT run. snapml 1.15.6 ships cp310/cp311 "
-                     "win_amd64 wheels but none for 3.12+; this machine has "
-                     "only Python 3.14. Unblock = provision a Python 3.11 env "
-                     "and `pip install snapml`. Until then the 'feature parity "
-                     "with GFP' claim in docs/HANDOFF.md section 4 remains "
-                     "UNMEASURED -- it is a claim about feature-family "
-                     "coverage, not a measured F1 comparison.")
+        # CORRECTED. This note used to say the blocker was the Python
+        # version: "snapml 1.15.6 ships cp310/cp311 win_amd64 wheels but none
+        # for 3.12+, so provision a 3.11 env". That was measured and is wrong.
+        # A 3.11 venv was provisioned and snapml 1.15.6 installed; the
+        # GraphFeaturePreprocessor wrapper imports, and its constructor dies on
+        # a missing `gf_allocate`. No Windows .pyd in any snapml release
+        # exports any gf_* symbol, while the manylinux wheel of the same
+        # version exports all eight. GFP is a Linux/macOS-only component. The
+        # obstacle is the OS, not the interpreter, and it is LARGER than the
+        # note it replaces claimed -- the opposite of the direction that
+        # previous correction moved it.
+        gfp_note = ("GFP control NOT run. IBM's GraphFeaturePreprocessor is "
+                     "not built for Windows at ANY snapml version or Python "
+                     "version: the Windows wheels ship the Python wrapper but "
+                     "none of the gf_* native symbols, and snapml 1.17.x ships "
+                     "no Windows wheels at all. Unblock = run "
+                     "`scripts/gfp_control.py gfp-features` on Linux/macOS. "
+                     "Until then any 'feature parity with GFP' claim is "
+                     "UNMEASURED -- it was only ever feature-family coverage, "
+                     "not a measured comparison, and it has been struck from "
+                     "docs/HANDOFF.md section 4.")
     print(f"\nGFP control: {gfp_note}")
 
     # The previous `interpretation` field branched on F1 at a fixed 0.5
