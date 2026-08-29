@@ -25,3 +25,4 @@ payops-sentinel.zip
 data/gfp_export/
 data/gfp_features.npz
 data/ranker_pool.npz
+data/eval_median_gap.json

@@ -6,7 +6,8 @@ session can pick up without re-deriving anything.
 **Repo:** https://github.com/Pranav252005/FraudOps
 **Target:** Razorpay AI Buildathon, AI Risk Manager track. One class of loss:
 money-movement / mule rings. Defence only.
-**Tests:** 416 passing + 1 xfail. `python -m pytest -q`
+**Tests:** 436 passing + 1 skipped + 1 xfail. `python -m pytest -q` is the only authority for this figure.
+(The skip is the snapml constructor check in `tests/test_gfp_control.py`, which runs only where snapml is installed.)
 
 > **Read §5b–§5e and §12 before acting on §5 or §10.** Several sections of this
 > document were written before measurements that overturned them. Where that
