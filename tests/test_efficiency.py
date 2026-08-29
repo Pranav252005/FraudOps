@@ -285,3 +285,64 @@ class TestExpansionCache:
         CandidateGenerator(g, hops=2).generate(b, expansion_cache=cache)
         with pytest.raises(AssertionError):
             CandidateGenerator(g, hops=3).generate(b, expansion_cache=cache)
+
+
+# --------------------------------------------------------------------------
+# Bug #17 -- dominant_entity_type was decided by PYTHONHASHSEED
+# --------------------------------------------------------------------------
+
+class TestDominantEntityTypeIsDeterministic:
+    """Found by the fingerprint diff between the pre- and post-efficiency runs.
+
+    `max(set(types), key=types.count)` returns the first maximal element in SET
+    ITERATION ORDER. A set of strings iterates in an order that depends on
+    PYTHONHASHSEED, so a candidate whose entity types tie reported a different
+    "dominant" type on different runs of the same input. Nothing raised. The
+    case file simply stated a confident fact about the ring that had been
+    decided by a hash seed -- this project's characteristic defect exactly.
+    """
+
+    def test_a_tie_resolves_the_same_way_in_every_process(self):
+        import subprocess
+        import sys
+        probe = (
+            "types = ['Sole Proprietorship', 'Partnership', 'Corporation']; "
+            "print(max(sorted(set(types)), key=types.count))"
+        )
+        seen = set()
+        for seed in ("0", "1", "12345", "99991"):
+            import os
+            out = subprocess.run([sys.executable, "-c", probe],
+                                 capture_output=True, text=True, check=True,
+                                 env=dict(os.environ, PYTHONHASHSEED=seed))
+            seen.add(out.stdout.strip())
+        assert len(seen) == 1, (
+            f"dominant entity type depends on the hash seed: {seen}")
+
+    def test_the_old_formulation_really_was_unstable(self):
+        """A regression test for a bug is worth little if the bug it describes
+        could not have happened. This pins that the removed formulation was
+        genuinely seed-dependent, so the fix above is not cargo cult."""
+        import os
+        import subprocess
+        import sys
+        probe = (
+            "types = ['Sole Proprietorship', 'Partnership', 'Corporation']; "
+            "print(max(set(types), key=types.count))"
+        )
+        seen = set()
+        for seed in ("0", "1", "12345", "99991"):
+            out = subprocess.run([sys.executable, "-c", probe],
+                                 capture_output=True, text=True, check=True,
+                                 env=dict(os.environ, PYTHONHASHSEED=seed))
+            seen.add(out.stdout.strip())
+        assert len(seen) > 1, (
+            "the old formulation resolved consistently here, so this test no "
+            "longer demonstrates the defect it was written for")
+
+    def test_purity_was_never_affected(self):
+        """Tied types share a count, so the purity ratio is the same whichever
+        label wins. Recorded so the blast radius of the bug stays documented."""
+        types = ["Sole Proprietorship", "Partnership", "Corporation"]
+        for top in set(types):
+            assert types.count(top) / len(types) == pytest.approx(1 / 3)

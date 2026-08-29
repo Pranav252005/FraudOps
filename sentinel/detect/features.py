@@ -158,28 +158,38 @@ def is_round(amount: float) -> bool:
     return amount >= 100 and (amount % 100 == 0 or amount % 1000 == 0)
 
 
-# Relative floor below which a boundary-flow residue is treated as zero.
+# The band in which the boundary-flow identity is not trustworthy, expressed
+# relative to the total value summed.
 #
 # `_boundary_flow` computes external flow as (sum of members' whole-window
-# totals) - (sum of internal edge amounts). Mathematically the two sides cancel
-# exactly for a candidate with no external edges; in binary floating point they
-# leave a residue of order 1e-16 relative to the magnitudes summed. Without a
-# clamp, a candidate that is genuinely isolated would get inflow = 3e-9 instead
-# of 0.0, and `conservation = min/max` would then return an arbitrary value in
-# [0,1] for it instead of 0.0 -- a plausible wrong answer produced by a
-# rounding artifact, which is precisely this project's characteristic bug.
+# totals) - (sum of internal edge amounts). That is exact in real arithmetic
+# and NOT exact in floating point: it is a difference of two large, nearly
+# equal numbers, so its absolute error scales with the MAGNITUDE OF THE TOTALS,
+# not with the magnitude of the answer. When a candidate's external flow is
+# tiny beside its internal flow, the answer is entirely inside that error.
 #
-# The clamp is relative to the total value summed, so it does not depend on the
-# currency scale of the dataset.
-BOUNDARY_EPS_REL = 1e-9
+# This is not hypothetical. Measured on tick 36 of the real stream, 4 of 15,496
+# candidates land in that band, and the worst case had a genuine external
+# inflow of 0.09 against 6,948,663.08 of internal flow -- the identity returned
+# 0.0, which would have made `conservation` 0.0 rather than 1.3e-8. Small
+# enough not to move any ranking (rank order was identical across all 65,114
+# candidates benchmarked), and still a wrong number reported with confidence,
+# which is the defect class this project exists to resist.
+#
+# So the identity is used where it is reliable and the O(degree) adjacency walk
+# is used where it is not. The walk fires for ~0.03% of candidates, so the
+# speedup is kept, and inside the band the result is bit-identical to the
+# implementation the identity replaced rather than merely close to it.
+BOUNDARY_CANCELLATION_REL = 1e-6
 
 
 def _boundary_flow_walk(nodes: set[int], graph) -> tuple[float, float]:
     """External inflow/outflow by walking every member's window adjacency.
 
-    O(sum of member degrees). Retained as the reference implementation the
-    identity below is checked against (scripts/verify_efficiency.py); it is
-    not on the hot path.
+    O(sum of member degrees), and numerically exact: it sums only the external
+    edges, so no cancellation against the internal total occurs. This is the
+    reference implementation, still used directly whenever the identity lands
+    in its unreliable band.
     """
     inflow = outflow = 0.0
     for n in nodes:
@@ -193,20 +203,23 @@ def _boundary_flow_walk(nodes: set[int], graph) -> tuple[float, float]:
 
 
 def _boundary_flow(nodes: set[int], graph, internal: float) -> tuple[float, float]:
-    """External inflow/outflow by the boundary-flow identity. O(|nodes|).
+    """External inflow/outflow. O(|nodes|) in the common case.
 
         external_inflow(C)  = sum_{n in C} total_in[n]  - sum_{internal} amt
         external_outflow(C) = sum_{n in C} total_out[n] - sum_{internal} amt
 
     Every edge into a member is either internal to C or external, and each
     internal edge contributes to exactly one member's `total_in` and one
-    member's `total_out`, so both identities are exact in real arithmetic. A
+    member's `total_out`, so both identities hold exactly in real arithmetic. A
     self-loop contributes to both totals and appears once in the internal sum,
     so it cancels correctly too (the dataset drops self-loops at compile time,
     but the identity does not depend on that).
 
-    Falls back to the adjacency walk if the graph does not maintain the totals,
-    so hand-built graphs in tests keep working.
+    Falls back to the adjacency walk in two cases: when the graph does not
+    maintain the totals (hand-built graphs in tests), and when the result lands
+    within BOUNDARY_CANCELLATION_REL of the totals summed, where floating-point
+    cancellation makes the identity unreliable. See that constant for the
+    measured case this exists to prevent.
     """
     totals_in = getattr(graph, "total_in", None)
     totals_out = getattr(graph, "total_out", None)
@@ -220,15 +233,10 @@ def _boundary_flow(nodes: set[int], graph, internal: float) -> tuple[float, floa
     inflow = sum_in - internal
     outflow = sum_out - internal
 
-    scale = max(sum_in, sum_out, 0.0)
-    eps = BOUNDARY_EPS_REL * scale
-    if abs(inflow) <= eps:
-        inflow = 0.0
-    if abs(outflow) <= eps:
-        outflow = 0.0
-    # A genuinely negative external flow is impossible; anything below zero
-    # past the clamp would be a real defect, not a rounding artifact.
-    return max(0.0, inflow), max(0.0, outflow)
+    guard = BOUNDARY_CANCELLATION_REL * max(sum_in, sum_out, 0.0)
+    if abs(inflow) <= guard or abs(outflow) <= guard:
+        return _boundary_flow_walk(nodes, graph)
+    return inflow, outflow
 
 
 def build(nodes: set[int], graph, motifs: Motifs, registry=None,
@@ -376,7 +384,21 @@ def build(nodes: set[int], graph, motifs: Motifs, registry=None,
             # fact about the world rather than an inference from behaviour.
             f.entity_reuse = len(ents) / distinct if distinct else 0.0
         if types:
-            top = max(set(types), key=types.count)
+            # `sorted`, not `set`, and the reason is a real defect found by the
+            # efficiency benchmark's fingerprint diff. `max(set(types), ...)`
+            # returns the first maximal element in SET ITERATION ORDER, and a
+            # set of strings iterates in an order that depends on
+            # PYTHONHASHSEED. So a candidate whose entity types tie -- one
+            # Sole Proprietorship, one Partnership, one Corporation -- reported
+            # a different "dominant" type on different runs of the same input:
+            # "Sole Proprietorship" under one seed, "Corporation" under
+            # another. Nothing raised; the case file simply stated a confident
+            # fact about the ring that was decided by a hash seed.
+            #
+            # `entity_type_purity` was unaffected (tied types share a count),
+            # and `dominant_entity_type` is in the re-ranker's EXCLUDED set, so
+            # no reported metric moved. The analyst-facing case file did.
+            top = max(sorted(set(types)), key=types.count)
             f.dominant_entity_type = top
             f.entity_type_purity = types.count(top) / len(types)
 
