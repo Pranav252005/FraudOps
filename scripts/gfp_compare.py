@@ -109,11 +109,20 @@ def split_mask(ring, t, ring_first_t, fraction=SPLIT_FRACTION):
     return is_train, split_t
 
 
-def fit(Xtr, ytr, Xte, seed=7):
-    """The same model everywhere, so the feature block is the only variable."""
+def fit(Xtr, ytr, Xte, seed=7, **overrides):
+    """The same model everywhere, so the feature block is the only variable.
+
+    `overrides` exists for robustness sweeps only. Note that `seed` alone is
+    inert here: with bagging and feature sampling at their defaults of 1.0,
+    LightGBM's tree construction is deterministic and never consults the RNG,
+    so two seeds give bit-identical predictions. Anything probing fit variance
+    must pass subsample/colsample overrides as well -- see STOCHASTIC in
+    scripts/eval_median_gap.py, where assuming otherwise produced a sweep that
+    measured nothing and was reported as five agreeing fits.
+    """
     m = LGBMClassifier(n_estimators=300, max_depth=6, learning_rate=0.05,
                        class_weight="balanced", random_state=seed,
-                       verbosity=-1)
+                       verbosity=-1, **overrides)
     m.fit(Xtr, ytr)
     return m.predict_proba(Xte)[:, 1], m
 

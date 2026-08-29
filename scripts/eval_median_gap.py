@@ -52,6 +52,30 @@ from scripts.gfp_compare import (EXPORT_DIR, KS, cycle_rows, fit, load_export,
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "eval_median_gap.json"
+CACHE = ROOT / "data" / "median_features.npz"
+
+# Model-fit seeds. The paired bootstrap resamples CYCLES, so it carries the
+# variance of which cycles landed in the test split -- and none of the variance
+# of the fit itself. A five-feature change evaluated at one fit cannot
+# distinguish "these features hurt" from "this fit happens to be worse", and
+# the first reading is the one that would get written down.
+SEEDS = (7, 13, 29, 101, 997)
+
+# CORRECTION, and it invalidated the first version of this sweep. Passing a
+# different `random_state` to LGBMClassifier changes NOTHING in the shipped
+# configuration: with bagging and feature sampling both at 1.0, LightGBM's
+# histogram tree construction is deterministic and the RNG is never consulted.
+# The first run duly reported "5 of 5 seeds show a degradation" while every
+# seed had produced bit-identical p@k to four decimal places -- one fit
+# reported five times, presented as five agreeing fits.
+#
+# Verified directly: with the shipped params two seeds give np.array_equal
+# predictions; adding subsample/colsample below they differ. So the stability
+# probe has to perturb something the RNG actually reaches. These are the
+# smallest such knobs, and they are applied ONLY to the robustness sweep --
+# the headline comparison stays on the deterministic shipped configuration,
+# which is the right thing for a reported number to be.
+STOCHASTIC = {"subsample": 0.8, "subsample_freq": 1, "colsample_bytree": 0.8}
 
 MEDIAN_FEATURES = (
     "mean_median_out_amount",   # GFP's per-vertex median, averaged over members
@@ -136,7 +160,17 @@ def main() -> None:
 
     t0 = time.time()
     exp = load_export(EXPORT_DIR)
-    Xm, keys, ts = build(EXPORT_DIR)
+    if CACHE.exists():
+        z = np.load(CACHE, allow_pickle=False)
+        Xm, keys, ts = z["X"], [str(k) for k in z["keys"]], z["t"]
+        print(f"loaded cached median features from {CACHE}")
+    else:
+        # Building these is a 65-minute pass over 34 windows of ~1.3M edges.
+        # Cached because the interesting follow-up questions are all about the
+        # MODEL, and none of them should cost another hour.
+        Xm, keys, ts = build(EXPORT_DIR)
+        np.savez_compressed(CACHE, X=Xm, keys=np.array(keys), t=ts)
+        print(f"cached median features to {CACHE}")
     assert keys == exp["keys"] and (ts == exp["t"]).all(), \
         "median features are not in the export's candidate order"
 
@@ -151,10 +185,29 @@ def main() -> None:
     print(f"sentinel {Xs.shape[1]} features, +median {Xb.shape[1]}")
 
     scores = {}
-    scores["sentinel"], _ = fit(Xs[is_train], y[is_train], Xs[te])
-    scores["with_median"], model = fit(Xb[is_train], y[is_train], Xb[te])
+    scores["sentinel"], _ = fit(Xs[is_train], y[is_train], Xs[te], seed=SEEDS[0])
+    scores["with_median"], model = fit(Xb[is_train], y[is_train], Xb[te],
+                                       seed=SEEDS[0])
     scores["blend"] = exp["blend"][te]
     scores["size"] = exp["size"][te]
+
+    # Every seed, both blocks, under STOCHASTIC so the seed actually bites.
+    for sd in SEEDS:
+        scores[f"sentinel_s{sd}"], _ = fit(Xs[is_train], y[is_train], Xs[te],
+                                           seed=sd, **STOCHASTIC)
+        scores[f"with_median_s{sd}"], _ = fit(Xb[is_train], y[is_train], Xb[te],
+                                              seed=sd, **STOCHASTIC)
+        print(f"  stochastic refit, seed {sd} ({time.time() - t0:.0f}s)",
+              flush=True)
+
+    # Guard the correction so it cannot silently regress: if the sweep ever
+    # produces identical predictions across two seeds again, the sweep is not
+    # measuring fit variance and must not be reported as if it were.
+    a, b = scores[f"sentinel_s{SEEDS[0]}"], scores[f"sentinel_s{SEEDS[-1]}"]
+    assert not np.array_equal(a, b), (
+        "the stochastic sweep produced identical fits across seeds -- "
+        "random_state is not reaching the model, so this measures nothing. "
+        "Check that STOCHASTIC is still being applied.")
 
     cand_rows, ring_rows = cycle_rows(exp["t"][te], y[te], exp["rnd"][te],
                                       exp["ring"][te], scores)
@@ -162,7 +215,9 @@ def main() -> None:
     result = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
               "median_features": list(MEDIAN_FEATURES),
               "n_test_cycles": len(cand_rows),
-              "pre_registered": "CI expected to include zero"}
+              "pre_registered": ("CI expected to include zero; a measured "
+                                "DEGRADATION was not predicted"),
+              "seeds": list(SEEDS)}
 
     verdicts = {}
     for label, rws in (("candidate", cand_rows), ("distinct_ring", ring_rows)):
@@ -191,6 +246,36 @@ def main() -> None:
         result[label] = {"precision_at": {str(k): point[k] for k in KS},
                          "paired": paired, "cycle_rows": rws}
 
+    # Seed stability of the delta, at the k the verdict turns on.
+    print(f"\nper-seed delta (with_median - sentinel) at k=10 and "
+          f"k=20, candidate-level, under bagging+feature sampling so the seed "
+          f"is not inert:")
+    per_seed: dict = {}
+    n_neg10 = n_pos10 = 0
+    for sd in SEEDS:
+        sfx = f"_s{sd}"
+        row = {}
+        for k in (10, 20):
+            a = ratio_of_sums(f"with_median{sfx}_hit_{k}",
+                              f"with_median{sfx}_n_{k}")
+            b = ratio_of_sums(f"sentinel{sfx}_hit_{k}", f"sentinel{sfx}_n_{k}")
+            d = paired_bootstrap_delta(cand_rows, b, a)
+            row[k] = d
+        per_seed[sd] = row
+        d10 = row[10]
+        n_neg10 += int(d10["point"] < 0 and d10["excludes_zero"])
+        n_pos10 += int(d10["point"] > 0 and d10["excludes_zero"])
+        print(f"  seed {sd:<5} k=10 {row[10]['point']:+.4f} "
+              f"[{row[10]['lo']:+.4f}, {row[10]['hi']:+.4f}]"
+              f"   k=20 {row[20]['point']:+.4f} "
+              f"[{row[20]['lo']:+.4f}, {row[20]['hi']:+.4f}]")
+    result["per_seed"] = {str(k): {str(kk): vv for kk, vv in v.items()}
+                          for k, v in per_seed.items()}
+    result["seeds_harming_at_10"] = n_neg10
+    result["seeds_helping_at_10"] = n_pos10
+    print(f"  {n_neg10}/{len(SEEDS)} seeds show a CI-clear DEGRADATION at "
+          f"k=10; {n_pos10}/{len(SEEDS)} show a CI-clear gain.")
+
     # Where the model puts them, which says whether the features are ignored or
     # used-and-still-not-helping. Those warrant different conclusions.
     imp = model.feature_importances_
@@ -207,16 +292,36 @@ def main() -> None:
     result["median_ranks"] = {n: int(ranks[n_s + i]) + 1
                               for i, n in enumerate(MEDIAN_FEATURES)}
 
+    # Three outcomes, not two. The first version of this branch only asked
+    # whether the features HELP, so a measured degradation would have been
+    # reported as "no improvement" -- true, and a serious understatement of
+    # what the numbers say.
     worth_it = verdicts["candidate"] or verdicts["distinct_ring"]
-    result["verdict"] = (
-        "WORTH THE DESIGN COST: adding the per-account median improves "
-        "ring-level p@k with a CI excluding zero at k=10 or k=20. A streaming "
-        "quantile estimator in sentinel/graph/stats.py is justified."
-        if worth_it else
-        "NOT WORTH THE DESIGN COST: no measured improvement at k=10 or k=20. "
-        "The absence recorded in tests/test_gfp_gaps.py stands, and now stands "
-        "on a measurement rather than on the argument that Welford cannot do "
-        "medians. Do not add a streaming quantile estimator for this.")
+    harms = n_neg10 > n_pos10 and n_neg10 >= len(SEEDS) // 2 + 1
+    if worth_it:
+        result["verdict"] = (
+            "WORTH THE DESIGN COST: adding the per-account median improves "
+            "ring-level p@k with a CI excluding zero at k=10 or k=20. A "
+            "streaming quantile estimator in sentinel/graph/stats.py is "
+            "justified.")
+    elif harms:
+        result["verdict"] = (
+            f"ACTIVELY HARMFUL, NOT MERELY USELESS: the median features "
+            f"DEGRADE ring-level p@10 with a CI excluding zero in "
+            f"{n_neg10} of {len(SEEDS)} INDEPENDENT stochastic fits. The "
+            f"model leans on "
+            f"them heavily (see median_ranks) and generalises worse for it -- "
+            f"the signature of overfitting a 321-positive training set, not of "
+            f"an ignored feature. Do not add a streaming quantile estimator, "
+            f"and note that closing a GFP coverage gap is not automatically "
+            f"an improvement.")
+    else:
+        result["verdict"] = (
+            "NOT WORTH THE DESIGN COST: no measured improvement at k=10 or "
+            "k=20, and the degradation is not stable across model-fit seeds. "
+            "The absence recorded in tests/test_gfp_gaps.py stands, and now "
+            "stands on a measurement rather than on the argument that Welford "
+            "cannot do medians. Do not add a streaming quantile estimator.")
     print(f"\nVERDICT: {result['verdict']}")
 
     OUT.write_text(json.dumps(result, indent=2, default=float))
