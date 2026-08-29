@@ -1,0 +1,80 @@
+name: CI
+
+# Section 6.5 of docs/ARCHITECTURE_UPLIFT.md. Before this there was no CI at
+# all: no .github/, no pyproject.toml, no pytest.ini. 363 tests ran when
+# someone remembered to run them.
+#
+# The gates are deliberately more than "the tests pass". This codebase's
+# characteristic defect is a plausible wrong answer rather than an error, and
+# the two regressions that actually shipped (the FAN-IN 23 -> 21 drop, and the
+# oracle interpretation reasoned from a pathological F1) were both invisible to
+# a green suite.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is in the matrix on purpose: it is the interpreter the snapml /
+        # IBM GFP control run needs (docs/ARCHITECTURE_UPLIFT.md 2.1), so the
+        # code must keep working there. 3.14 is what the project develops on.
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -r requirements.txt pytest lightgbm
+      - name: Test suite
+        run: python -m pytest tests -q
+
+      # Gate 5 and 6 exist as tests already; naming them here makes the
+      # guarantee visible in the build log rather than buried in a suite of
+      # several hundred.
+      - name: Excluded-feature gate (channel may never reach a feature vector)
+        run: python -m pytest tests -q -k "channel or excluded"
+      - name: Import-boundary gate (detect/eval may not import sentinel.llm)
+        run: python -m pytest tests -q -k "import_boundary or no_llm or transitive"
+
+  gates:
+    # These need the frozen fixture, which is committed, but not the full
+    # AMLworld stream, which is not.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Unsourced-cost gate
+        run: python scripts/ci_gates.py cost
+
+      - name: Baseline re-tie gate (score must beat node count at k=10, k=20)
+        run: python scripts/ci_gates.py retie
+
+      - name: Metric regression gate
+        run: python scripts/ci_gates.py regression
+
+      # Pre-registered as expected to FAIL when first switched on:
+      # expand_traced truncates by sorted(nxt, key=degree) with arbitrary
+      # tie-breaking over a set, and merge.suppress iterates a set of rivals.
+      # It is reported rather than enforced until that is fixed, because a
+      # permanently-red gate teaches people to ignore red gates. The step is
+      # here, and visible, so the debt is not silently forgotten.
+      - name: Determinism gate (reported, not yet enforced)
+        continue-on-error: true
+        run: python scripts/ci_gates.py determinism

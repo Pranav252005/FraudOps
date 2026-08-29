@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "payops-sentinel"
+version = "0.1.0"
+description = "Fraud-ring investigation console: ring-level detection, evidence assembly and a measured label pipeline"
+requires-python = ">=3.11"
+readme = "README.md"
+
+# Runtime dependencies are pinned loosely and mirrored in requirements.txt,
+# which remains the file the run scripts use. Two facts worth keeping visible:
+# `snapml` is absent deliberately (no build past 3.11, see docs/HANDOFF.md 4),
+# and `lightgbm` is required only by the evaluation scripts, never by the
+# detector.
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "networkx",
+    "scikit-learn",
+    "python-igraph",
+    "leidenalg",
+    "fastapi",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+eval = ["lightgbm>=4.7"]
+dev = ["pytest", "pytest-timeout"]
+
+[tool.setuptools]
+packages = ["sentinel"]
+
+[tool.pytest.ini_options]
+# `scripts` is importable from the repo root as a namespace package; several
+# tests exercise evaluation-script logic directly, which is deliberate -- the
+# scripts hold real decisions (the train/test split, the hit rule) and those
+# must be tested rather than only run.
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "needs_stream: requires the compiled AMLworld stream in data/stream",
+    "slow: takes more than a few seconds",
+]
+filterwarnings = ["error::SyntaxWarning"]
