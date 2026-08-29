@@ -6,9 +6,15 @@ session can pick up without re-deriving anything.
 **Repo:** https://github.com/Pranav252005/FraudOps
 **Target:** Razorpay AI Buildathon, AI Risk Manager track. One class of loss:
 money-movement / mule rings. Defence only.
-**Tests:** 308, all passing (stale count corrected here — was 192 as of the
-first version of this document; multiple sessions since then added coverage,
-most recently for candidate pruning).
+**Tests:** 416 passing + 1 xfail. `python -m pytest -q`
+
+> **Read §5b–§5e and §12 before acting on §5 or §10.** Several sections of this
+> document were written before measurements that overturned them. Where that
+> happened the original text is kept and a correction follows it, because the
+> reversal is usually the most useful thing on the page — but it means the
+> earliest statement of a question is often the wrong one. §10 in particular
+> still lists a next step that §5b explicitly rules out; it is annotated inline
+> now rather than left to trap a reader going top-down.
 
 ---
 
@@ -210,8 +216,19 @@ taxonomy, or control-arm sampling.
 ### RBI MuleHunter.AI
 
 Built by the Reserve Bank Innovation Hub on **19 distinct mule behaviour
-patterns**, operational in 26 banks, ~20,000 mule accounts flagged monthly.
-Runs **inside banks on bank-account data**.
+patterns**. Runs **inside banks on bank-account data**.
+
+**Corrected — the earlier version of this paragraph ("operational in 26 banks,
+~20,000 mule accounts flagged monthly") presented a capability claim as a
+verified outcome, which is the standard this repo applies to its own numbers
+and must apply symmetrically.** What is actually sourced: an RTI response
+reported Dec 2025 gives **23 banks** implemented
+([MediaNama](https://www.medianama.com/2025/12/223-rti-23-banks-mulehunter-mule-accounts/)).
+On the same RTI the **RBI declined to disclose how many mule accounts have been
+identified or acted on**, citing fiduciary grounds. So "~20,000 flagged
+monthly" is **not an independently verified outcome** and must not be quoted as
+one — it is a capability figure circulating in secondary coverage. The 19
+patterns remain unpublished.
 
 The 19 patterns are unpublished; the industry typology they draw on is
 implemented here — pass-through velocity, the 80%-within-48h rule, dormancy,
@@ -659,8 +676,10 @@ buildable solo now.
 
 - **524,121** suspected mule accounts flagged in March 2026 alone
 - **2.47 million** Layer-1 mule accounts flagged by I4C
-- RBI **MuleHunter.AI** in 26 banks; **DPIP** (RBI + NPCI) for cross-institution
-  signal sharing
+- RBI **MuleHunter.AI** in **23 banks** (Dec 2025 RTI response; see §4 — the
+  "26 banks / ~20,000 accounts monthly" figures used here previously were not
+  independently verified, and the RBI declined under RTI to disclose accounts
+  identified); **DPIP** (RBI + NPCI) for cross-institution signal sharing
 - Reporting explicitly names **payment-aggregator merchant accounts** as the
   weaponised vector — *"fraudulent accounts can look identical to legitimate
   businesses"*
@@ -717,7 +736,20 @@ is the actual product.
 
 ## 10. Remaining before submission
 
-1. **Widen seeding** (§5) — the only change that can move recall off 15%
+**This list was written before §5b–§5e and is stale in two ways. Corrected in
+place rather than rewritten, because the correction is the useful part.**
+
+1. ~~**Widen seeding** (§5) — the only change that can move recall off 15%~~
+   **DO NOT DO THIS.** §5b measured the funnel with an explicit *seeded* stage
+   and found seeding already reaches **89%** of active rings, not the 26% §5
+   reported. §5b's own words: *"do not implement the union-of-seed-triggers fix
+   in §5 as scoped — it targets a stage that is not actually where
+   BIPARTITE/STACK are lost."* §5c then ruled out all three expansion knobs by
+   experiment. The item survived four rounds of corrections above it purely
+   because nobody edited this list, and a fresh session reading top-down would
+   have spent a day on it.
+   Also stale: **ring recall is 20.1%, not 15%** (§5d, post-prune).
+   The live version of this item is §12: the scorer, not the generator.
 2. Rebalance weights by measured prevalence, re-run Phase 2 + Phase 4
 3. Update README with current numbers and the Vulcan positioning (name it
    explicitly; complementary, not competitive)
@@ -791,6 +823,19 @@ to before, and nothing in `sentinel/detect` or `sentinel/eval` may import
 `sentinel.llm` — a non-deterministic component inside a measured path would
 contaminate every reported interval.
 
+**CORRECTION — the second of those two tests did not exist when this paragraph
+was written.** Only the first was real (`test_client_returns_not_configured_
+without_a_key`, `test_unavailable_model_falls_back_silently`). The import
+boundary was a docstring promise with nothing behind it, asserted here in the
+past tense for several sessions. It exists now:
+`tests/test_import_boundaries.py` checks it in a subprocess against the
+*transitive* module set for every module in `sentinel.detect` and
+`sentinel.eval`, and is a CI gate. It also includes a test that the probe
+itself can fail, pointed at a module that genuinely does import `sentinel.llm`
+— this file already records one check that could never fail (the template
+narrative's citations were correct by construction), and an unfailable check is
+not evidence.
+
 OpenRouter was chosen over a vendor SDK because the endpoint is
 OpenAI-compatible, so `OPENROUTER_BASE_URL` repoints the whole path at a
 self-hosted vLLM or Ollama instance with no code change. That is the answer to
@@ -833,6 +878,13 @@ show weights moving with the cost curve alongside. Needs the compiled stream.
 ### 11d. Corrections to §10's premises
 
 - **Tests: 363**, not 192 and no longer 308.
+  **Superseded: 416 passing + 1 xfail** as of §12. Note that this document
+  carried *two different* test counts simultaneously for several sessions — the
+  header said 308 while this line said 363 — which is the same failure the
+  claims ledger in the uplift plan (§6.6) is designed to prevent: a number
+  quoted in prose with nothing checking it against the artifact that produced
+  it. The header is now a single figure and `python -m pytest -q` is the only
+  authority for it.
 - **The working tree was clean**, not carrying CRLF churn — but 15 commits were
   unpushed, so the public repo was missing the entire pruning workstream and
   every correction in §5b to §5e. `.gitattributes` added regardless.
