@@ -14,9 +14,18 @@ this docstring claimed the dataset was licence-gated behind a request form at
 http://elliptic.co/elliptic2 and that "no script can fetch it unattended".
 That is wrong. Elliptic2 is published openly by Elliptic Co. at
 https://www.kaggle.com/datasets/ellipticco/elliptic2-data-set and
-`scripts/download_elliptic2.bat` fetches and extracts it via the Kaggle CLI
-(one-time manual step: a Kaggle API token at `%USERPROFILE%/.kaggle/kaggle.json`).
-The archive extracts to these five files, expected in `data/elliptic2/`:
+`scripts/download_elliptic2.bat` fetches it via the Kaggle CLI (one-time
+manual step: a Kaggle API token at `%USERPROFILE%/.kaggle/kaggle.json`).
+
+**Do not extract it.** `background_edges.csv` alone is 82.9 GB extracted
+against roughly 24.5 GB inside the archive, and the extract step fails on any
+machine without that much spare disk -- which is most of them. Nothing in this
+module needs the extracted file: every read is a sequential single pass, so
+pass `archive=` to `load()` and the members are streamed out of the zip with
+nothing written to disk. See `Source`.
+
+The archive contains these five files, which `load()` will also read from a
+directory (`data/elliptic2/`) if you did extract them:
 
     background_nodes.csv       one row per wallet cluster; first column is
                                 the cluster id; remaining 43 columns are
@@ -44,6 +53,8 @@ nothing to "find" in a licit subgraph.
 from __future__ import annotations
 
 import csv
+import io
+import zipfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -89,24 +100,94 @@ def _read_csv(path: Path) -> list[dict]:
     `background_edges.csv` (196.2M rows) -- see `_stream_csv` and the
     scale note in the module docstring.
     """
-    with open(path, "r", encoding="utf-8", newline="") as fh:
+    with (path if hasattr(path, "read")
+          else open(path, "r", encoding="utf-8", newline="")) as fh:
         return list(csv.DictReader(fh))
 
 
-def _stream_csv(path: Path):
-    """Yield (header, row_iterator) using csv.reader, never materialising.
+class Source:
+    """Resolves the five file names to text handles, from a directory OR a zip.
+
+    **Why the zip path exists.** `background_edges.csv` is 82.9 GB extracted
+    and about 24.5 GB inside the Kaggle archive. Extracting it needs more free
+    disk than a typical laptop has spare -- the machine this was written on had
+    50 GB -- so `scripts/download_elliptic2.bat` fails at the extract step with
+    "Free space on the target drive" and leaves nothing usable behind.
+
+    Nothing here ever needs the extracted file. Every reader in this module is
+    already sequential and single-pass (see `_stream_csv`), and that is exactly
+    what `zipfile.ZipFile.open` provides: a decompress-on-demand stream. So the
+    archive is read in place and the 82.9 GB is never written anywhere.
+
+    Members are matched by basename, because Kaggle archives sometimes nest the
+    files under a directory and sometimes do not.
+    """
+
+    def __init__(self, root: str | Path | None = None,
+                 archive: str | Path | None = None):
+        if root is None and archive is None:
+            raise ValueError("Source needs a directory or an archive")
+        self.root = Path(root) if root is not None else None
+        self.archive = Path(archive) if archive is not None else None
+        self._zf: zipfile.ZipFile | None = None
+        self._members: dict[str, str] = {}
+        if self.archive is not None:
+            if not self.archive.exists():
+                raise FileNotFoundError(f"archive not found: {self.archive}")
+            self._zf = zipfile.ZipFile(self.archive)
+            for name in self._zf.namelist():
+                self._members.setdefault(name.rsplit("/", 1)[-1], name)
+
+    def has(self, name: str) -> bool:
+        if self.root is not None and (self.root / name).exists():
+            return True
+        return name in self._members
+
+    def open(self, name: str):
+        """A text handle for `name`. Directory first, archive as fallback.
+
+        The directory wins when both have it, so a caller who has extracted
+        the three SMALL files and left the two huge ones in the zip gets the
+        fast path where it is available and the streamed path where it is not.
+        """
+        if self.root is not None and (self.root / name).exists():
+            return open(self.root / name, "r", encoding="utf-8", newline="")
+        if name in self._members:
+            raw = self._zf.open(self._members[name])
+            return io.TextIOWrapper(raw, encoding="utf-8", newline="")
+        raise FileNotFoundError(name)
+
+    def describe(self) -> str:
+        bits = []
+        if self.root is not None:
+            bits.append(f"dir={self.root}")
+        if self.archive is not None:
+            bits.append(f"archive={self.archive}")
+        return " ".join(bits)
+
+    def close(self) -> None:
+        if self._zf is not None:
+            self._zf.close()
+            self._zf = None
+
+
+def _stream_csv(handle):
+    """Yield (handle, header, row_iterator) using csv.reader, never materialising.
 
     csv.reader rather than DictReader: at 196M rows the per-row dict alone
     is tens of gigabytes, and every column but two is discarded anyway.
+
+    Takes an already-open handle rather than a path so the caller can hand it
+    a plain file or a stream decompressing out of the Kaggle zip -- see
+    `Source`. Both are sequential single-pass reads, which is all this needs.
     """
-    fh = open(path, "r", encoding="utf-8", newline="")
-    reader = csv.reader(fh)
+    reader = csv.reader(handle)
     try:
         header = next(reader, [])
     except Exception:
-        fh.close()
+        handle.close()
         raise
-    return fh, header, reader
+    return handle, header, reader
 
 
 def _col_index(header: list[str], preferred: str, fallback: int) -> int:
@@ -124,19 +205,26 @@ class Elliptic2Data:
     stats: dict = field(default_factory=dict)
 
 
-def available(root: str | Path) -> bool:
-    root = Path(root)
-    return all((root / f).exists() for f in REQUIRED_FILES)
+def available(root) -> bool:
+    return not missing_files(root)
 
 
-def missing_files(root: str | Path) -> list[str]:
+def missing_files(root) -> list[str]:
+    """Which of the five are absent. Accepts a directory path or a `Source`.
+
+    The Path() coercion happens AFTER the Source check, not before: coercing
+    first turns a Source into a nonsense path and reports all five missing,
+    which is the kind of failure that looks like a data problem for an hour.
+    """
+    if isinstance(root, Source):
+        return [f for f in REQUIRED_FILES if not root.has(f)]
     root = Path(root)
     return [f for f in REQUIRED_FILES if not (root / f).exists()]
 
 
-def load(root: str | Path, induced: bool = True,
+def load(root=None, induced: bool = True,
          max_background_edges: int | None = None,
-         progress_every: int = 0) -> Elliptic2Data:
+         progress_every: int = 0, archive=None) -> Elliptic2Data:
     """Parse the five Elliptic2 files into the normalised Edge/LabeledRing shape.
 
     **Scale.** The real background graph is 49,299,864 nodes and 196,215,606
@@ -160,26 +248,48 @@ def load(root: str | Path, induced: bool = True,
     `progress_every` prints scan progress, since a 196M-row pass is slow
     enough that silence is indistinguishable from a hang.
 
+    `archive` reads the CSVs straight out of the Kaggle zip instead of a
+    directory of extracted files, and is the option to use on any machine that
+    cannot spare 82.9 GB for `background_edges.csv` alone. Everything here is a
+    sequential single pass, so streaming out of the archive costs decompression
+    time and no disk at all. `root` and `archive` can both be given: extracted
+    files win where they exist, so the three small files can be unpacked for
+    speed while the two huge ones stay compressed. See `Source`.
+
     Raises FileNotFoundError with the manual-download instructions if any
     file is missing, rather than silently returning an empty dataset --
     empty ground truth would corrupt every downstream metric while looking
     like a legitimate (if small) run.
     """
-    root = Path(root)
-    missing = missing_files(root)
+    src = root if isinstance(root, Source) else Source(root, archive)
+    missing = missing_files(src)
     if missing:
+        # This message used to say the dataset "requires a manual, licensed
+        # download ... there is no automatable bulk endpoint". That was wrong
+        # and docs/HANDOFF.md 11d already flagged it: Elliptic2 is public on
+        # Kaggle. Corrected here rather than left to mislead whoever hits it.
+        # This message used to say the dataset "requires a manual,
+        # licensed download ... there is no automatable bulk endpoint".
+        # That was wrong and docs/HANDOFF.md 11d already flagged it:
+        # Elliptic2 is public on Kaggle. Corrected here rather than left
+        # to mislead whoever actually hits it.
         raise FileNotFoundError(
-            f"Elliptic2 files missing from {root}: {missing}. "
-            "This dataset requires a manual, licensed download from "
-            "http://elliptic.co/elliptic2 -- there is no automatable bulk "
-            "endpoint. See the sentinel/data/elliptic2.py module docstring "
-            "for the exact files and layout expected."
+            f"Elliptic2 files missing from {src.describe()}: {missing}.\n"
+            "Elliptic2 is PUBLIC on Kaggle (it is not licence-gated):\n"
+            "  https://www.kaggle.com/datasets/ellipticco/"
+            "elliptic2-data-set\n\n"
+            "You do NOT need to extract the archive. background_edges.csv"
+            " is 82.9 GB extracted, and every read in this module is a\n"
+            "sequential single pass -- so point `archive` at the\n"
+            "downloaded zip instead:\n"
+            "    elliptic2.load(archive='data/elliptic2.zip')\n"
+            "which streams the members and writes nothing to disk."
         )
 
     # --- small files: safe to materialise -------------------------------
-    cc_rows = _read_csv(root / "connected_components.csv")
-    node_rows = _read_csv(root / "nodes.csv")
-    edge_rows = _read_csv(root / "edges.csv")
+    cc_rows = _read_csv(src.open("connected_components.csv"))
+    node_rows = _read_csv(src.open("nodes.csv"))
+    edge_rows = _read_csv(src.open("edges.csv"))
 
     if not cc_rows:
         raise ValueError("connected_components.csv is empty")
@@ -203,7 +313,7 @@ def load(root: str | Path, induced: bool = True,
     # --- background_nodes.csv: streamed, counted only -------------------
     # 49.3M rows and 43 anonymised pre-binned feature columns. Nothing
     # downstream consumes those features yet, so only the row count is kept.
-    fh, _header, reader = _stream_csv(root / "background_nodes.csv")
+    fh, _header, reader = _stream_csv(src.open("background_nodes.csv"))
     try:
         n_background_nodes = sum(1 for _ in reader)
     finally:
@@ -214,7 +324,7 @@ def load(root: str | Path, induced: bool = True,
     # --- background_edges.csv: streamed, filtered -----------------------
     edges: list[Edge] = []
     scanned = 0
-    fh, header, reader = _stream_csv(root / "background_edges.csv")
+    fh, header, reader = _stream_csv(src.open("background_edges.csv"))
     try:
         c1 = _col_index(header, "clId1", 0)
         c2 = _col_index(header, "clId2", 1)

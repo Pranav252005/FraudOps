@@ -33,8 +33,21 @@ class TestAvailability:
         assert set(missing) == set(elliptic2.REQUIRED_FILES)
 
     def test_load_raises_with_instructions_when_absent(self, tmp_path):
-        with pytest.raises(FileNotFoundError, match="elliptic.co/elliptic2"):
+        """The error must point at Kaggle, NOT at the licence-request form.
+
+        This test previously asserted `elliptic.co/elliptic2` -- it was
+        pinning the claim that the dataset is licence-gated and needs a manual
+        request. docs/HANDOFF.md 11d established that is false: it is public on
+        Kaggle. The test was holding the wrong answer in place, so it now pins
+        the corrected one, plus the archive advice, since a reader who hits
+        this error on a 50 GB-free laptop needs to be told not to extract.
+        """
+        with pytest.raises(FileNotFoundError) as e:
             elliptic2.load(tmp_path)
+        msg = str(e.value)
+        assert "kaggle.com/datasets/ellipticco" in msg
+        assert "elliptic.co/elliptic2" not in msg
+        assert "NOT need to extract" in msg and "archive=" in msg
 
 
 class TestLoad:
@@ -144,3 +157,94 @@ class TestDatasetAdapter:
         tracker, candidates, node_ids = run_static_funnel([], [])
         assert candidates == []
         assert tracker.rings() == {}
+
+
+class TestArchiveStreaming:
+    """Reading straight out of the Kaggle zip, which is the only route that
+    fits on an ordinary disk.
+
+    `background_edges.csv` is 82.9 GB extracted against ~24.5 GB packed. The
+    machine this was written on had 50 GB free, so `download_elliptic2.bat`
+    died at the extract step. Every read in `elliptic2` is a sequential single
+    pass, so the archive can be streamed instead -- these tests hold that
+    property in place, because it is the kind of thing an innocent-looking
+    refactor to `open(path)` would silently destroy.
+    """
+
+    @staticmethod
+    def _zip_of_fixture(tmp_path, names=None, prefix=""):
+        import zipfile
+
+        z = tmp_path / "elliptic2.zip"
+        with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in (names or elliptic2.REQUIRED_FILES):
+                zf.write(FIXTURE / f, prefix + f)
+        return z
+
+    def test_load_from_archive_matches_load_from_directory(self, tmp_path):
+        """The zip path must produce the same object, not merely 'work'."""
+        z = self._zip_of_fixture(tmp_path)
+        from_dir = elliptic2.load(FIXTURE)
+        from_zip = elliptic2.load(archive=z)
+        assert from_zip.n_background_nodes == from_dir.n_background_nodes
+        assert from_zip.n_background_edges == from_dir.n_background_edges
+        assert from_zip.n_suspicious_components == \
+            from_dir.n_suspicious_components
+        assert from_zip.n_licit_components == from_dir.n_licit_components
+        assert [(e.src, e.dst) for e in from_zip.edges] == \
+            [(e.src, e.dst) for e in from_dir.edges]
+        assert [r.id for r in from_zip.rings] == \
+            [r.id for r in from_dir.rings]
+
+    def test_members_are_found_under_a_directory_prefix(self, tmp_path):
+        """Kaggle archives sometimes nest the files one level down."""
+        z = self._zip_of_fixture(tmp_path, prefix="elliptic2/")
+        assert elliptic2.load(archive=z).n_background_edges == 8
+
+    def test_extracted_files_win_over_the_archive(self, tmp_path):
+        """A directory copy takes precedence, so the three small files can be
+        unpacked for speed while the two huge ones stay compressed."""
+        src = elliptic2.Source(FIXTURE, self._zip_of_fixture(tmp_path))
+        handle = src.open("nodes.csv")
+        try:
+            assert hasattr(handle, "name")
+            assert str(FIXTURE) in str(handle.name)
+        finally:
+            handle.close()
+
+    def test_missing_from_both_is_reported(self, tmp_path):
+        z = self._zip_of_fixture(tmp_path, names=["nodes.csv", "edges.csv"])
+        assert set(elliptic2.missing_files(elliptic2.Source(archive=z))) == \
+            {"background_nodes.csv", "background_edges.csv",
+             "connected_components.csv"}
+
+    def test_archive_that_does_not_exist_says_so(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="archive not found"):
+            elliptic2.load(archive=tmp_path / "nope.zip")
+
+    def test_big_files_are_never_read_whole(self, tmp_path):
+        """`_stream_csv` must stay a reader over a handle, not a materialiser.
+
+        The regression this guards: someone 'simplifies' the streamed pass into
+        `_read_csv`, which is a list(DictReader) and would need tens of GB on
+        the real 196M-row file. Checked by giving it a handle that refuses to
+        be fully consumed.
+        """
+        class OneShot:
+            def __init__(self, rows):
+                self._rows = iter(rows)
+                self.closed = False
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                return next(self._rows)
+
+            def close(self):
+                self.closed = True
+
+        handle, header, reader = elliptic2._stream_csv(
+            OneShot(["clId1,clId2\n", "1,2\n", "3,4\n"]))
+        assert header == ["clId1", "clId2"]
+        assert next(reader) == ["1", "2"]      # lazy: nothing consumed early
