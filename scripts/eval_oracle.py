@@ -14,16 +14,21 @@ possibly make it? Two runs:
      members -- a cheat used only here, to measure what the feature set could
      do if seeding recall were 100%. Never used by the real detector.
 
-Interpretation, stated in the printed report:
-  - F1 in ~0.45-0.60 on run 1 -> the feature set is genuinely competitive
-    (parity with IBM's Graph Feature Preprocessor is a measured fact) and the
-    loss is in seeding and lack of supervision.
-  - F1 in ~0.20-0.35 -> the feature-parity claim does not hold up and feature
-    engineering should be prioritised ahead of weak-supervision work.
-  - Because run 1 only sees the ~26% of rings that become candidates at all,
-    F1 there is mechanically capped near 2R/(1+R) even at perfect precision,
-    where R is the built-stage recall from scripts/eval_funnel.py. Run 2
-    exists to separate that seeding loss from genuine feature loss.
+Interpretation is read off the **oracle/blend p@k ratio**, not off F1.
+
+An earlier version of this script branched its stored `interpretation` on F1
+at a fixed 0.5 threshold. That was wrong and is corrected here: on a pool with
+roughly 0.1% positives, F1 at a fixed threshold measures the threshold, not the
+model (docs/HANDOFF.md section 3 establishes the same pathology for the
+transaction-level F1). F1 is still computed and stored for continuity with the
+older file, and is explicitly not interpreted.
+
+The comparison that IS interpreted is run 1's oracle against the shipped v1
+hand-set blend and the size/degree/random baselines, all scored on the **same
+held-out cycles** with paired bootstrap CIs. The previous file compared the
+oracle's p@10 over ~17 held-out cycles against a blend p@10 measured over all
+34 cycles in a different script -- two denominators, so the widely quoted
+"2.8x" was not a ratio of anything. Item 0.2 of docs/ARCHITECTURE_UPLIFT.md.
 
 Leakage guards, enforced by assertion rather than trusted by eye:
   - a ring's candidates are wholly in train or wholly in test, never split;
@@ -37,6 +42,7 @@ Leakage guards, enforced by assertion rather than trusted by eye:
 from __future__ import annotations
 
 import json
+import random
 import sys
 import time
 from collections import defaultdict
@@ -49,9 +55,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lightgbm import LGBMClassifier
 from sklearn.metrics import average_precision_score, f1_score
 
-from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
+from sentinel.config import EVAL_END, PRUNE_STRATEGY, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
+from sentinel.eval.bootstrap import bootstrap_ci, paired_bootstrap_delta, ratio_of_sums
 from sentinel.eval.funnel import is_hit
 from sentinel.graph.window import WindowedGraph
 from sentinel.learn.reranker import feature_names, vectorise
@@ -59,7 +66,7 @@ from sentinel.stream.replay import Stream
 
 ROOT = Path(__file__).resolve().parent.parent
 EVERY = 6
-KS = (10, 20)
+KS = (10, 20, 50)
 MIN_RING_NODES = 3
 SPLIT_FRACTION = 0.5
 
@@ -185,31 +192,104 @@ def to_xy(records: list[dict], names: list[str]) -> tuple[np.ndarray, np.ndarray
     return X, y
 
 
+# The rankings compared head-to-head on the oracle's own held-out cycles.
+# `blend` is the shipped v1 hand-set score; the other three are the standing
+# baselines every ranking claim in this project must be quoted against.
+RANKINGS = ("oracle", "blend", "size", "degree", "random")
+
+
+def _cycle_rows(test_records, proba) -> list[dict]:
+    """One row per held-out cycle, carrying (hits, n) at each k for every ranking.
+
+    This is the unit the paired bootstrap resamples. Building it once, with
+    every ranking scored on the *same* cycles and the same candidate pool, is
+    the whole point of item 0.2: the previous comparison put the oracle's p@10
+    over ~17 held-out cycles against the blend's over all 34, which is not a
+    ratio of anything.
+    """
+    by_t: dict[int, list[dict]] = defaultdict(list)
+    for rec, p in zip(test_records, proba):
+        c = rec["cand"]
+        by_t[rec["t"]].append({
+            "label": 1 if rec["ring"] is not None else 0,
+            "oracle": float(p),
+            "blend": float(c.score),
+            "size": float(c.size),
+            "degree": float(c.features.max_fan),
+            # Deterministic per-candidate random key: seeded off the candidate's
+            # canonical key so the random baseline is reproducible run to run
+            # and does not depend on dict iteration order.
+            "random": random.Random(c.key).random(),
+        })
+
+    rows = []
+    for t in sorted(by_t):
+        cycle = by_t[t]
+        row = {"t": t, "n_cands": len(cycle),
+               "n_positive": sum(c["label"] for c in cycle)}
+        for name in RANKINGS:
+            # Sort descending by the ranking key, breaking ties deterministically
+            # on the candidate's own random key so no ranking gets a free ride
+            # from input order.
+            ordered = sorted(cycle, key=lambda c: (-c[name], c["random"]))
+            for k in KS:
+                top = ordered[:k]
+                row[f"{name}_hit_{k}"] = sum(c["label"] for c in top)
+                row[f"{name}_n_{k}"] = len(top)
+        rows.append(row)
+    return rows
+
+
 def evaluate(model, names, test_records) -> dict:
-    """F1 at 0.5, average precision, and p@k grouped by cycle tick."""
+    """F1 at 0.5, average precision, and p@k grouped by cycle tick.
+
+    Also evaluates the v1 blend and the size/degree/random baselines on the
+    *same* held-out cycles, with paired bootstrap CIs on every delta against
+    the oracle. F1 at a fixed 0.5 threshold is retained for continuity but is
+    a known pathology on a pool this imbalanced -- it is reported, never
+    interpreted (see `interpretation` in the output).
+    """
     if not test_records:
         return {"f1": 0.0, "ap": 0.0, "n_test": 0, "n_positive": 0,
-                "precision_at": {}}
+                "precision_at": {}, "cycles": 0}
     X, y = to_xy(test_records, names)
     proba = model.predict_proba(X)[:, 1]
     pred = (proba >= 0.5).astype(int)
     f1 = float(f1_score(y, pred)) if 0 < y.sum() < len(y) else 0.0
     ap = float(average_precision_score(y, proba)) if 0 < y.sum() < len(y) else 0.0
 
-    by_t: dict[int, list[tuple[float, int]]] = defaultdict(list)
-    for rec, p, label in zip(test_records, proba, y):
-        by_t[rec["t"]].append((p, label))
-    precision_at = {}
+    rows = _cycle_rows(test_records, proba)
+
+    precision_at: dict = {}
+    ci: dict = {}
+    paired: dict = {}
     for k in KS:
-        hit = tot = 0
-        for cycle in by_t.values():
-            cycle.sort(key=lambda pr: -pr[0])
-            top = cycle[:k]
-            hit += sum(1 for _, label in top if label)
-            tot += len(top)
-        precision_at[k] = hit / tot if tot else 0.0
+        precision_at[k] = {}
+        for name in RANKINGS:
+            stat = ratio_of_sums(f"{name}_hit_{k}", f"{name}_n_{k}")
+            precision_at[k][name] = stat(rows)
+            ci[f"{name}@{k}"] = bootstrap_ci(rows, stat)
+        # Paired deltas against the oracle, and the standing score-vs-size check.
+        oracle_stat = ratio_of_sums(f"oracle_hit_{k}", f"oracle_n_{k}")
+        for name in ("blend", "size", "degree", "random"):
+            other = ratio_of_sums(f"{name}_hit_{k}", f"{name}_n_{k}")
+            paired[f"oracle-{name}@{k}"] = paired_bootstrap_delta(rows, other, oracle_stat)
+        blend_stat = ratio_of_sums(f"blend_hit_{k}", f"blend_n_{k}")
+        size_stat = ratio_of_sums(f"size_hit_{k}", f"size_n_{k}")
+        paired[f"blend-size@{k}"] = paired_bootstrap_delta(rows, size_stat, blend_stat)
+
+    # The ratio the plan pre-registered a threshold on, now on one denominator.
+    ratio = {}
+    for k in KS:
+        b = precision_at[k]["blend"]
+        ratio[k] = (precision_at[k]["oracle"] / b) if b > 0 else None
+
     return {"f1": f1, "ap": ap, "n_test": len(test_records),
-            "n_positive": int(y.sum()), "precision_at": precision_at}
+            "n_positive": int(y.sum()), "cycles": len(rows),
+            "precision_at": precision_at, "precision_ci": ci,
+            "paired": paired, "oracle_over_blend": ratio,
+            "mean_candidate_size": float(np.mean([r["cand"].size for r in test_records])),
+            "cycle_rows": rows}
 
 
 def train_and_report(records, ring_first_t, label: str) -> dict:
@@ -238,10 +318,31 @@ def train_and_report(records, ring_first_t, label: str) -> dict:
     model.fit(X, y)
 
     report = evaluate(model, names, test)
-    print(f"[{label}] test F1={report['f1']:.4f}  AP={report['ap']:.4f}  "
-          f"n_test={report['n_test']} ({report['n_positive']} positive)")
-    for k, p in report["precision_at"].items():
-        print(f"[{label}] p@{k}={p:.4f}")
+    print(f"[{label}] test AP={report['ap']:.4f}  "
+          f"n_test={report['n_test']} ({report['n_positive']} positive) over "
+          f"{report['cycles']} held-out cycles, "
+          f"mean cand size {report['mean_candidate_size']:.2f}")
+    print(f"[{label}] F1@0.5={report['f1']:.4f}  (reported for continuity only -- "
+          f"a fixed 0.5 threshold on a pool this imbalanced is a pathology, "
+          f"not a measurement)")
+    print()
+    print(f"[{label}] p@k on the SAME held-out cycles, every ranking:")
+    print(f"  {'ranking':<10}" + "".join(f"{'p@' + str(k):>12}" for k in KS))
+    for name in RANKINGS:
+        print(f"  {name:<10}"
+              + "".join(f"{report['precision_at'][k][name]:>12.4f}" for k in KS))
+    print()
+    print(f"[{label}] oracle / blend ratio, one denominator at last:")
+    for k in KS:
+        r = report["oracle_over_blend"][k]
+        print(f"  k={k:<4} " + ("n/a" if r is None else f"{r:.2f}x"))
+    print()
+    print(f"[{label}] paired bootstrap deltas over the held-out cycles:")
+    for key in sorted(report["paired"]):
+        d = report["paired"][key]
+        flag = "REAL" if d["excludes_zero"] else "includes zero"
+        print(f"  {key:<20} {d['point']:+.4f} "
+              f"[{d['lo']:+.4f}, {d['hi']:+.4f}]  {flag}")
 
     return {"label": label, "n_pool": len(records), "n_train": len(train),
             "n_positive_train": n_pos_train, "split_t": split_t,
@@ -284,27 +385,60 @@ def main() -> None:
                      "coverage, not a measured F1 comparison.")
     print(f"\nGFP control: {gfp_note}")
 
+    # The previous `interpretation` field branched on F1 at a fixed 0.5
+    # threshold. docs/HANDOFF.md section 3 has since established that number is
+    # a fixed-threshold pathology on a pool with ~0.1% positives, not a
+    # measurement of feature quality -- so an interpretation reasoned from it
+    # contradicted the corrected reading of its own file. It is replaced by the
+    # quantity docs/ARCHITECTURE_UPLIFT.md item 0.1 actually pre-registers a
+    # decision rule on: the oracle/blend p@k ratio, on ONE denominator.
     interpretation = None
     if as_is_report.get("trainable"):
-        f1 = as_is_report["f1"]
-        if f1 >= 0.45:
-            interpretation = ("F1 >= 0.45: the feature set is genuinely competitive. "
-                               "The loss is in seeding and lack of supervision, not features.")
-        elif f1 >= 0.20:
-            interpretation = ("F1 in the 0.20-0.35ish band: ambiguous zone, closer to "
-                               "the 'feature parity is wrong' branch than the confident "
-                               "one. Prioritise feature engineering before weak supervision.")
+        r10 = as_is_report["oracle_over_blend"].get(10)
+        r20 = as_is_report["oracle_over_blend"].get(20)
+        seen = [x for x in (r10, r20) if x is not None]
+        best = max(seen) if seen else None
+        if best is None:
+            interpretation = ("blend p@k is zero on the held-out cycles, so the "
+                               "ratio is undefined; compare absolute p@k instead.")
+        elif best >= 2.0:
+            interpretation = (
+                f"oracle/blend >= 2x on the same held-out cycles (k=10: {r10}, "
+                f"k=20: {r20}). The scorer, not the feature set, is the binding "
+                f"constraint: a supervised model on these same features extracts "
+                f"materially more from them than the hand-set blend does. The "
+                f"uplift plan's centrepiece stands.")
+        elif best >= 1.5:
+            interpretation = (
+                f"oracle/blend between 1.5x and 2x (k=10: {r10}, k=20: {r20}). "
+                f"Weaker than the pre-prune 2.8x the plan was written from. There "
+                f"is still scorer headroom, but the case for a ranker rewrite is "
+                f"no longer strong on its own and must be weighed against feature "
+                f"work.")
         else:
-            interpretation = ("F1 < 0.20: the feature-parity claim does not hold up. "
-                               "Feature engineering should be prioritised ahead of "
-                               "weak-supervision work.")
-        print(f"\nInterpretation: {interpretation}")
+            interpretation = (
+                f"oracle/blend below 1.5x (k=10: {r10}, k=20: {r20}). PLAN-"
+                f"INVALIDATING by the pre-registration in "
+                f"docs/ARCHITECTURE_UPLIFT.md section 8 item 0.1: the ceiling the "
+                f"'scorer is the bottleneck' conclusion rested on does not survive "
+                f"post-prune measurement. Re-scope toward features, not a ranker.")
+        print()
+        print(f"Interpretation: {interpretation}")
 
     out = {
+        "measured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "prune_strategy": PRUNE_STRATEGY,
+        "every_ticks": EVERY,
+        "ks": list(KS),
         "oracle_as_is": as_is_report,
         "oracle_on_all_rings": perfect_report,
         "gfp_control": gfp_note,
         "interpretation": interpretation,
+        "interpretation_basis": (
+            "oracle/blend p@k ratio on the oracle's own held-out cycles. The "
+            "f1 field is retained for continuity and is NOT interpreted: a fixed "
+            "0.5 threshold on a pool with ~0.1% positives measures the threshold, "
+            "not the model."),
     }
     (ROOT / "data" / "eval_oracle.json").write_text(json.dumps(out, indent=2, default=str))
     print("\nwritten to data/eval_oracle.json")
