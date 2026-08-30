@@ -1054,8 +1054,11 @@ queue clears break-even by a wide margin at that precision.
 from this repo. Nothing here rests on access to bank data, which this project
 does not have.*
 
-India's Ministry of Home Affairs has directed financial institutions to
-integrate with the RBI's **MuleHunter.AI** by **December 2026**. It runs on 19
+India's Ministry of Home Affairs is reported to have directed financial
+institutions to integrate with the RBI's **MuleHunter.AI** by **December
+2026**. That deadline is carried consistently across secondary coverage but was
+not traced to a primary MHA circular, so it is repeated here as reporting, not
+as a verified instrument. It runs on 19
 behavioural patterns and is implemented in **23 banks** (a December 2025 RTI
 response, via MediaNama). On that same RTI the RBI **declined to disclose how
 many mule accounts have been identified or acted on**, citing fiduciary
@@ -1084,14 +1087,34 @@ covering one each.
   payments and 3 trillion data points, free to merchants, already doing
   network-level cross-merchant detection. No public dataset and no laptop
   closes that gap.
-- **The agentic alert-triage category** (Unit21, Sardine, Alessa, Binderr,
-  Kriv) is genuinely crowded, and its marketing language is close to this
-  README's older framing. But every one of them triages alerts **one at a
-  time**. None of them change the unit of investigation. The crowding is an
-  argument for sharpening ring-level case assembly, not for abandoning it.
+- **The agentic alert-triage category** (Unit21, Sardine, Alessa, Binderr) is
+  genuinely crowded, and its marketing language is close to this README's older
+  framing. On the product evidence found, these do triage alerts one at a time;
+  Sardine's differentiator is cross-institution signal sharing, which is a
+  network effect in the *data*, not in how a case is built.
 
-Naming non-competitors accurately is a judgment claim, not a modesty one. The
-layer this occupies is the investigation, not the score.
+**An earlier draft of this section claimed that nobody changes the unit of
+investigation. That claim is false and is withdrawn.** Ring-level detection is
+a shipping product category:
+
+- **Hawk AI** sells a page titled *"AI Mule Account Detection: Identify Fraud
+  Rings & Scams"*, combining entity resolution with network analysis and
+  reporting a 50% reduction in investigation time.
+- **Feedzai Genome** recognises visual link-analysis patterns — it names mule
+  accounts, triangle schemes and structuring — and states that entire groups of
+  activity can be acted on at once.
+- **Quantexa** is the closest of the three: entity resolution into dynamic
+  networks, contextual monitoring aimed explicitly at organised groups, and
+  investigators shown resolved networks rather than single alerts.
+
+A judge who spends five minutes on Hawk AI's site would have found this, so it
+is stated here rather than left to be found. **The differentiator is not the
+ring concept — it is ring-level *evaluation*.** Nothing found in vendor
+material, in RBI or EU guidance, or in the commercial AML literature reports
+precision and recall *on rings*, held out on a ring-disjoint split, with
+confidence intervals and a pre-registered prediction. Ring-level products
+exist; published ring-level measurement does not appear to. That is a narrower
+claim than the one it replaces, and unlike that one it survives being checked.
 
 **DPIP** (RBI and NPCI) shares fraud signal between institutions. MuleHunter
 sits inside banks; DPIP sits between them. **Neither sits at the
@@ -1112,14 +1135,28 @@ late filing. This compresses both clocks.
 
 ### Elliptic2: take the dataset, leave the market
 
-`scripts/eval_elliptic2.py` already reads Elliptic2, and its thesis — that
-money laundering is a subgraph-level problem — is this project's thesis. Its
-**2,763 labelled suspicious subgraphs against HI-Small's 370** is the honest
-fix for the sample-size ceiling that weakens every confidence interval in this
-README.
+[Elliptic2](https://arxiv.org/abs/2404.19109)'s thesis — that money laundering
+is a subgraph-level problem — is this project's thesis, and its labelled
+suspicious subgraphs outnumber HI-Small's 370 by roughly an order of magnitude.
+That is the honest fix for the sample-size ceiling which widens every
+confidence interval in this README.
 
-It is used here as a **second dataset for cross-dataset generalisation**, and
-explicitly **not** as a change of market. Repositioning onto crypto would walk
+**State it exactly: the loader is written, and it has never run on the real
+dataset.** `scripts/eval_elliptic2.py` and `sentinel/data/`'s Elliptic2 reader
+are tested against a ten-node fixture in `tests/fixtures/elliptic2_sample/`,
+and `data/eval_elliptic2.json` records `"is_sample": true` for precisely that
+reason. The real data requires a manual access request. **No Elliptic2 number
+in this repository is a result**, and none is quoted as one.
+
+The intended use is a **second dataset for cross-dataset generalisation**, and
+explicitly **not** a change of market. One caution on what that can mean:
+training on Elliptic2 and testing on HI-Small would be a category error — the
+feature set depends on bank and jurisdiction metadata (`n_banks`,
+`n_countries`, `cross_border`, `entity_reuse`) that a Bitcoin cluster graph has
+no equivalent for, and a synthetic injected typology is not the same object as
+a real investigative outcome. What transfers is the *funnel*: does seed-and-
+expand recover real suspicious subgraphs on a domain it was never tuned
+against? That is a structural validation, not a trained-model transfer. Repositioning onto crypto would walk
 into Chainalysis, Elliptic and TRM, and away from Indian payments. The dataset
 is worth taking; the market is not.
 
