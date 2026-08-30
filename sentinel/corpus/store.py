@@ -38,6 +38,24 @@ class CorpusMismatch(RuntimeError):
     """A stored corpus does not answer the question being asked of it."""
 
 
+class CorpusDrift(CorpusMismatch):
+    """The corpus disagrees with the code that would score it today.
+
+    Distinct from a key mismatch, and the more dangerous of the two. The key
+    covers generation CONSTANTS and the feature SCHEMA; it is structurally
+    blind to a change in how a feature is COMPUTED. A corpus can therefore
+    carry a perfectly matching key and still have been built by different code.
+
+    This was not hypothetical: the first corpus adopted into this repo was
+    stale in exactly that way, and the key did not catch it. A cold replay did,
+    by disagreeing in the last bit of the blend on 36% of rows. Hashing the
+    source files would also catch it, but this project rewrites docstrings
+    constantly and that would discard a 55-minute compile over a comment. So
+    the check is behavioural instead: recompute the score from the stored
+    features and see whether today's code agrees.
+    """
+
+
 def detector_config_hash(feature_names: list[str] | tuple[str, ...]) -> str:
     """Stable short hash over generation constants and the feature schema.
 
@@ -81,6 +99,63 @@ class CorpusKey:
     def describe(self) -> str:
         return (f"{self.dataset}/{self.detector_config_hash}"
                 f"/v{self.feature_version}")
+
+
+def verify_scoring(arrays: dict, names: list[str], n_sample: int = 2000,
+                   seed: int = 7, tol: float = 0.0) -> dict:
+    """Recompute the v1 blend from stored features and compare to the stored one.
+
+    A pure-function check: `score()` reads only Features attributes, all of
+    which are columns of the stored matrix, so today's code applied to the
+    stored features must reproduce the stored blend exactly. Any disagreement
+    means the corpus was compiled by different code, whatever its key says.
+
+    `tol` defaults to 0.0 -- exact. A last-bit difference is small enough to
+    change no ranking today and large enough to prove the corpus is not what it
+    claims, and the second fact is the one worth failing on.
+    """
+    import numpy as _np
+
+    from sentinel.detect.features import Features, score
+
+    X = arrays["test_X"]
+    stored = arrays["test_blend"]
+    rng = _np.random.default_rng(seed)
+    n = min(n_sample, X.shape[0])
+    rows = rng.choice(X.shape[0], size=n, replace=False)
+    blank = Features()
+    cols = [(j, nm) for j, nm in enumerate(names) if hasattr(blank, nm)]
+
+    worst, n_diff = 0.0, 0
+    for i in rows:
+        f = Features()
+        for j, nm in cols:
+            # Every field is set as a float. `score()` only ever tests
+            # truthiness or compares numerically, so an int/bool field holding
+            # 1.0 behaves identically -- and round-tripping through the stored
+            # float64 is what makes this an honest reproduction of the value
+            # the corpus actually carries.
+            setattr(f, nm, float(X[i, j]))
+        got, _ = score(f)
+        d = abs(got - float(stored[i]))
+        if d > 0:
+            n_diff += 1
+            worst = max(worst, d)
+    return {"n_checked": int(n), "n_disagreeing": n_diff, "max_abs_diff": worst,
+            "consistent": worst <= tol}
+
+
+def require_consistent(arrays: dict, names: list[str], **kw) -> dict:
+    """`verify_scoring`, raising on drift. Call before computing any number."""
+    r = verify_scoring(arrays, names, **kw)
+    if not r["consistent"]:
+        raise CorpusDrift(
+            f"corpus disagrees with current scoring code on "
+            f"{r['n_disagreeing']} of {r['n_checked']} sampled rows "
+            f"(max {r['max_abs_diff']:.3e}). The key matched, so a generation "
+            f"constant did not change -- a feature's COMPUTATION did. "
+            f"Recompile; do not reinterpret.")
+    return r
 
 
 def save(path: Path, key: CorpusKey, arrays: dict) -> Path:

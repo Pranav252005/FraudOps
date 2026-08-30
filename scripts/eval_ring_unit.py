@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lightgbm import LGBMClassifier
 
-from sentinel.corpus import CorpusKey, load
+from sentinel.corpus import CorpusKey, load, require_consistent
 
 ROOT = Path(__file__).resolve().parent.parent
 CORPUS = ROOT / "data" / "corpus_amlworld_hi_small.npz"
@@ -113,6 +113,15 @@ def main() -> int:
         DATASET, [str(n) for n in np.load(CORPUS, allow_pickle=True)["names"]]))
     print(f"corpus {key.describe()}  (no replay: the stream holds no further "
           f"information about a scorer question)")
+
+    # The key proves no generation CONSTANT changed. It cannot prove no
+    # feature COMPUTATION changed -- the first corpus adopted here was stale in
+    # exactly that way and its key matched. So the blend is recomputed from the
+    # stored features and must agree with today's code, exactly.
+    names = [str(n) for n in arrays["names"]]
+    checked = require_consistent(arrays, names)
+    print(f"scoring consistency: {checked['n_checked']} sampled rows recomputed, "
+          f"0 disagreements -- the corpus is what this code would build today")
 
     model = LGBMClassifier(n_estimators=300, max_depth=6, learning_rate=0.05,
                            class_weight="balanced", random_state=SEED,

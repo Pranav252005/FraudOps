@@ -14,8 +14,9 @@ import numpy as np
 import pytest
 
 from sentinel import config
-from sentinel.corpus import (FEATURE_VERSION, CorpusKey, CorpusMismatch,
-                             detector_config_hash, load, save)
+from sentinel.corpus import (FEATURE_VERSION, CorpusDrift, CorpusKey,
+                             CorpusMismatch, detector_config_hash, load,
+                             require_consistent, save, verify_scoring)
 
 NAMES = ["conservation", "n_nodes", "passthrough_ratio"]
 ARRAYS = {"test_X": np.zeros((3, 3)), "test_y": np.array([0, 1, 0])}
@@ -155,3 +156,75 @@ def test_corpus_refit_reproduces_the_stored_held_out_p_at_10():
         f"corpus refit gives p@10 {got!r}, stored replay gives {want!r}. "
         f"The corpus is no longer equivalent to the replay for scorer "
         f"questions, which is the assumption the whole corpus rests on.")
+
+
+# --- drift: the failure the key structurally cannot catch ---------------------
+#
+# The key covers generation constants and the feature schema. A change to how a
+# feature is COMPUTED leaves the key identical and the corpus wrong. That is not
+# hypothetical -- the first corpus adopted into this repo was stale in exactly
+# that way, its key matched, and only a cold replay found it, by disagreeing in
+# the last bit of the blend on 36% of rows.
+
+def _synthetic_corpus(n=40):
+    """A corpus whose blend really was produced by today's `score()`."""
+    from sentinel.detect.features import Features, score
+
+    rng = np.random.default_rng(11)
+    names = ["conservation", "passthrough_ratio", "fast_passthrough_ratio",
+             "cycle_coverage", "temporal_cycle_coverage", "gargaml",
+             "bipartite_score", "stack_score", "round_amount_ratio",
+             "burstiness", "scatter_gather_width", "gather_scatter_width",
+             "n_countries", "has_cycle", "has_temporal_cycle",
+             "shortest_cycle", "shortest_temporal_cycle"]
+    X = rng.random((n, len(names)))
+    X[:, names.index("shortest_cycle")] = 3.0
+    X[:, names.index("shortest_temporal_cycle")] = 3.0
+    X[:, names.index("n_countries")] = 2.0
+    blend = np.empty(n)
+    for i in range(n):
+        f = Features()
+        for j, nm in enumerate(names):
+            setattr(f, nm, float(X[i, j]))
+        blend[i] = score(f)[0]
+    return {"test_X": X, "test_blend": blend}, names
+
+
+def test_verify_scoring_passes_on_a_corpus_this_code_built():
+    arrays, names = _synthetic_corpus()
+    r = verify_scoring(arrays, names)
+    assert r["consistent"] and r["n_disagreeing"] == 0
+    assert r["max_abs_diff"] == 0.0
+
+
+def test_verify_scoring_catches_a_one_ulp_drift():
+    """The real drift was one ULP. A tolerance loose enough to admit it would
+    have admitted the stale corpus, so the check is exact by design."""
+    arrays, names = _synthetic_corpus()
+    arrays["test_blend"] = np.nextafter(arrays["test_blend"], np.inf)
+    r = verify_scoring(arrays, names)
+    assert not r["consistent"]
+    assert r["n_disagreeing"] == len(arrays["test_blend"])
+    assert 0 < r["max_abs_diff"] < 1e-15
+
+
+def test_require_consistent_raises_and_says_recompile():
+    arrays, names = _synthetic_corpus()
+    arrays["test_blend"] = np.nextafter(arrays["test_blend"], np.inf)
+    with pytest.raises(CorpusDrift, match="Recompile"):
+        require_consistent(arrays, names)
+
+
+def test_drift_is_a_kind_of_mismatch():
+    """Callers guarding with CorpusMismatch must also catch drift."""
+    assert issubclass(CorpusDrift, CorpusMismatch)
+
+
+def test_a_matching_key_does_not_imply_consistency():
+    """The point of the whole check, stated as a test: key equality and
+    scoring consistency are independent, and only one of them is cheap."""
+    arrays, names = _synthetic_corpus()
+    key = CorpusKey.for_current_config("test-set", names)
+    arrays["test_blend"] = np.nextafter(arrays["test_blend"], np.inf)
+    assert CorpusKey.for_current_config("test-set", names) == key
+    assert not verify_scoring(arrays, names)["consistent"]

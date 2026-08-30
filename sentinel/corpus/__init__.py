@@ -25,8 +25,11 @@ project keeps a bug catalogue for. That is why the corpus is keyed by
 mismatch rather than warning about it. The key is the safety mechanism, not
 decoration.
 """
-from sentinel.corpus.store import (FEATURE_VERSION, CorpusKey, CorpusMismatch,
-                                   detector_config_hash, load, save)
+from sentinel.corpus.store import (FEATURE_VERSION, CorpusDrift, CorpusKey,
+                                   CorpusMismatch, detector_config_hash,
+                                   load, require_consistent, save,
+                                   verify_scoring)
 
-__all__ = ["FEATURE_VERSION", "CorpusKey", "CorpusMismatch",
-           "detector_config_hash", "load", "save"]
+__all__ = ["FEATURE_VERSION", "CorpusDrift", "CorpusKey", "CorpusMismatch",
+           "detector_config_hash", "load", "require_consistent", "save",
+           "verify_scoring"]
