@@ -29,3 +29,6 @@ data/eval_median_gap.json
 
 # Median-amount feature cache from scripts/eval_median_gap.py (20 MB, regenerable).
 data/median_features.npz
+
+# Compiled candidate corpora (large, regenerable from a replay).
+data/corpus_*.npz
