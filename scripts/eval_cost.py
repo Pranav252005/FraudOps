@@ -19,8 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sentinel.economics.cost import (CostModel, evaluate_queue, optimal_k,
-                                     sensitivity)
+from sentinel.economics.cost import (CostModel, evaluate_queue, joint_adverse,
+                                     optimal_k, sensitivity)
 
 ROOT = Path(__file__).resolve().parent.parent
 MEASURED = ROOT / "data" / "eval_phase2.json"
@@ -35,11 +35,20 @@ FALLBACK_SIZE = {10: 0.088, 20: 0.074, 50: 0.049}
 def load_precision() -> tuple[dict, dict, str]:
     if MEASURED.exists():
         blob = json.loads(MEASURED.read_text(encoding="utf-8"))
-        rankings = blob.get("rankings", blob)
-        score = {int(k): v for k, v in
-                 (rankings.get("score", {}).get("p_at_k", {}) or {}).items()}
-        size = {int(k): v for k, v in
-                (rankings.get("size", {}).get("p_at_k", {}) or {}).items()}
+        # `eval_phase2.py` writes {"precision": {"score": {"10": ...}}}. An
+        # earlier version of this loader looked for a "rankings" wrapper with a
+        # "p_at_k" sub-key, which that script has never produced -- so the
+        # measured branch silently never fired and the fallback constants below
+        # were always used. Both shapes are accepted now; the real one first.
+        rankings = blob.get("precision") or blob.get("rankings") or blob
+
+        def p_at_k(name: str) -> dict:
+            row = rankings.get(name, {}) or {}
+            if "p_at_k" in row:          # the shape the old loader expected
+                row = row["p_at_k"] or {}
+            return {int(k): v for k, v in row.items()}
+
+        score, size = p_at_k("score"), p_at_k("size")
         if score:
             return score, size, str(MEASURED)
     return FALLBACK_SCORE, FALLBACK_SIZE, "docs/HANDOFF.md §5d (no local eval run)"
@@ -102,6 +111,20 @@ def main() -> int:
     print()
     print("  A conclusion that survives an order of magnitude on an input")
     print("  does not depend on that input's exact value.")
+
+    print()
+    print("Joint stress: all six inputs adverse at once, each by x2")
+    print("  (each of review cost, benefit and FP harm is a product of two of "
+          "them, so they move x4, /4 and x4 respectively)")
+    print("  (sensitivity moves one input at a time, which understates the risk --")
+    print("   these are placeholders, so their errors need not offset)")
+    worst = joint_adverse(model, factor=2.0)
+    worst_be = worst.break_even_precision()
+    print(f"    break-even precision rises {model.break_even_precision():.4f} "
+          f"-> {worst_be:.4f}")
+    for k in sorted(score):
+        verdict = "still pays" if score[k] > worst_be else "does NOT pay"
+        print(f"    top {k:>3}: p@k {score[k]:.3f} vs {worst_be:.4f}  {verdict}")
     return 0
 
 

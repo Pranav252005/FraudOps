@@ -11,7 +11,8 @@ import math
 
 import pytest
 
-from sentinel.economics.cost import (CostModel, evaluate_queue, optimal_k,
+from sentinel.economics.cost import (ADVERSE_DIRECTION, CostModel,
+                                     evaluate_queue, joint_adverse, optimal_k,
                                      sensitivity)
 
 
@@ -132,3 +133,61 @@ def test_higher_precision_needs_less_exposure_to_pay(model):
 
 def test_zero_precision_never_pays_at_any_exposure(model):
     assert math.isinf(model.required_value_at_risk(0.0))
+
+
+# --- the joint stress ---------------------------------------------------------
+
+def test_joint_adverse_moves_every_input_the_wrong_way(model):
+    """One-at-a-time sensitivity understates the risk; this is the corner."""
+    worst = joint_adverse(model, factor=2.0)
+    for name, direction in ADVERSE_DIRECTION.items():
+        base, moved = getattr(model, name), getattr(worst, name)
+        if base == 0.0:
+            # A zeroed input has no adverse direction to move in; the fixture
+            # zeroes the false-approval terms deliberately.
+            assert moved == 0.0, name
+        elif direction == "up":
+            assert moved > base, name
+        else:
+            assert moved < base, name
+
+
+def test_joint_adverse_is_worse_than_any_single_input(model):
+    """The joint corner must dominate every one-at-a-time perturbation."""
+    joint = joint_adverse(model, factor=2.0).break_even_precision()
+    singles = sensitivity(model, factors=(0.5, 2.0))
+    for name, row in singles.items():
+        assert joint >= max(row.values()), name
+
+
+def test_joint_adverse_rejects_a_factor_below_one(model):
+    with pytest.raises(ValueError):
+        joint_adverse(model, factor=0.5)
+
+
+def test_joint_adverse_compounds_each_derived_quantity_twice():
+    """Review cost, benefit and residual harm are each a product of two
+    adversely-moved inputs, so a x2 on the inputs is x4 on the quantity.
+
+    The `model` fixture zeroes the harm terms, which would hide exactly this;
+    this case uses non-zero ones on purpose.
+    """
+    m = CostModel(analyst_minutes_per_case=60.0,
+                  analyst_cost_per_hour=1000.0,
+                  value_at_risk_per_ring=100_000.0,
+                  recovery_rate=0.4,
+                  analyst_false_approval_rate=0.05,
+                  harm_per_wrong_action=20_000.0)
+    worst = joint_adverse(m, factor=2.0)
+    assert worst.review_cost == pytest.approx(m.review_cost * 4)
+    assert worst.benefit_per_true_positive == pytest.approx(
+        m.benefit_per_true_positive / 4)
+    assert worst.harm_per_false_positive == pytest.approx(
+        m.harm_per_false_positive * 4)
+
+
+def test_joint_adverse_clamps_a_probability_it_pushes_upward():
+    """`analyst_false_approval_rate` moves up; a large factor must not take it
+    past 1.0 and produce a nonsense expected harm."""
+    m = CostModel(analyst_false_approval_rate=0.5)
+    assert joint_adverse(m, factor=8.0).analyst_false_approval_rate == 1.0

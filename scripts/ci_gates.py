@@ -333,7 +333,7 @@ def gate_cost() -> int:
     """
     from dataclasses import replace
 
-    from sentinel.economics.cost import CostModel
+    from sentinel.economics.cost import CostModel, joint_adverse
 
     m = CostModel()
     missing = m.unsourced()
@@ -363,15 +363,11 @@ def gate_cost() -> int:
     # The joint worst case pushes every unsourced input in the direction that
     # hurts, simultaneously, which is the honest bound on "the conclusion does
     # not depend on these placeholders".
-    worst = replace(
-        m,
-        analyst_minutes_per_case=m.analyst_minutes_per_case * 10,
-        analyst_cost_per_hour=m.analyst_cost_per_hour * 10,
-        value_at_risk_per_ring=m.value_at_risk_per_ring * 0.1,
-        recovery_rate=m.recovery_rate * 0.1,
-        analyst_false_approval_rate=min(1.0, m.analyst_false_approval_rate * 10),
-        harm_per_wrong_action=m.harm_per_wrong_action * 10,
-    )
+    # Factor 10 to match the 0.1x - 10x band the one-at-a-time sweep above
+    # uses, so the two are read on the same scale. `joint_adverse` is the same
+    # construction this gate used to inline; it lives in cost.py now so the
+    # gate and `scripts/eval_cost.py` cannot drift apart.
+    worst = joint_adverse(m, factor=10.0)
     joint_pays = worst.net_benefit_per_case(REPORTED_PRECISION) > 0
     print()
     print(f"JOINT worst case, all six inputs adverse at once: "

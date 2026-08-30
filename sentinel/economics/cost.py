@@ -246,3 +246,40 @@ def sensitivity(model: CostModel, factors=(0.5, 1.0, 2.0)) -> dict:
             row[factor] = replace(model, **{name: value}).break_even_precision()
         out[name] = row
     return out
+
+
+# The six inputs `sensitivity` varies, and the direction that makes each one
+# worse for the queue: costs up, benefits down.
+ADVERSE_DIRECTION = {
+    "analyst_minutes_per_case": "up",
+    "analyst_cost_per_hour": "up",
+    "value_at_risk_per_ring": "down",
+    "recovery_rate": "down",
+    "analyst_false_approval_rate": "up",
+    "harm_per_wrong_action": "up",
+}
+
+
+def joint_adverse(model: CostModel, factor: float = 2.0) -> CostModel:
+    """All six inputs moved the wrong way at once.
+
+    `sensitivity` moves one input at a time, which understates the risk: the
+    inputs are placeholders, so there is no reason their errors would be
+    independent or offsetting. This is the pessimistic corner of the box --
+    review costs doubled, benefit halved, false-positive harm doubled -- and
+    it is the stress the break-even should be quoted against when someone
+    asks what happens if the guesses are all wrong together.
+    """
+    if factor < 1.0:
+        raise ValueError("factor is a severity multiplier and must be >= 1.0")
+    changes = {}
+    for name, direction in ADVERSE_DIRECTION.items():
+        base = getattr(model, name)
+        value = base * factor if direction == "up" else base / factor
+        # Only an upward move can push a probability past 1.0; dividing one
+        # never can, so the clamp is scoped to the direction that needs it.
+        if direction == "up" and name in ("recovery_rate",
+                                          "analyst_false_approval_rate"):
+            value = min(1.0, value)
+        changes[name] = value
+    return replace(model, **changes)
