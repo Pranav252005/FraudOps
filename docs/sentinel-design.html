@@ -950,14 +950,19 @@ figcaption{
       <table>
         <thead><tr><th>Stage</th><th>What it is</th><th>Prerequisite</th></tr></thead>
         <tbody>
-          <tr><td class="num">v1</td><td>Unsupervised clustering + motif matching + hand-designed features + transparent rule ensemble. <strong>No trained model.</strong></td><td>None</td></tr>
+          <tr><td class="num">v1</td><td>Unsupervised clustering + motif matching + hand-designed features + transparent rule ensemble. <strong>No trained model in the shipped path.</strong> <em>Corrected later:</em> the repository does now contain trained models &mdash; a supervised re-ranker on ground-truth ring labels (p@10 0.2778 on a ring-disjoint held-out split, reported identically by <code>data/eval_oracle.json</code> and <code>data/eval_ranker.json</code>) and the Phase 4 verdict-trained re-ranker. Neither ships as the v1 detector, and the supervised one trains on labels a deployment does not have.</td><td>None</td></tr>
           <tr><td class="num">v2</td><td>Gradient-boosted re-ranker over the same point-in-time features, predicting P(analyst confirms). Reorders the queue. No graph learning.</td><td>A few thousand verdicts</td></tr>
           <tr><td class="num">v3</td><td>Graph neural network over confirmed subgraphs.</td><td>Enough confirmed rings</td></tr>
         </tbody>
       </table>
     </div>
 
-    <p class="kicker">You cannot train a supervised ring detector before you have confirmed rings. That is precisely why v1 must be unsupervised, and precisely why the label pipeline is the actual product.</p>
+    <p class="kicker">You cannot <em>deploy</em> a supervised ring detector before you have confirmed rings. That is precisely why v1 must be unsupervised, and precisely why the label pipeline is the actual product.</p>
+
+    <div class="note">
+      <span class="note-tag">Correction (later session)</span>
+      <p>This kicker used to read <em>"you cannot train a supervised ring detector before you have confirmed rings."</em> As written that is false, and the repository disproves it: <code>scripts/eval_oracle.py</code> and <code>scripts/eval_ranker.py</code> both train one, reaching the same p@10 0.2778 on a ring-disjoint held-out split. What they train on is the dataset's <strong>ground-truth ring labels</strong> &mdash; which is exactly what a deployment does not have on day one, and why the claim survives in the narrower form above. The strategic conclusion is unchanged; the sentence that carried it was too strong.</p>
+    </div>
 
     <p>Which leads to the strategic point worth making out loud: <strong>the algorithm is not the moat.</strong> Leiden and Louvain are publicly available and anyone can run them. A payments company's proprietary corpus of confirmed rings, with point-in-time features attached, is not reproducible by a competitor. That is the answer to "why should we care."</p>
 

@@ -5,7 +5,9 @@ Split out of `scripts/gfp_control.py` so that stage runs on any OS while stage
 why the two cannot share a process.
 
 The comparison holds everything except the feature block fixed: same candidate
-pool, same ring-disjoint time-ordered split, same LGBMClassifier
+pool, same ring-disjoint split (time-ordered on the negative pool only --
+positives follow their ring; see ring_time_split in scripts/eval_oracle.py),
+same LGBMClassifier
 hyperparameters, same per-cycle p@k, same paired bootstrap over held-out
 cycles. Three blocks are scored:
 

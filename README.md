@@ -15,7 +15,7 @@ review.
 Built for the Razorpay AI Buildathon, **AI Risk Manager** track. One class of
 loss: **merchant-account abuse rings / money movement**. Strictly defence-only.
 
-**363 tests, all passing.** `python -m pytest -q`
+**450 tests passing, 1 xfail.** `python -m pytest -q`
 
 ---
 
@@ -110,20 +110,141 @@ cycles, score minus size:
 This is the most important honest statement in the repository, and it is
 [an open problem](#open-problems-stated-not-buried), not a footnote.
 
-### Where the loss lives
+### Where the loss lives — the funnel
 
-Ring recall decomposed into stages, distinct rings across all cycles:
+**The funnel diagnoses, the supervised re-ranker treats, and the paired
+bootstrap confirms.** This is the artefact to read first: every accuracy number
+below it is uninterpretable without knowing which stage lost the ring.
 
-| stage | rings | share |
-|---|---:|---:|
-| seed-reachable | 259 | 100% |
-| seeded | 230 | 89% |
-| built (candidate generated) | 162 | 63% |
-| ranked into top 50 | 49 | 19% |
+Ring recall decomposed into stages, distinct rings across all cycles.
+Source: `data/funnel.json` / `data/funnel.csv` — 34 generation runs, `rank_k`
+50, 259 labelled rings active in the 10-day evaluation window
+(`scripts/eval_funnel.py`). A rendered version for presentation is
+[`docs/funnel.html`](docs/funnel.html).
+
+| stage | rings | share | loss at this stage |
+|---|---:|---:|---:|
+| seed-reachable | 259 | 100.0% | — |
+| seeded | 230 | 88.8% | **−11.2 pts** |
+| built (candidate generated) | 162 | 62.5% | **−26.3 pts** |
+| ranked into top 50 | 49 | 18.9% | **−43.6 pts** |
+
+The losses are stated in percentage points because that is the only form in
+which they can be compared, and `scripts/eval_funnel.py` computes them from the
+measured recalls rather than from a hand-typed table (`stage_losses_pts` in
+`data/funnel.json`).
 
 **Structural ceiling is 73.3%** — 88 of 370 rings have two or fewer accounts and
-no community structure to detect. The dominant remaining loss is built to
-ranked, which is ranking, not generation.
+no community structure to detect.
+
+#### Ranking is the largest single loss, at 43.6 points
+
+More rings are lost between *built* and *ranked* (162 → 49) than at seeding and
+building combined. A candidate that structurally covers the ring exists; the
+scorer does not put it in the top 50.
+
+That is exactly the loss the supervised re-ranker addresses, and it moves it:
+**p@10 0.2778 [0.1500, 0.4167] against the shipped v1 hand-set blend's 0.0500,
+a paired delta of +0.2278 [+0.1167, +0.3500] on a ring-disjoint held-out split
+— and it is trained on ground-truth ring labels, which a deployment does not
+have.** (`scripts/eval_oracle.py` run 1, `data/eval_oracle.json`; independently
+reproduced by the pointwise arm of `scripts/eval_ranker.py`.) Both halves of
+that sentence are the result; [The label tax](#the-label-tax--why-the-caveat-is-the-argument)
+below is why the caveat is the argument rather than a hedge. 0.2778 is not a
+production number and is not quoted as one anywhere in this repository.
+
+#### The build stage's 26 points are concentrated in exactly two typologies
+
+Per typology, from `data/funnel.csv`. The `interpretation` column is derived in
+code from each row's own build retention (built ÷ seeded), not from a
+hand-written per-typology lookup — the thresholds and their boundary behaviour
+are documented at the top of `scripts/eval_funnel.py`.
+
+| typology | total | seeded | built | ranked (top-50) | interpretation |
+|---|---:|---:|---:|---:|---|
+| BIPARTITE | 31 | 28 (90.3%) | **5 (16.1%)** | 1 (3.2%) | **build-destroyed** |
+| STACK | 30 | **30 (100.0%)** | **9 (30.0%)** | 2 (6.7%) | **build-destroyed** |
+| SCATTER-GATHER | 31 | 28 (90.3%) | 27 (87.1%) | 10 (32.3%) | ranking-limited |
+| GATHER-SCATTER | 38 | 35 (92.1%) | 31 (81.6%) | 9 (23.7%) | ranking-limited |
+| CYCLE | 37 | 31 (83.8%) | 28 (75.7%) | 7 (18.9%) | ranking-limited |
+| FAN-OUT | 36 | 30 (83.3%) | 24 (66.7%) | 9 (25.0%) | ordinary attrition |
+| FAN-IN | 30 | 26 (86.7%) | 21 (70.0%) | 4 (13.3%) | ordinary attrition |
+| RANDOM | 26 | 22 (84.6%) | 17 (65.4%) | 7 (26.9%) | ordinary attrition |
+| **TOTAL** | **259** | **230 (88.8%)** | **162 (62.5%)** | **49 (18.9%)** | aggregate |
+
+Six of the eight typologies keep 77–96% of their seeded rings through the build
+stage. BIPARTITE keeps 17.9% and STACK 30.0%. **Those two rows are the build
+stage's 26 points.** The three `ranking-limited` rows lose almost nothing at
+build (3–11 pts) and 55–58 points at ranking; the three `ordinary attrition`
+rows lose steadily at every stage.
+
+#### The STACK finding, stated plainly
+
+**Nothing is wrong with *finding* these rings.** STACK is seeded 30 of 30 —
+perfectly, the only typology in the table that is. Every one of those rings was
+located by the seed rule and then discarded by the expansion-or-pruning step
+that runs after it. BIPARTITE is the same failure at 90.3% seeded.
+
+That is a bounded, well-localised bug hunt with a known input (30 seeded STACK
+rings, 21 of which never become a candidate) and a known output, and it is **the
+highest-value remaining engineering task that is not the re-ranker**. Whether it
+can be closed in the time remaining is genuinely uncertain — [both obvious knobs
+have already been ruled out by experiment](#what-is-already-known-about-the-build-stage-bug),
+so it is not a tuning pass. **Naming it precisely is itself the deliverable**:
+three previous attempts at this question each blamed a stage that was not at
+fault, and those corrections are recorded in place in `docs/HANDOFF.md` §5b–§5f.
+
+#### What is already known about the build-stage bug
+
+`scripts/diagnose_build.py` splits the build failure into two causes with
+**opposite fixes**:
+
+- **CONTAINMENT_FAIL** — expansion never reached ≥50% of the ring. *Fix by
+  expanding harder.*
+- **DILUTION_FAIL** — expansion *did* reach the ring, but dragged in so much
+  neighbourhood that Jaccard fell below 0.3. The structure was found and then
+  buried. *Fix by expanding less and pruning.*
+
+At the shipped expansion config (`hops=2`, `max_degree=50`,
+`data/build_diagnosis_h2_d50.json`), over the same 34 cycles and the same 230
+seeded rings as the funnel:
+
+| typology | seeded | containment_fail | → hop_limit | → hub_guard | dilution_fail |
+|---|---:|---:|---:|---:|---:|
+| BIPARTITE | 28 | 12 | 9 | 3 | 16 |
+| STACK | 30 | 14 | 13 | 1 | 14 |
+
+Roughly half "never reached" and half "reached then buried", for both. **That is
+why a single knob cannot fix it** — the two halves want opposite changes.
+
+> **Denominator caveat, stated up front rather than buried.** The
+> `build_diagnosis_*.json` files report BIPARTITE **built = 0** and STACK
+> **built = 2**; `data/funnel.csv` reports **5** and **9**. Both are correct and
+> they are not the same measurement. `scripts/diagnose_build.py` calls
+> `WindowedGraph.expand_traced` directly on each seed and scores the raw
+> neighbourhood; it never calls `CandidateGenerator.generate`, so it applies
+> **no pruning** (`PRUNE_STRATEGY = "leaf2"`, `sentinel/detect/prune.py`), no
+> dedup, no `MIN_EDGES` filter and no overlap suppression. `eval_funnel.py` goes
+> through `generate` and therefore gets all of them. The diagnosis counts are
+> **raw two-hop expansion, pre-prune**; the funnel counts are the **shipped
+> pipeline, post-prune**. The seeded denominator *is* shared — 230 rings in both
+> — so the whole gap is the post-expansion pipeline, and it runs in the expected
+> direction: pruning is precisely the treatment for DILUTION_FAIL, and it is
+> what lifts BIPARTITE 0 → 5 and STACK 2 → 9. **Quote the diagnosis for its
+> proportions and causes, never for its absolute built counts.**
+
+**Both obvious knobs were ruled out by experiment, and the experiments are
+stored.** Both rows below are pre-prune counts, per the caveat:
+
+| knob | result | source |
+|---|---|---|
+| hops 2 → 3 | **worse.** BIPARTITE built 0 → 0, STACK 2 → 1. Mean best Jaccard collapsed (BIPARTITE 0.140 → 0.083, STACK 0.153 → 0.075) as mean candidate size ballooned (BIPARTITE 15.2 → 36.4, STACK 19.1 → 52.8). | `data/build_diagnosis_h3.json` |
+| hub-degree guard 50 → 500 | **nothing at all.** The BIPARTITE and STACK rows are identical on every count — built, containment_fail, each sub-reason, dilution_fail. (Elsewhere it moves builds by at most one ring, and downward: FAN-OUT 20 → 19, GATHER-SCATTER 23 → 22, RANDOM 10 → 9.) | `data/build_diagnosis_h2_d500.json` |
+
+More hops is not the fix and a looser hub guard is not the fix. The remaining
+`hop_limit` containment failures mean those ring members are genuinely not
+reachable from a *pass-through* seed within the window — a structural property
+of seed-and-expand on those two shapes, not a parameter.
 
 ### What pruning bought, measured properly
 
@@ -139,6 +260,277 @@ cycles, not two separate runs:
 
 Generation improved and it is confirmed. Scoring did not, and the size baseline
 caught up. Both halves are reported.
+
+### The supervised re-ranker, and what perfect labels are worth
+
+**A supervised re-ranker over ground-truth ring labels, ring-disjoint held-out
+split, p@10 0.278 [0.150, 0.417] — trained on ground-truth ring labels, which a
+deployment does not have on day one.** Both halves of that sentence are the
+result. `scripts/eval_oracle.py`, run 1 (`oracle_as_is` in
+`data/eval_oracle.json`); the same LightGBM model on the same candidate
+features the shipped scorer already computes, with no cheat anywhere in the
+pipeline.
+
+The split is what makes it a result rather than a demo, and it is worth being
+exact about what it guarantees, because the two guarantees are not equally
+strong.
+
+**Ring-disjointness is the strong one, and it is asserted.** A ring's
+candidates are wholly in train or wholly in test, never split across the
+boundary; `ring_time_split` in `scripts/eval_oracle.py` asserts it and the run
+dies if it is violated.
+
+**Time-ordering is the weaker one, and the weakness is deliberate.** The
+negative pool is a pure temporal split, and that half *is* asserted: no
+training negative post-dates any test negative. Positives are not. A positive
+candidate follows its ring, so a ring assigned to train keeps every one of its
+candidates — including the ones that fall after the cutoff. That is a trade
+taken on purpose, and the function says so in its own comment: two
+near-duplicate candidates for the same ring landing on opposite sides of the
+boundary is the worse leak of the two, so ring identity wins and a little
+temporal overlap on an already-positive ring is accepted. "Train strictly
+precedes test" is therefore true of the negative pool and **not** true of the
+positives. This README used to state it flat out; that was an overclaim and it
+is corrected here rather than quietly dropped.
+
+Pool 346,523 candidates; train 169,947 (321 positive); test 176,576 (164
+positive); 18 held-out cycles; `leaf2` pruning.
+
+Every ranking scored on the **same** 18 held-out cycles:
+
+| ranking | p@10 | 95% CI | p@20 | p@50 |
+|---|---:|---|---:|---:|
+| **supervised (TRUE LABELS — not deployable; see [the label tax](#the-label-tax--why-the-caveat-is-the-argument))** | **0.2778** | [0.1500, 0.4167] | 0.1500 | 0.0689 |
+| v1 hand-set blend (shipped) | 0.0500 | [0.0222, 0.0778] | 0.0389 | 0.0244 |
+| size | 0.0333 | [0.0111, 0.0556] | 0.0389 | 0.0233 |
+| degree | 0.0167 | [0.0000, 0.0389] | 0.0278 | 0.0211 |
+| random | 0.0000 | [0.0000, 0.0000] | 0.0000 | 0.0000 |
+
+Average precision 0.2285. The size baseline is quoted beside the headline
+because [the standing rule](#standing-rule) requires it, and here it is finally
+not flattering to the baseline: at p@10 the supervised model clears size by an
+interval that never touches zero.
+
+**The denominator inflates that 0.2778, and by roughly a tenth.** p@k here is
+counted over *candidates*, so a cycle in which the generator emits three
+surviving candidates covering one true ring pays three times for one detection.
+That is not a hypothetical: `scripts/eval_ranker.py` measures both denominators
+on this same split, and for its pointwise fit the same model scores **0.2778
+candidate-level against 0.2500 distinct-ring** at k=10
+(`data/eval_ranker.json`, `precision_at["10"]["pointwise"]` versus
+`distinct_ring_precision_at["10"]["pointwise"]`). `scripts/eval_oracle.py`
+computes only the candidate-level figure, so **its 0.2778 — the identical
+number, not merely a comparable one — carries the identical inflation, and
+there is no distinct-ring counterpart for it in any JSON.** The honest
+distinct-ring reading of the headline is therefore 0.2500. Read
+it as a candidate-level number, and read every baseline in the table beside it
+the same way — they are all inflated by the same mechanism, which is why the
+*deltas* below are the load-bearing part.
+
+Paired bootstrap over those same 18 cycles, supervised minus the shipped v1
+blend (`data/eval_oracle.json`, `oracle_as_is.paired`):
+
+| k | delta | 95% CI | excludes zero? |
+|---:|---:|---|---|
+| 10 | **+0.2278** | [+0.1167, +0.3500] | **yes** |
+| 20 | +0.1111 | [+0.0528, +0.1778] | **yes** |
+| 50 | +0.0444 | [+0.0222, +0.0678] | **yes** |
+
+The stored F1 of 0.0045 is **not** interpreted and should not be quoted without
+this clause: a fixed 0.5 threshold on a pool with roughly 0.1% positives
+measures the threshold, not the model.
+
+### It was fitted twice, by two scripts, and landed in the same place
+
+This is the reason the result is quoted at all rather than filed as a curiosity.
+`scripts/eval_ranker.py` exists to test LambdaMART, and it carries a pointwise
+LightGBM classifier as its reference arm — a second fit, from a separately
+collected candidate pool, on the identical ring-disjoint split (same `split_t`
+7980, same 169,947 train / 176,576 test rows, same 18 held-out cycles). It
+reaches **p@10 0.2778 [0.1500, 0.4167]**, with a paired delta over the v1 blend
+of **+0.2278 [+0.1167, +0.3500]** (`data/eval_ranker.json`,
+`paired["pointwise-blend@10"]`).
+
+**The two agree exactly, to every digit.** Both report p@10 0.2778 [0.1500,
+0.4167]; both report a paired delta over the v1 blend of +0.2278 [+0.1167,
++0.3500] at k=10 and +0.0444 at k=50. Two scripts, with separate
+pool-collection paths and separate evaluation harnesses, produce the identical
+number. State the limit of that too — the two fits share a model family, a
+feature block and a seed, so this is a check that the pool-collection and
+evaluation path reproduces, not two statistically independent estimates. An
+earlier version of this section reported the two as 0.2667 and 0.2778 and read
+the 0.011 between them as fit-to-fit wobble. That reading was wrong: the 0.2667
+was a stored number from a run that predated commit `b1ef656`'s fix to a
+numerically unstable feature (see `docs/HANDOFF.md` §3). Re-run after the fix,
+the gap is zero.
+
+**The largest CI-clear separation from a baseline anywhere in this repository is
+this one — supervised versus baseline at k=10, at either fit.** Against the
+shipped v1 blend that is +0.2278 [+0.1167, +0.3500] in both
+`data/eval_oracle.json` and `data/eval_ranker.json`; against random, +0.2778
+[+0.1500, +0.4167] in both. Nothing else
+measured on real seeding is in the same range — the pruning A/B tops out at
++0.088 [+0.056, +0.126] (`data/prune_impact.json`) and every Phase 4 re-ranker
+delta includes zero. The only larger separations stored anywhere are inside run
+2 of `scripts/eval_oracle.py`, which cheats at seeding and is a ceiling
+diagnostic, not a result. This paragraph replaces an earlier claim that the
+supervised-minus-blend delta at k=10 was "the widest CI-clear result in this
+project": it was not, because the same two files hold a wider one — the
+supervised-minus-random delta at k=10, +0.2778 [+0.1500, +0.4167], on the very
+same split. The correction is that the widest result is *a* supervised-versus-
+baseline gap at k=10, not that particular one.
+
+### The label tax — why the caveat is the argument
+
+0.278 is what these features support **when the labels are perfect**. A
+deployment does not get ground truth; it gets analyst verdicts. Phase 4's
+learned re-ranker, trained on *simulated analyst verdicts* instead of truth,
+reached **p@10 = 0.124 against 0.106 for the v1 hand-set** over 17 held-out
+cycles, with [a paired delta CI that includes zero at every
+k](docs/HANDOFF.md#with-the-learned-re-ranker-held-out) (`data/eval_phase4.json`,
+`lift_ci`).
+
+**Those two numbers are not two arms of one experiment, and this README used to
+claim they were.** The retracted sentence read "same features, same candidates,
+same model family — only the labels changed". Every clause of it is false, and
+here is the list, because a correction that does not enumerate what was wrong is
+just a softer version of the same claim:
+
+| | verdict-trained (Phase 4) | truth-trained (run 1) |
+|---|---|---|
+| model | `HistGradientBoostingClassifier` (`sentinel/learn/reranker.py`) | `LGBMClassifier` (`scripts/eval_oracle.py`) |
+| features | 44 (`data/eval_phase4.json` → `importances`) | 54 (`data/eval_ranker.json` → `n_features`) |
+| training corpus | 680 **cases** (`n_train`) | 169,947 **candidates**, 321 positive — roughly 250× |
+| split rule | plain time split on cases (`time_split`, `scripts/eval_phase4.py`) | ring-disjoint `ring_time_split` |
+| split point | `split_t` 8340 | `split_t` 7980 |
+| evaluation window | 17 held-out cycles | 18 held-out cycles |
+
+**What can honestly be said.** A verdict-trained re-ranker on 680 labelled cases
+reached p@10 0.124 over 17 held-out cycles; a truth-trained model on ~170k
+candidates reached 0.278 over a different 18. The gap is *consistent with* a
+label-quality tax, and it is not a measurement of one — training-set size,
+feature block, model family, split rule and evaluation window all differ, and
+any one of them could carry the whole 2.25×.
+
+**The clean experiment is the same model, on the same pool, on the same split,
+fitted twice: once on true ring labels, once on simulated verdicts. It has not
+been run.** Naming it is the honest position; calling the 2.25× the tax is not.
+And it is cheap — `collect_pool` in `scripts/eval_oracle.py` already returns
+exactly what it needs (the candidate records plus `ring_first_t`), so the second
+arm is a relabelling of an existing pool and a second `fit`, not a new
+evaluation harness. **That is the next task on this measurement**, and until it
+runs, "the label tax" is a hypothesis with a plausible mechanism, not a number.
+
+The strategic claim does not depend on the arithmetic, which is why it survives
+the correction: **the label corpus, not the detector, is the actual product.**
+The detector reaches 0.278 when someone hands it clean ring labels, and nobody
+will hand it those. What would close whatever gap is real is the verdict
+pipeline — the case store, the control lane, the calibration loop — not a better
+model. That was the argument before the 2.25× was quoted and it is the argument
+after it is withdrawn.
+
+**0.278 is never a production number, and it is not quoted as one anywhere in
+this repository.** It is what these features support under a label advantage no
+deployment has — and it is not a ceiling on the features either, only the best
+these features have been made to do so far.
+
+### Three measurements came back negative, and that is recorded here
+
+Three follow-up experiments were run to close gaps this project already knew
+it had open. All three came back negative or null, the decisions they imply
+have not changed, and a negative result gets deleted from documentation more
+often than a positive one — so it goes here rather than in a script's own
+output.
+
+**1. A ranking-native loss does not beat the pointwise model where it matters.**
+`scripts/eval_ranker.py` exists to test whether LambdaMART beats the pointwise
+LightGBM classifier already quoted above. It beats the v1 hand-set blend —
+both fits do, at every k (`data/eval_ranker.json`, `ship`, true for
+`pointwise`/`lambdamart` at k=10/20/50). It does not clearly beat the
+pointwise model itself. Paired bootstrap, lambdamart minus pointwise, same
+ring-disjoint split, same 18 held-out cycles
+(`data/eval_ranker.json`, `head_to_head_vs_pointwise`):
+
+| k | delta | 95% CI | excludes zero? |
+|---:|---:|---|---|
+| 10 | -0.0167 | [-0.0611, +0.0222] | no |
+| 20 | +0.0111 | [-0.0139, +0.0361] | no |
+| 50 | +0.0122 | [+0.0022, +0.0244] | yes |
+
+The pre-registered prediction was that a ranking-native loss would beat a
+pointwise classifier; it was wrong in both directions, not merely optimistic —
+LambdaMART neither loses to the pointwise model nor clearly beats it. The two
+are statistically indistinguishable at k=10 and k=20, and the one interval
+that clears zero is at k=50, the depth where the analyst's alert budget
+matters least. There is no measured case here for shipping the listwise loss
+over the pointwise model.
+
+**2. Closing a real GFP coverage gap made ranking worse, not better — and the
+seed-stability re-run that would have qualified that claim has already run.**
+IBM's Graph Feature Preprocessor computes per-account/edge median transaction
+amounts; sentinel's 54-feature block did not. Five such features
+(`mean_median_out_amount`, `mean_median_in_amount`, `max_median_out_amount`,
+`max_median_in_amount`, `internal_edge_median`) were added and the model
+refit on the identical pool and split (`data/eval_median_gap.json`).
+
+*Chapter A — the single shipped-config fit.* Paired bootstrap, with-median
+minus sentinel, candidate-level, same 18 cycles (`data/eval_median_gap.json`,
+`candidate.paired`):
+
+| k | delta | 95% CI | excludes zero? |
+|---:|---:|---|---|
+| 10 | -0.0444 | [-0.0833, -0.0056] | yes |
+| 20 | -0.0167 | [-0.0417, +0.0083] | no |
+| 50 | -0.0078 | [-0.0144, -0.0011] | yes |
+
+Of the 59 total features in that fit, three of the five new ones rank in the
+top 10 by importance — `internal_edge_median` 5th, `max_median_out_amount`
+8th, `mean_median_out_amount` 9th (`median_ranks`) — while degrading
+precision. Heavily used and net-negative on a 321-positive training set is the
+signature of overfitting, not of a feature the model correctly ignored.
+
+*Chapter B — the corrected 5-seed re-run, which supersedes Chapter A's number
+as a stability claim.* A first seed sweep reported "5 of 5 seeds degrade at
+k=10" with bit-identical predictions across seeds — `random_state` does
+nothing in this LightGBM config once bagging and feature-sampling sit at their
+default 1.0, so it was one fit reported five times (commit `8c17994`, message
+in full via `git show 8c17994`). The sweep was corrected to perturb
+`subsample=0.8`/`subsample_freq=1`/`colsample_bytree=0.8`, which the RNG does
+reach, with an assertion added so identical seeds can never again pass as five
+agreeing fits. The corrected sweep (`data/eval_median_gap.json`, `per_seed`,
+`seeds_harming_at_10`, `seeds_helping_at_10`): at k=10, 2 of 5 seeds show a
+CI-clear degradation and 0 of 5 show a gain — point estimates run from -0.0556
+to +0.0056, so 3 of 5 are statistically null, not degradations. At k=20 all
+five point estimates are negative and 3 of 5 exclude zero.
+
+**The honest characterization is not "confirmed degradation, -0.0444,
+provisional pending a seed re-run" — that re-run is done.** It is: these
+features never helped in any fit at either depth; the degradation is real in
+the single shipped-config fit and in 2 of 5 genuinely-varied fits, and
+indistinguishable from zero in the other 3. The file's own verdict
+(`data/eval_median_gap.json`, `verdict`) states it plainly: *"NOT WORTH THE
+DESIGN COST: no measured improvement at k=10 or k=20, and the degradation is
+not stable across model-fit seeds. The absence recorded in
+tests/test_gfp_gaps.py stands, and now stands on a measurement rather than on
+the argument that Welford cannot do medians. Do not add a streaming quantile
+estimator."* The decision — do not add these features, do not build a
+streaming quantile estimator — is unchanged; it now rests on the corrected
+evidence rather than the single, stronger-sounding number, which is a better
+place for a decision to rest. The broader point survives at full strength:
+a feature GFP computes and sentinel lacked is not automatically worth adding —
+heavily-used-but-net-negative on a small labelled set is overfitting, and
+"GFP computes it" is not by itself a reason.
+
+**3. GFP feature parity remains unmeasured, and stays unclaimed here.**
+`scripts/gfp_control.py` already establishes why: `snapml` 1.15.6 imports
+cleanly on this Windows Python 3.11 venv, but constructing
+`GraphFeaturePreprocessor()` raises `AttributeError: module
+'snapml.libsnapmllocal3_avx2' has no attribute 'gf_allocate'` — none of the
+Windows `.pyd` binaries export any `gf_*` symbol, while the manylinux wheel of
+the identical version exports all eight. The blocker is the operating system,
+not the Python version; a newer venv cannot fix a symbol the Windows build
+never exported at any snapml release. No parity control has run, no parity
+number exists in this repository, and no sentence here claims otherwise.
 
 ### Standing rule
 
@@ -172,7 +564,7 @@ for the ring value** at which each queue depth breaks even:
 
 | depth | pays if the average confirmed ring has more than |
 |---|---:|
-| top 10 | 66,384 at risk |
+| top 10 | 66,342 at risk |
 | top 20 | 82,324 at risk |
 | top 50 | 154,236 at risk |
 
@@ -201,16 +593,34 @@ error rate rather than being assumed to zero.
 
 ## Where the AI actually is
 
-There is no graph neural network here and no trained ring detector, and that is
-a decision with a reason rather than a gap: **you cannot train a supervised ring
-detector before you have confirmed rings.** Which is exactly why the label
-pipeline is the product. Every component below earns its place on a measurement,
-not on the fact that this is an AI buildathon.
+There is no graph neural network here. There *is* a trained model, in fact two
+of them, and the distance between what they score is the argument: a supervised
+re-ranker trained on ground-truth ring labels reaches [p@10 0.278 on a
+ring-disjoint held-out split](#the-supervised-re-ranker-and-what-perfect-labels-are-worth),
+while a re-ranker trained on simulated analyst verdicts — the only labels a
+deployment actually has — reaches 0.124. Those are **two different experiments**,
+not one experiment run twice: different model, different feature block, a
+250×-smaller training corpus, a different split rule and a different evaluation
+window, all enumerated [in the label-tax
+section](#the-label-tax--why-the-caveat-is-the-argument). The gap is consistent
+with **you cannot train a supervised ring detector to its potential before you
+have confirmed rings**; it does not by itself measure the size of that effect.
+Which is still why the label pipeline is the product. Every component below
+earns its place on a measurement, not on the fact that this is an AI
+buildathon.
 
 ### 1. Learned re-ranker — `sentinel/learn/reranker.py`
 
-Trains on the analyst verdict corpus and reorders the queue. Held-out average
-precision 0.2704 against a 0.0412 base rate.
+Trains on the analyst verdict corpus and reorders the queue.
+
+**STRUCK — the held-out average precision figure this paragraph used to quote.**
+It read "held-out average precision 0.2704 against a 0.0412 base rate". It is
+gone rather than softened, because it is not traceable to anything runnable:
+`data/eval_phase4.json` has no `ap` key, and `scripts/eval_phase4.py` never
+computes average precision at all. The number survives only in
+`docs/PHASE4-FINDINGS.md`, the session record of the run that produced it, and
+that file is left alone as the historical record it is. It is not reproducible
+from this repository today, so it is not quoted from this repository today.
 
 **And its lift does not survive its own confidence interval.** Paired bootstrap
 over the 17 held-out cycles gives deltas whose 95% intervals include zero at
@@ -546,7 +956,9 @@ python scripts/eval_phase2.py        # p@k with size/degree/random baselines
 python scripts/eval_funnel.py        # per-typology stage recall + bootstrap CIs
 python scripts/eval_phase4.py        # re-ranker vs hand-set, paired CI on the lift
 python scripts/eval_prune_impact.py  # paired same-cycle A/B on pruning (~40 min)
-python scripts/eval_oracle.py        # supervised LightGBM ceiling on the features
+python scripts/eval_oracle.py        # run 1: supervised re-ranker on TRUE ring
+                                     #   labels, ring-disjoint held-out split
+                                     # run 2: seed-cheat ceiling diagnostic
 python scripts/eval_vs_published.py  # threshold-free AP vs published GNN baselines
 python scripts/eval_elliptic2.py     # second dataset: real labels, real data
 python scripts/eval_cost.py          # break-even precision and cost-optimal depth
@@ -600,14 +1012,26 @@ Datasets are gitignored and separately licensed. Download instructions above.
 | Standard GNN, no adaptations | 26.9% |
 | GNN + reverse MP + port numbering + ego IDs | 42.9% |
 | GIN, adapted | 57.2% |
-| **This project, unsupervised, threshold-free, whole population** | **AP 0.011 (1.7x base rate)** |
+| **This project's shipped v1 blend, unsupervised, threshold-free, whole population** | **AP 0.011 (1.7x base rate)** |
 
 The fair like-for-like row is the threshold-free one, and it is weak. An earlier
 top-10 slice figure (F1 0.068, "11x lift") is a fixed-cardinality-selection
 artifact — five different uncalibrated operating points, with the best quoted —
-and it should not be placed beside a calibrated whole-test-set decision. Those
-baselines train on the labels; this uses none. That gap is real, and its size
-should be read off the threshold-free row.
+and it should not be placed beside a calibrated whole-test-set decision.
+
+**The "unsupervised" qualifier belongs to that row, not to the repository.** The
+last row is the *shipped v1 hand-set blend*, which trains on nothing. This repo
+also contains a supervised result — [p@10 0.2778 on a ring-disjoint
+held-out split](#the-supervised-re-ranker-and-what-perfect-labels-are-worth) —
+so "this uses none" is true of what ships and false of what has been measured.
+The supervised numbers are deliberately **not** dropped into the table above,
+because they would not mean anything there: the published baselines and the last
+row are *transaction-level minority-class F1 over the whole population*, and the
+supervised result is *ring-level precision at k over held-out cycles* — a
+different unit, a different denominator, and a different decision. Putting them
+in one column would be exactly the fixed-cardinality mistake the paragraph above
+retracts. Those baselines do train on the labels, the shipped blend uses none,
+and the size of that gap should be read off the threshold-free row.
 
 ### Industry reality — the comparison that is fair
 
@@ -624,32 +1048,169 @@ queue clears break-even by a wide margin at that precision.
 
 ## Positioning
 
-**RBI MuleHunter.AI** runs inside banks, on bank-account data, across 26 banks
-and around 20,000 mule accounts flagged monthly. **DPIP** (RBI and NPCI) shares
-fraud signal between institutions. **Razorpay Vulcan** scores transactions and
-flags entities at enormous scale — around 3 trillion data points across 4
-billion payments — including cross-merchant detection.
+### The wedge: a mandate is manufacturing this bottleneck on a published schedule
 
-Nothing public suggests any of them hands an analyst *"here are the nine
-accounts that form this structure, here is the shape, and here is the evidence
-for each claim."* Nor point-in-time labelling, a five-way verdict taxonomy, or
-control-arm sampling.
+*The figures in this subsection are external public claims, not measurements
+from this repo. Nothing here rests on access to bank data, which this project
+does not have.*
 
-This is complementary to Vulcan, not competitive with it. No public dataset and
-no laptop closes a 3-trillion-datapoint gap, and this README does not pretend
-otherwise. What it adds sits at a different layer: the investigation, not the
-score.
+India's Ministry of Home Affairs has directed financial institutions to
+integrate with the RBI's **MuleHunter.AI** by **December 2026**. It runs on 19
+behavioural patterns and is implemented in **23 banks** (a December 2025 RTI
+response, via MediaNama). On that same RTI the RBI **declined to disclose how
+many mule accounts have been identified or acted on**, citing fiduciary
+grounds — so the "~20,000 mule accounts per month" and "~450,000 frozen"
+figures that circulate in secondary coverage are capability claims, not
+RBI-confirmed outcomes, and are not repeated here as measurements. The mandate
+argument below does not need them: it rests on the account count MuleHunter
+touches being nonzero and growing, not on its exact monthly rate.
 
-**524,121** suspected mule accounts were flagged in March 2026 alone, and
-**2.47 million** Layer-1 mule accounts by I4C. Reporting explicitly names
-payment-aggregator merchant accounts as the weaponised vector — *"fraudulent
-accounts can look identical to legitimate businesses."* MuleHunter sits inside
-banks. DPIP sits between institutions. **Neither sits at the payment-aggregator
-merchant layer**, and that gap is the sharpest case for this work.
+MuleHunter answers *"is this account a mule?"* **Nothing in that stack answers
+"which of these mules are the same ring?"** A mandate that obliges every
+institution in the country to stand up account-level mule detection by a fixed
+date is, by construction, manufacturing a flood of account-level alerts — and
+the bottleneck that flood creates is the one this project is built for.
 
-Compliance timing matters too: an STR must be filed within seven working days of
-forming suspicion, and protracted internal review is the most-cited cause of
+That makes Sentinel **complementary to MuleHunter, not competitive with it**:
+consume the alert stream, resolve it into rings, assemble the evidence, and
+hand an analyst one decision covering forty accounts instead of forty decisions
+covering one each.
+
+### Who this does not compete with, said plainly
+
+- **RBI MuleHunter.AI** — government-built, free to banks, and mandated. There
+  is no version of this project that out-detects it, and it should not try.
+- **Razorpay Vulcan** (launched 18 Aug 2026) — trained on roughly 4 billion
+  payments and 3 trillion data points, free to merchants, already doing
+  network-level cross-merchant detection. No public dataset and no laptop
+  closes that gap.
+- **The agentic alert-triage category** (Unit21, Sardine, Alessa, Binderr,
+  Kriv) is genuinely crowded, and its marketing language is close to this
+  README's older framing. But every one of them triages alerts **one at a
+  time**. None of them change the unit of investigation. The crowding is an
+  argument for sharpening ring-level case assembly, not for abandoning it.
+
+Naming non-competitors accurately is a judgment claim, not a modesty one. The
+layer this occupies is the investigation, not the score.
+
+**DPIP** (RBI and NPCI) shares fraud signal between institutions. MuleHunter
+sits inside banks; DPIP sits between them. **Neither sits at the
+payment-aggregator merchant layer**, and that gap is the sharpest case for this
+work. Reporting explicitly names payment-aggregator merchant accounts as the
+weaponised vector — *"fraudulent accounts can look identical to legitimate
+businesses."* **524,121** suspected mule accounts were flagged in March 2026
+alone, and **2.47 million** Layer-1 mule accounts by I4C.
+
+Nothing public suggests any of these systems hands an analyst *"here are the
+nine accounts that form this structure, here is the shape, and here is the
+evidence for each claim."* Nor point-in-time labelling, a five-way verdict
+taxonomy, or control-arm sampling.
+
+Compliance timing matters too: an STR must be filed within seven working days
+of forming suspicion, and protracted internal review is the most-cited cause of
 late filing. This compresses both clocks.
+
+### Elliptic2: take the dataset, leave the market
+
+`scripts/eval_elliptic2.py` already reads Elliptic2, and its thesis — that
+money laundering is a subgraph-level problem — is this project's thesis. Its
+**2,763 labelled suspicious subgraphs against HI-Small's 370** is the honest
+fix for the sample-size ceiling that weakens every confidence interval in this
+README.
+
+It is used here as a **second dataset for cross-dataset generalisation**, and
+explicitly **not** as a change of market. Repositioning onto crypto would walk
+into Chainalysis, Elliptic and TRM, and away from Indian payments. The dataset
+is worth taking; the market is not.
+
+### If this were a company rather than a submission
+
+*External public figures again, not measured here.* Between FY2021-22 and
+September FY2025-26 India recorded **₹3,588 crore** in digital-payment fraud
+losses and recovered **₹238.83 crore** — a **6.7% recovery rate**. Cyber fraud
+overall ran to roughly ₹22,495 crore in 2025, with case volume up 24%.
+
+That recovery rate is the whole argument. Money is recoverable only *before* it
+disperses through the layering chain. Freezing one mule account per alert loses
+that race by construction — it chases a network with a scalar. Ring-level
+action is the only structure that moves at the speed the money moves, because
+one decision covers the whole layer instead of one node in it.
+
+Three things would make that defensible: the labelled ring corpus accumulated
+in operation is a compounding asset no incumbent has; ring-level evaluation is
+something nobody in the category currently reports; and the regulatory calendar
+creates the alert flood without anyone having to sell it.
+
+### The counterweight, in the same breath
+
+The cost model says the queue's viability is **conditional**, and the condition
+is measurable rather than assumed. At top 10 it pays only if the average
+confirmed ring carries more than **66,342** at risk
+(`scripts/eval_cost.py`; the unit is deliberately unnamed — ratios are what
+the model claims, not rupees).
+
+*A note on which p@k this is.* The precisions in this subsection — 0.097,
+0.079, 0.043 — are the **shipped v1 queue's** score ranking from HANDOFF §5d,
+which is what an ops team would actually work today. They are not the
+supervised re-ranker's p@10 of 0.2778 quoted earlier: that model trains on
+ground-truth ring labels and is not deployable on day one. Costing the queue
+against the re-ranker's number would assume away exactly the label dependency
+this README spends a section establishing.
+
+**All six cost inputs are still placeholders**, and the model says so on every
+run (`unsourced()`). Under a joint stress — all six *inputs* moved adverse at
+once, each by a factor of two — the break-even precision rises from **0.0056
+to 0.0864**. Note that this is harsher than doubling: review cost, benefit and
+false-positive harm are each a *product of two* of those inputs, so review cost
+and residual harm rise fourfold while the benefit falls to a quarter. At that
+corner
+**only top 10 still pays** (p@10 = 0.097); top 20 (0.079) and top 50 (0.043)
+do not.
+
+**But the severity factor is doing all the work, and that is the real
+finding.** Two is a convention, not a measurement, and top 10 clears 0.0864 by
+about one point of precision. Sweeping the factor: at x1.5 the break-even is
+0.0282 and top 10 pays; at x2 it is 0.0864 and top 10 still pays; at **x2.06 it
+stops paying**; at x2.5 it is 0.1979 and no depth pays at any k.
+
+**At the x10 corner the repo actually gates on, nothing pays at all.**
+`scripts/ci_gates.py`'s cost gate runs the same joint construction across the
+0.1x-10x band its one-at-a-time sweep uses, and reports a break-even of
+**1.8382** — a precision above 1.0, i.e. unreachable by any detector. So the
+honest statement is not "the shallow queue survives the pessimistic corner." It
+is that **the queue's survival under joint stress is decided entirely by a
+severity parameter nobody has grounded**: it flips about three percent past x2,
+and by x10 the queue cannot pay however good the ranking gets.
+
+That gate PASSES, and the reason it passes is worth stating: its criterion is
+that no *single* unsourced input can flip the pay/no-pay verdict across an
+order of magnitude, which is true. The joint corner does flip it, and the gate
+prints that rather than gating on it — one-at-a-time robustness does not extend
+to the joint case, and the gate says so in its own output.
+
+Grounding those six inputs is the difference between a thesis and a business.
+The answer to the obvious challenge, though, is that **the break-even
+inverts**: `required_value_at_risk` solves for the exposure instead of assuming
+it, so nobody has to accept these rupee figures to check the claim. They only
+have to decide whether the threshold is plausible — a question an ops lead can
+actually answer.
+
+### Pivots considered and rejected
+
+Five directions were considered and rejected, on purpose: becoming a general
+AML case-management platform (a different, crowded product with different
+buyers); moving the target market to crypto/on-chain (the Elliptic2 dataset
+gets used above precisely *without* this move, because it walks into
+Chainalysis, Elliptic and TRM and away from the Indian-payments track this is
+built for); selling the measurement and evaluation harness itself as the
+product (it is the thing that makes every other claim here checkable, not a
+product in its own right); chasing GFP feature-parity as a goal
+(`scripts/gfp_control.py` and the corrections above it establish that parity is
+unmeasured and unmeasurable on this OS — treating it as a target would mean
+optimizing against a number nobody can compute); and competing head-on with
+MuleHunter or Vulcan on raw detection accuracy (covered above under "who this
+does not compete with" — restated here because a reader scanning for pivots
+rather than positioning should be able to find it without re-deriving it).
 
 ---
 
@@ -659,8 +1220,12 @@ Kafka ingest from a live transaction topic, deep links into an internal admin
 panel, case-management push, and real execution of payout holds or step-up
 authentication. Batch actions are simulated and labelled as such.
 
-There is no graph neural network and no trained ring detector — see
-[Where the AI actually is](#where-the-ai-actually-is) for why that is a decision
+There is no graph neural network. There is no *deployed* ring detector trained
+on ground truth either — only on analyst verdicts, which is all a deployment
+ever has; the ground-truth-label run is a held-out measurement of what the
+features can support, never a shipped model. See
+[Where the AI actually is](#where-the-ai-actually-is) and [the label
+tax](#the-label-tax--why-the-caveat-is-the-argument) for why that is a decision
 rather than an omission, and what is trained instead.
 
 ---

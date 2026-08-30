@@ -1,20 +1,50 @@
-"""The oracle run: what is the ceiling of the current feature set?
+"""Two runs on ground-truth ring labels: one result, one ceiling diagnostic.
 
-This is a diagnostic, not a deliverable. It trains a supervised LightGBM model
-on the EXISTING candidate features using the TRUE ring labels (not the
-simulated-analyst labels Phase 4 uses), to answer one question: if we had a
-supervised model instead of the hand-set score, how good could these features
-possibly make it? Two runs:
+Both runs train a supervised LightGBM model on the EXISTING candidate features
+using the TRUE ring labels (not the simulated-analyst labels Phase 4 uses).
+They are NOT the same kind of claim, and the difference is the whole reason
+this file has two of them:
 
-  1. ORACLE (as generated): trained and evaluated only on candidates the real
-     seeding pipeline actually produces. This is the number a supervised
-     re-ranker could realistically deliver today.
-  2. ORACLE-ON-ALL-RINGS (the ceiling): trained and evaluated on candidates
-     generated with a seed rule that also fires on every active ring's own
-     members -- a cheat used only here, to measure what the feature set could
-     do if seeding recall were 100%. Never used by the real detector.
+  1. `oracle-as-is` -- **A SUPERVISED RE-RANKER, EVALUATED ON A RING-DISJOINT
+     HELD-OUT SPLIT.** Trained and evaluated only on candidates the real
+     seeding pipeline actually produces, with no cheat anywhere in the
+     pipeline: a ring's candidates are wholly in train or wholly in test. The
+     split is also time-ordered on the NEGATIVE pool -- see the leakage-guard
+     list below for what that does and does not cover, because the two
+     invariants are not equally strong and this docstring used to imply they
+     were. This is a result, not a diagnostic. It is what these features
+     support when the labels are perfect, measured the way any supervised
+     ranking result should be measured, and it is reported as such.
+  2. `oracle-on-all-rings` -- **A CEILING DIAGNOSTIC, AND ONLY THAT.** Trained
+     and evaluated on candidates generated with a seed rule that also fires on
+     every active ring's own members: a seed-cheat used nowhere else, to
+     measure what the feature set could do if seeding recall were 100%. Never
+     used by the real detector, never comparable to run 1, never quotable as a
+     result. Kept structurally and visually separate from run 1 below for
+     exactly that reason.
 
-Interpretation is read off the **oracle/blend p@k ratio**, not off F1.
+THE CAVEAT THAT TRAVELS WITH RUN 1, IN THE SAME BREATH AS THE NUMBER: run 1
+trains on ground-truth ring labels. A deployment does not have those on day
+one -- it has analyst verdicts. Phase 4's learned re-ranker, trained on
+simulated analyst verdicts instead of truth, reached p@10 = 0.124 against
+0.106 for the v1 hand-set over 17 held-out cycles, with a paired delta CI that
+includes zero at every k (data/eval_phase4.json, docs/HANDOFF.md section 3).
+That gap is CONSISTENT WITH a label-quality tax and is NOT a measurement of
+one, and this docstring used to claim otherwise. The two runs are two different
+experiments: LGBMClassifier here vs HistGradientBoostingClassifier in
+sentinel/learn/reranker.py; 54 candidate features vs 44 case features; 169,947
+training candidates (321 positive) vs 680 training CASES, a ~250x difference;
+ring-disjoint ring_time_split vs a plain time split on cases; split_t 7980 vs
+8340; 18 held-out cycles vs 17. Any one of those could carry the whole 2x.
+
+The clean experiment -- same model, same pool, same split, fitted once on truth
+and once on simulated verdicts -- HAS NOT BEEN RUN. collect_pool below already
+returns everything it needs, so it is cheap; see that function's docstring.
+Naming the unrun experiment is the honest position, and it does not weaken the
+strategic claim the 2x was recruited to support: the label corpus, not the
+detector, is the actual product. Run 1's p@10 is NEVER a production number.
+
+Interpretation is read off the **supervised/blend p@k ratio**, not off F1.
 
 An earlier version of this script branched its stored `interpretation` on F1
 at a fixed 0.5 threshold. That was wrong and is corrected here: on a pool with
@@ -23,27 +53,53 @@ model (docs/HANDOFF.md section 3 establishes the same pathology for the
 transaction-level F1). F1 is still computed and stored for continuity with the
 older file, and is explicitly not interpreted.
 
-The comparison that IS interpreted is run 1's oracle against the shipped v1
-hand-set blend and the size/degree/random baselines, all scored on the **same
-held-out cycles** with paired bootstrap CIs. The previous file compared the
-oracle's p@10 over ~17 held-out cycles against a blend p@10 measured over all
-34 cycles in a different script -- two denominators, so the widely quoted
-"2.8x" was not a ratio of anything. Item 0.2 of docs/ARCHITECTURE_UPLIFT.md.
+The comparison that IS interpreted is run 1's supervised model against the
+shipped v1 hand-set blend and the size/degree/random baselines, all scored on
+the **same held-out cycles** with paired bootstrap CIs. The previous file
+compared run 1's p@10 over ~17 held-out cycles against a blend p@10 measured
+over all 34 cycles in a different script -- two denominators, so the widely
+quoted "2.8x" was not a ratio of anything. Item 0.2 of
+docs/ARCHITECTURE_UPLIFT.md.
+
+An earlier version of this docstring called run 1 itself a ceiling diagnostic
+("this is a diagnostic, not a deliverable"). That undersold it and is
+corrected in place rather than erased: run 1's split construction is exactly
+what a supervised held-out evaluation requires, so the honest label for it is
+"supervised re-ranker result, with a label dependency", not "diagnostic". Only
+run 2, which cheats at seeding, remains a diagnostic.
 
 Leakage guards, enforced by assertion rather than trusted by eye:
-  - a ring's candidates are wholly in train or wholly in test, never split;
-  - the split is also time-ordered (train strictly precedes test);
+  - a ring's candidates are wholly in train or wholly in test, never split
+    (asserted directly, and the strong guarantee of the two);
+  - the split is time-ordered ON THE NEGATIVE POOL: no training negative
+    post-dates any test negative, and that is asserted. It is NOT true of the
+    positives. A positive candidate follows its ring, so a train-assigned ring
+    keeps the candidates that land after split_t. That is a deliberate trade,
+    explained at the assertion in ring_time_split: two near-duplicate
+    candidates for one ring on opposite sides of the boundary is the worse
+    leak, so ring identity wins. An earlier version of this list said "train
+    strictly precedes test" without qualification; that was an overclaim and
+    is corrected here rather than deleted;
   - features excluded elsewhere for leakage (channel/ACH, exact, and the
     dominant_entity_type label string) are excluded here too;
   - label-derived features are impossible by construction: the candidate
     feature dict is built by sentinel/detect/features.py before any label is
     looked at, so nothing here can leak the target into a feature.
+
+NAMING NOTE. The module name, the function names, the JSON keys
+(`oracle_as_is`, `oracle_on_all_rings`, `oracle_over_blend`), and the ranking
+name "oracle" inside `precision_at` / `precision_ci` / `paired` all predate
+this reframing and are deliberately UNCHANGED -- scripts/eval_ranker.py,
+scripts/gfp_control.py, the tests, and any comparison against an existing
+data/eval_oracle.json read them. Only the framing changed; the wire format did
+not.
 """
 from __future__ import annotations
 
 import json
 import random
 import sys
+import textwrap
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -70,6 +126,65 @@ KS = (10, 20, 50)
 MIN_RING_NODES = 3
 SPLIT_FRACTION = 0.5
 
+# What each run IS, in words, printed as a banner and stored additively in the
+# JSON under "role"/"framing". These exist because the wire-format keys
+# ("oracle_as_is", "oracle_on_all_rings", and the ranking name "oracle") are
+# frozen for backward compatibility and no longer describe the framing on
+# their own. Run 1 is a result; run 2 is a diagnostic; they must never be read
+# as two flavours of the same thing.
+AS_IS_ROLE = ("RUN 1 -- RESULT: a supervised re-ranker evaluated on a "
+              "ring-disjoint held-out split (time-ordered on the negative "
+              "pool; positives follow their ring -- see AS_IS_FRAMING)")
+ON_ALL_RINGS_ROLE = ("RUN 2 -- CEILING DIAGNOSTIC, NOT A RESULT: seeding is "
+                     "cheated to fire on every active ring's own members")
+
+# The caveat that must travel in the same breath as run 1's p@k, never in a
+# later paragraph. It is written as a strength on purpose: the size of the gap
+# between training on truth and training on analyst verdicts is the strongest
+# evidence this repo has that the label corpus, not the detector, is the
+# product.
+LABEL_TAX = (
+    "Trained on GROUND-TRUTH ring labels, which a deployment does not have on "
+    "day one -- it has analyst verdicts. Phase 4's re-ranker, trained on "
+    "SIMULATED ANALYST VERDICTS instead of truth, reached p@10 = 0.124 against "
+    "0.106 for the v1 hand-set over 17 held-out cycles, with a paired delta CI "
+    "that includes zero at every k (data/eval_phase4.json, docs/HANDOFF.md "
+    "section 3). That gap is CONSISTENT WITH a label-quality tax and is NOT a "
+    "measurement of one -- the two runs differ in model family "
+    "(LGBMClassifier vs HistGradientBoostingClassifier), feature block (54 vs "
+    "44), training-set size (169,947 candidates vs 680 cases, ~250x), split "
+    "rule (ring-disjoint vs a plain time split on cases), split point (7980 vs "
+    "8340) and evaluation window (18 vs 17 cycles). The clean experiment -- "
+    "same model, same pool, same split, fitted once on truth and once on "
+    "simulated verdicts -- HAS NOT BEEN RUN; collect_pool already returns what "
+    "it needs. Until it does, the label tax is a hypothesis with a plausible "
+    "mechanism, not a number. What does not depend on that arithmetic: the "
+    "label corpus, not the detector, is the actual product. This p@k is NEVER "
+    "a production number -- it is what these features support under a label "
+    "advantage no deployment has, and it is not a ceiling on the features "
+    "(scripts/eval_ranker.py reaches 0.2778 on the same features and the same "
+    "split).")
+
+AS_IS_FRAMING = (
+    "Real seeding, no cheat anywhere in the pipeline. RING-DISJOINTNESS is\n"
+    "asserted: a ring's candidates are wholly in train or wholly in test.\n"
+    "TIME-ORDERING is asserted on the NEGATIVE pool only -- no training\n"
+    "negative post-dates any test negative -- while positive candidates\n"
+    "follow their ring, so a train-assigned ring keeps candidates that fall\n"
+    "after the cutoff. That is a deliberate trade: ring leakage is the worse\n"
+    "of the two. This framing used to claim time-ordering flatly, without\n"
+    "that qualification, which was an overclaim and is corrected here.\n"
+    "This is a supervised ranking result, and it is reported as one.\n"
+    + LABEL_TAX)
+
+ON_ALL_RINGS_FRAMING = (
+    "SEED-CHEAT. Candidates are generated with a seed rule that also fires on\n"
+    "every active ring's own members -- something the real detector can never\n"
+    "do. This measures only what the feature set could reach if seeding recall\n"
+    "were 100%. It is a ceiling diagnostic: nothing below it may be quoted as a\n"
+    "result, or compared like-for-like against run 1.")
+
+
 
 def active_rings(stream, t_lo, t_hi):
     m = (stream.ts >= t_lo) & (stream.ts < t_hi) & (stream.ring >= 0)
@@ -92,7 +207,19 @@ def collect_pool(stream, registry, seed_perfect: bool) -> tuple[list, dict]:
 
     Each record: {cand, ring_id_or_None, t}. `ring_first_t` maps every ring
     that ever produced at least one active window to the tick it was first
-    seen -- the basis of the time-ordered, ring-disjoint split.
+    seen -- the basis of the ring-disjoint split (which is time-ordered on the
+    negative pool; see ring_time_split for the exact guarantee).
+
+    THIS IS ALSO WHAT THE UNRUN LABEL-TAX EXPERIMENT NEEDS, which is why the
+    return value is worth naming here. The clean measurement of the label tax
+    -- same model, same pool, same split, fitted once on true ring labels and
+    once on simulated analyst verdicts -- needs exactly these two values and
+    nothing else: relabel the training records, refit, score on the same
+    held-out cycles. It has NOT been run. Until it does, the gap between this
+    script's p@10 and scripts/eval_phase4.py's is CONSISTENT WITH a label tax
+    rather than a measurement of one -- those two runs differ in model family,
+    feature count, training-set size (~250x), split rule and evaluation window.
+    See README.md and docs/HANDOFF.md section 3.
     """
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)
@@ -245,9 +372,10 @@ def evaluate(model, names, test_records) -> dict:
 
     Also evaluates the v1 blend and the size/degree/random baselines on the
     *same* held-out cycles, with paired bootstrap CIs on every delta against
-    the oracle. F1 at a fixed 0.5 threshold is retained for continuity but is
-    a known pathology on a pool this imbalanced -- it is reported, never
-    interpreted (see `interpretation` in the output).
+    the supervised model (keyed "oracle" on the wire for backward
+    compatibility). F1 at a fixed 0.5 threshold is retained for continuity
+    but is a known pathology on a pool this imbalanced -- it is reported,
+    never interpreted (see `interpretation` in the output).
     """
     if not test_records:
         return {"f1": 0.0, "ap": 0.0, "n_test": 0, "n_positive": 0,
@@ -292,10 +420,31 @@ def evaluate(model, names, test_records) -> dict:
             "cycle_rows": rows}
 
 
-def train_and_report(records, ring_first_t, label: str) -> dict:
+def train_and_report(records, ring_first_t, label: str,
+                     role: str = "", framing: str = "") -> dict:
+    """Train, evaluate and print one run.
+
+    `label` is the wire-format name and is deliberately unchanged
+    ("oracle-as-is" / "oracle-on-all-rings"): it is stored in the JSON and read
+    by other scripts. `role` and `framing` are the human-facing words for what
+    the run IS -- printed as a banner and stored additively -- so that no
+    reader has to infer from a legacy key whether they are looking at a
+    supervised result (run 1) or a seed-cheating ceiling diagnostic (run 2).
+    """
+    if role or framing:
+        print()
+        print("=" * 78)
+        print(textwrap.fill(role, width=74,
+                            initial_indent="  ", subsequent_indent="  "))
+        for line in framing.splitlines():
+            # The label-tax paragraph is one long string on purpose (it is
+            # stored verbatim in the JSON too); wrap it only for the console.
+            print(textwrap.fill(line, width=74,
+                                initial_indent="  ", subsequent_indent="  "))
+        print("=" * 78)
     if not records:
         print(f"\n[{label}] no candidates generated -- nothing to train on")
-        return {"label": label, "n_pool": 0}
+        return {"label": label, "role": role, "framing": framing, "n_pool": 0}
 
     train, test, split_t = ring_time_split(records, ring_first_t)
     names = feature_names(train[0]["cand"].features) if train else \
@@ -308,7 +457,8 @@ def train_and_report(records, ring_first_t, label: str) -> dict:
 
     if n_pos_train < 5 or n_pos_train == len(train):
         print(f"[{label}] not enough class balance to train ({n_pos_train}/{len(train)} positive)")
-        return {"label": label, "n_pool": len(records), "n_train": len(train),
+        return {"label": label, "role": role, "framing": framing,
+                "n_pool": len(records), "n_train": len(train),
                 "n_test": len(test), "trainable": False}
 
     model = LGBMClassifier(
@@ -326,25 +476,30 @@ def train_and_report(records, ring_first_t, label: str) -> dict:
           f"a fixed 0.5 threshold on a pool this imbalanced is a pathology, "
           f"not a measurement)")
     print()
-    print(f"[{label}] p@k on the SAME held-out cycles, every ranking:")
+    print(f"[{label}] p@k on the SAME held-out cycles, every ranking "
+          f"(the 'oracle' row IS the supervised re-ranker -- the row name is "
+          f"the unchanged wire-format key, not a claim about the model):")
     print(f"  {'ranking':<10}" + "".join(f"{'p@' + str(k):>12}" for k in KS))
     for name in RANKINGS:
         print(f"  {name:<10}"
               + "".join(f"{report['precision_at'][k][name]:>12.4f}" for k in KS))
     print()
-    print(f"[{label}] oracle / blend ratio, one denominator at last:")
+    print(f"[{label}] supervised re-ranker / v1 hand-set blend ratio, "
+          f"one denominator at last:")
     for k in KS:
         r = report["oracle_over_blend"][k]
         print(f"  k={k:<4} " + ("n/a" if r is None else f"{r:.2f}x"))
     print()
-    print(f"[{label}] paired bootstrap deltas over the held-out cycles:")
+    print(f"[{label}] paired bootstrap deltas over the held-out cycles "
+          f"(oracle-X = supervised re-ranker minus baseline X):")
     for key in sorted(report["paired"]):
         d = report["paired"][key]
         flag = "REAL" if d["excludes_zero"] else "includes zero"
         print(f"  {key:<20} {d['point']:+.4f} "
               f"[{d['lo']:+.4f}, {d['hi']:+.4f}]  {flag}")
 
-    return {"label": label, "n_pool": len(records), "n_train": len(train),
+    return {"label": label, "role": role, "framing": framing,
+            "n_pool": len(records), "n_train": len(train),
             "n_positive_train": n_pos_train, "split_t": split_t,
             "trainable": True, **report}
 
@@ -353,13 +508,18 @@ def main() -> None:
     stream = Stream(ROOT / "data" / "stream")
     registry = AccountRegistry.load(ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
 
-    print("=== collecting candidate pool: AS-IS (real seeding) ===")
+    print("=== collecting candidate pool: AS-IS (real seeding, no cheat) ===")
     as_is_records, as_is_first_t = collect_pool(stream, registry, seed_perfect=False)
-    as_is_report = train_and_report(as_is_records, as_is_first_t, "oracle-as-is")
+    as_is_report = train_and_report(
+        as_is_records, as_is_first_t, "oracle-as-is",
+        role=AS_IS_ROLE, framing=AS_IS_FRAMING)
 
-    print("\n=== collecting candidate pool: PERFECT SEEDING (ceiling diagnostic) ===")
+    print("\n=== collecting candidate pool: PERFECT SEEDING "
+          "(SEED-CHEAT, ceiling diagnostic only) ===")
     perfect_records, perfect_first_t = collect_pool(stream, registry, seed_perfect=True)
-    perfect_report = train_and_report(perfect_records, perfect_first_t, "oracle-on-all-rings")
+    perfect_report = train_and_report(
+        perfect_records, perfect_first_t, "oracle-on-all-rings",
+        role=ON_ALL_RINGS_ROLE, framing=ON_ALL_RINGS_FRAMING)
 
     # snap ML / IBM Graph Feature Preprocessor control -- documented, not run.
     try:
@@ -396,7 +556,16 @@ def main() -> None:
     # measurement of feature quality -- so an interpretation reasoned from it
     # contradicted the corrected reading of its own file. It is replaced by the
     # quantity docs/ARCHITECTURE_UPLIFT.md item 0.1 actually pre-registers a
-    # decision rule on: the oracle/blend p@k ratio, on ONE denominator.
+    # decision rule on: the supervised/blend p@k ratio, on ONE denominator.
+    #
+    # The branch structure and its thresholds (>=2x / >=1.5x / <1.5x) are
+    # PRE-REGISTERED in docs/ARCHITECTURE_UPLIFT.md and are unchanged here --
+    # retuning a pre-registered threshold after seeing the number is the exact
+    # move this repo refuses to make. Only the WORDS changed: each branch now
+    # reports run 1 as the supervised re-ranker result it is, rather than as a
+    # diagnostic verdict about somebody else's plan, and every branch carries
+    # the label dependency in the same string as the number, because a reader
+    # who sees the ratio without the label tax has been misled.
     interpretation = None
     if as_is_report.get("trainable"):
         r10 = as_is_report["oracle_over_blend"].get(10)
@@ -405,31 +574,56 @@ def main() -> None:
         best = max(seen) if seen else None
         if best is None:
             interpretation = ("blend p@k is zero on the held-out cycles, so the "
-                               "ratio is undefined; compare absolute p@k instead.")
+                               "ratio is undefined; compare absolute p@k instead. "
+                               + LABEL_TAX)
         elif best >= 2.0:
             interpretation = (
-                f"oracle/blend >= 2x on the same held-out cycles (k=10: {r10}, "
-                f"k=20: {r20}). The scorer, not the feature set, is the binding "
-                f"constraint: a supervised model on these same features extracts "
-                f"materially more from them than the hand-set blend does. The "
-                f"uplift plan's centrepiece stands.")
+                f"RESULT. A supervised re-ranker on the existing candidate "
+                f"features, evaluated on a ring-disjoint held-out split "
+                f"(time-ordered on the negative pool), ranks at >=2x the "
+                f"shipped v1 hand-set blend on the same "
+                f"held-out cycles (k=10: {r10}, k=20: {r20}), with the paired "
+                f"bootstrap delta reported above. The features carry more signal "
+                f"than the hand-set scorer extracts from them: the scorer, not "
+                f"the feature set, is the binding constraint, and the uplift "
+                f"plan's centrepiece stands. {LABEL_TAX}")
         elif best >= 1.5:
             interpretation = (
-                f"oracle/blend between 1.5x and 2x (k=10: {r10}, k=20: {r20}). "
-                f"Weaker than the pre-prune 2.8x the plan was written from. There "
-                f"is still scorer headroom, but the case for a ranker rewrite is "
-                f"no longer strong on its own and must be weighed against feature "
-                f"work.")
+                f"RESULT, but a modest one. The supervised re-ranker on the "
+                f"ring-disjoint held-out split (time-ordered on the negative "
+                f"pool) ranks between 1.5x "
+                f"and 2x the v1 hand-set blend on the same cycles (k=10: {r10}, "
+                f"k=20: {r20}) -- weaker than the pre-prune 2.8x the plan was "
+                f"written from. There is still scorer headroom, but the case for "
+                f"a ranker rewrite is no longer strong on its own and must be "
+                f"weighed against feature work. {LABEL_TAX}")
         else:
             interpretation = (
-                f"oracle/blend below 1.5x (k=10: {r10}, k=20: {r20}). PLAN-"
-                f"INVALIDATING by the pre-registration in "
-                f"docs/ARCHITECTURE_UPLIFT.md section 8 item 0.1: the ceiling the "
-                f"'scorer is the bottleneck' conclusion rested on does not survive "
-                f"post-prune measurement. Re-scope toward features, not a ranker.")
+                f"RESULT, and it does not clear the pre-registered bar. The "
+                f"supervised re-ranker on the ring-disjoint held-out split "
+                f"(time-ordered on the negative pool) ranks below 1.5x the "
+                f"v1 hand-set blend on the "
+                f"same cycles (k=10: {r10}, k=20: {r20}). PLAN-INVALIDATING by "
+                f"the pre-registration in docs/ARCHITECTURE_UPLIFT.md section 8 "
+                f"item 0.1: the headroom the 'scorer is the bottleneck' "
+                f"conclusion rested on does not survive post-prune measurement. "
+                f"Re-scope toward features, not a ranker. {LABEL_TAX}")
         print()
         print(f"Interpretation: {interpretation}")
 
+    # WHY THE KEYS DID NOT MOVE WITH THE FRAMING. `oracle_as_is`,
+    # `oracle_on_all_rings`, `oracle_over_blend` and the ranking name "oracle"
+    # inside `precision_at` / `precision_ci` / `paired` (including the
+    # "oracle-blend@10" delta key format) are the wire format. scripts/
+    # eval_ranker.py, scripts/gfp_control.py, the tests, and any diff against
+    # an already-written data/eval_oracle.json all read them, so renaming them
+    # would break readers and silently invalidate every stored comparison for
+    # no measurement gain. The framing changed; the wire format did not. The
+    # words a reader needs are carried ADDITIVELY instead, in each run's
+    # "role"/"framing" and in "label_dependency" below -- so a later reader who
+    # notices the mismatch between the key "oracle" and the label "supervised
+    # re-ranker" is looking at deliberate backward compatibility, not at a
+    # leftover claim.
     out = {
         "measured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "prune_strategy": PRUNE_STRATEGY,
@@ -440,10 +634,26 @@ def main() -> None:
         "gfp_control": gfp_note,
         "interpretation": interpretation,
         "interpretation_basis": (
-            "oracle/blend p@k ratio on the oracle's own held-out cycles. The "
-            "f1 field is retained for continuity and is NOT interpreted: a fixed "
-            "0.5 threshold on a pool with ~0.1% positives measures the threshold, "
-            "not the model."),
+            "supervised/blend p@k ratio on run 1's own held-out cycles (the "
+            "supervised model is keyed 'oracle' for backward compatibility). "
+            "The f1 field is retained for continuity and is NOT interpreted: a "
+            "fixed 0.5 threshold on a pool with ~0.1% positives measures the "
+            "threshold, not the model."),
+        "run_roles": {
+            "oracle_as_is": AS_IS_ROLE,
+            "oracle_on_all_rings": ON_ALL_RINGS_ROLE,
+        },
+        "label_dependency": LABEL_TAX,
+        "key_naming_note": (
+            "The keys 'oracle_as_is', 'oracle_on_all_rings', "
+            "'oracle_over_blend' and the ranking name 'oracle' are frozen wire "
+            "format kept for backward compatibility with scripts/eval_ranker.py, "
+            "scripts/gfp_control.py, the tests, and previously written copies of "
+            "this file. Run 1 ('oracle_as_is') is a SUPERVISED RE-RANKER RESULT "
+            "on a ring-disjoint held-out split (time-ordered on the negative "
+            "pool -- see 'framing'); only run 2 "
+            "('oracle_on_all_rings'), which cheats at seeding, is a ceiling "
+            "diagnostic. See 'run_roles'."),
     }
     (ROOT / "data" / "eval_oracle.json").write_text(json.dumps(out, indent=2, default=str))
     print("\nwritten to data/eval_oracle.json")

@@ -11,9 +11,14 @@ readme = "README.md"
 
 # Runtime dependencies are pinned loosely and mirrored in requirements.txt,
 # which remains the file the run scripts use. Two facts worth keeping visible:
-# `snapml` is absent deliberately (no build past 3.11, see docs/HANDOFF.md 4),
-# and `lightgbm` is required only by the evaluation scripts, never by the
-# detector.
+# `snapml` 1.15.6 installs and imports fine on this Windows Python 3.11 venv --
+# it is not absent. What has no Windows build at any snapml version is the
+# Graph Feature Preprocessor's native half: constructing
+# `GraphFeaturePreprocessor()` raises AttributeError because none of the
+# Windows .pyd binaries export a `gf_*` symbol (see scripts/gfp_control.py).
+# That is why no GFP parity control can run on this machine; it is not a
+# Python-version problem and a newer interpreter cannot fix it. `lightgbm` is
+# required only by the evaluation scripts, never by the detector.
 dependencies = [
     "numpy",
     "pandas",

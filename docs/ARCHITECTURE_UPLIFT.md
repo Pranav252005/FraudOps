@@ -1,5 +1,43 @@
 # Architecture uplift plan
 
+> ## SUPERSEDED IN PART — read [`docs/HANDOFF.md` §3](HANDOFF.md#3-where-the-numbers-actually-stand) first
+>
+> This document is kept as the **historical planning record** it is. Most of it
+> still stands. Three specific things in it do not, and they are named here so
+> nobody has to discover it by diffing against the JSONs:
+>
+> 1. **The §0 table's oracle p@10 / p@20 / AP figures** were measured on the
+>    *pre-prune* candidate pool (`data/eval_oracle.json` as of 26 Aug). The
+>    oracle has since been re-run post-prune and the numbers moved: real
+>    seeding is now **AP 0.2285, p@10 0.2778, p@20 0.1500** (was AP 0.1875,
+>    p@10 0.239, p@20 0.153); perfect seeding is now **AP 0.0889, p@10 0.3833,
+>    p@20 0.2639** (was AP 0.2678, p@10 0.467, p@20 0.475). The table below is
+>    corrected in place, with the superseded values kept in parentheses. The
+>    §0 prose around it, and every downstream sentence that reasons from 0.239
+>    or 0.467, still quotes the old pool and has **not** been rewritten.
+> 2. **"The oracle says the existing ~50 features hold ~2.8× more signal"**
+>    (§3.2, and the §0 discussion of finding 1) is withdrawn. That ratio
+>    compared a p@10 measured over ~17 held-out cycles against a blend p@10
+>    measured over all 34 cycles in a different script — two denominators, so
+>    as `scripts/eval_oracle.py`'s own docstring now puts it, it "was not a
+>    ratio of anything". The replacement, on one denominator and one set of
+>    held-out cycles, is the supervised/blend ratio stored in
+>    `oracle_over_blend`: **5.56× at k=10, 3.86× at k=20, 2.82× at k=50**.
+> 3. **§12.4's framing of run 1 as a "true-label oracle" and a ceiling** is
+>    superseded. Run 1 is a **supervised re-ranker result on a ring-disjoint
+>    held-out split**, with a label dependency; only run 2, which cheats at
+>    seeding, remains a ceiling diagnostic. It is also not a ceiling on the
+>    features — it is the best these features have been made to do so far, and
+>    a second fit in `scripts/eval_ranker.py` reproduces it exactly on the same
+>    split (`data/eval_ranker.json`). §12.4's instruction "do not let the
+>    oracle number migrate into this sentence" was aimed at the *no-label
+>    ceiling estimate*, and that instruction still holds for that estimate; the
+>    README now quotes the supervised number as a result elsewhere, which is a
+>    different sentence and a deliberate change. §12.4 is left as written.
+>
+> Everything else here is the plan as it was written. Where it disagrees with
+> `docs/HANDOFF.md` §3 or `README.md`, those files win.
+
 **Status:** plan only. Nothing here is implemented. Written 29 Aug 2026 against
 commit `ee0607d`.
 
@@ -21,7 +59,10 @@ with the method.
 
 ## 0. The state this plans from
 
-All post-correction, all from `docs/HANDOFF.md` §3–§5e and `data/*.json`.
+All post-correction, all from `docs/HANDOFF.md` §3–§5e and `data/*.json` — **as
+those files stood when this was written.** Two rows have since been superseded
+by a re-run and are corrected in place below; see the banner at the top of this
+file for what moved and what it moved to.
 
 | quantity | value |
 |---|---|
@@ -31,8 +72,8 @@ All post-correction, all from `docs/HANDOFF.md` §3–§5e and `data/*.json`.
 | p@10 / p@20 / p@50 (size baseline, post-prune) | 0.088 / 0.074 / 0.049 |
 | paired (score − size), post-prune | k=10 +0.009 [−0.027,+0.041]; k=20 +0.006 [−0.021,+0.031]; k=50 −0.007 [−0.019,+0.005]; k=100 −0.009 [−0.016,−0.002] |
 | paired prune gain (leaf2 − none) | k=10 not a gain; k=20/50/100 real |
-| oracle (LightGBM, true labels, same features), real seeding | AP 0.1875, p@10 0.239, p@20 0.153 |
-| oracle, perfect seeding | AP 0.2678, p@10 0.467, p@20 0.475 |
+| oracle (LightGBM, true labels, same features), real seeding | AP 0.2285, p@10 0.2778, p@20 0.1500 *(was AP 0.1875, p@10 0.239, p@20 0.153 — that row predates the current post-prune run of `scripts/eval_oracle.py`)* |
+| oracle, perfect seeding (run 2, seed-cheat diagnostic) | AP 0.0889, p@10 0.3833, p@20 0.2639 *(was AP 0.2678, p@10 0.467, p@20 0.475 — same reason)* |
 | re-ranker lift over v1 | every paired CI at k=5/10/20/50 includes zero (n=17 cycles) |
 | threshold-free transaction level | AP 0.0113 vs 0.0067 base = 1.7× |
 | structural recall ceiling | 73.3% |
@@ -933,7 +974,7 @@ not rescue LambdaMART, because beating v1 was never the question.
 
 #### 12.2 The headroom is real, and the constraint is NOT sample size
 
-The framing this work started from was: *the oracle reaches p@10 0.2667 where
+The framing this work started from was: *the oracle reaches p@10 0.2778 where
 the blend reaches 0.0500, LambdaMART is step one, and if its CI includes zero
 at n=17 then the constraint is sample size.* **The measurement says otherwise.**
 The CI against the shipped blend does not include zero — it excludes it

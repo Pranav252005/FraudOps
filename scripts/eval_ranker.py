@@ -13,10 +13,18 @@ cut. LambdaMART weights each pairwise swap by the change it causes in the
 ranking metric, which concentrates the gradient at the top of each cycle's list
 (Burges, MSR-TR-2010-82).
 
-Four models, all on the same features, same pool, same ring-disjoint
-time-ordered split:
+Four models, all on the same features, same pool, same ring-disjoint split
+(time-ordered on the negative pool only -- positives follow their ring; see
+ring_time_split in scripts/eval_oracle.py for why that trade is taken):
 
-  pointwise            LGBMClassifier -- the existing oracle, for reference
+  pointwise            LGBMClassifier -- an independent re-fit of the same
+                       supervised re-ranker scripts/eval_oracle.py run 1
+                       reports, on this pool and the same ring-disjoint split.
+                       Keyed "pointwise" here and "oracle" there; both are
+                       trained on TRUE ring labels, which a deployment does not
+                       have. It is a reference arm for the listwise comparison
+                       AND the second reading of that result: 0.2778 here and
+                       0.2778 there -- two scripts, identical to every digit.
   lambdamart           LGBMRanker, objective=lambdarank, group = cycle
   lambdamart_intensive LGBMRanker on the SIZE-BLIND feature subset only
   pointwise_intensive  LGBMClassifier on the same subset, to separate "listwise
