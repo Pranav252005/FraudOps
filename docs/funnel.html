@@ -1,0 +1,563 @@
+<title>Sentinel Detection Funnel</title>
+
+<style>
+:root{
+  --ground:#F3F5F4;
+  --surface:#FFFFFF;
+  --surface-2:#EAEEED;
+  --ink:#12191B;
+  --ink-2:#33413F;
+  --muted:#5A6A6D;
+  --line:#D2DAD8;
+  --line-2:#BCC7C4;
+  --accent:#0F766E;
+  --accent-soft:#DCEEEB;
+  --warn:#B45309;
+  --warn-soft:#FBEFDF;
+  --crit:#9F1239;
+  --crit-soft:#FBE5EA;
+  --ok:#15803D;
+  --ok-soft:#E1F2E6;
+  --shadow:0 1px 2px rgba(18,25,27,.05), 0 8px 24px -16px rgba(18,25,27,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1416;
+    --surface:#151D20;
+    --surface-2:#1C2528;
+    --ink:#E4EAE9;
+    --ink-2:#B9C6C4;
+    --muted:#889895;
+    --line:#283537;
+    --line-2:#3A4A4C;
+    --accent:#3FB3A6;
+    --accent-soft:#12312E;
+    --warn:#E0A264;
+    --warn-soft:#2E2313;
+    --crit:#E88BA1;
+    --crit-soft:#2E151C;
+    --ok:#5FBF83;
+    --ok-soft:#132A1C;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1416;
+  --surface:#151D20;
+  --surface-2:#1C2528;
+  --ink:#E4EAE9;
+  --ink-2:#B9C6C4;
+  --muted:#889895;
+  --line:#283537;
+  --line-2:#3A4A4C;
+  --accent:#3FB3A6;
+  --accent-soft:#12312E;
+  --warn:#E0A264;
+  --warn-soft:#2E2313;
+  --crit:#E88BA1;
+  --crit-soft:#2E151C;
+  --ok:#5FBF83;
+  --ok-soft:#132A1C;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+}
+
+/* Same three families the console design names, as pure system stacks: the
+   named face is used when the reader happens to have it, and the fallback
+   degrades in the same direction. Nothing is fetched. */
+:root{
+  --sans:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.62;
+  margin:0;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+.shell{max-width:960px;margin:0 auto;padding:0 20px 96px}
+@media(min-width:900px){.shell{padding:0 40px 120px}}
+
+/* ---------- masthead ---------- */
+header{padding:64px 0 12px}
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:20px;
+}
+h1{
+  font-family:var(--serif);
+  font-weight:500;
+  font-size:clamp(36px,6vw,58px);
+  line-height:1.03;letter-spacing:-.018em;
+  margin:0 0 22px;text-wrap:balance;
+}
+.standfirst{
+  font-family:var(--serif);
+  font-size:clamp(18px,2.3vw,22px);
+  line-height:1.5;color:var(--ink-2);
+  max-width:62ch;margin:0 0 30px;
+}
+.meta{
+  display:flex;flex-wrap:wrap;gap:8px 28px;
+  font-family:var(--mono);
+  font-size:11.5px;color:var(--muted);
+}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- sections ---------- */
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:none}
+h2{
+  font-family:var(--serif);
+  font-weight:500;font-size:clamp(25px,3.4vw,34px);
+  line-height:1.14;letter-spacing:-.012em;
+  margin:0 0 8px;text-wrap:balance;
+}
+.h2num{
+  font-family:var(--mono);
+  font-size:11px;letter-spacing:.14em;color:var(--accent);
+  display:block;margin-bottom:12px;
+}
+.deck{color:var(--muted);font-size:16px;margin:0 0 30px;max-width:64ch}
+h3{font-family:var(--sans);font-weight:600;font-size:17px;margin:34px 0 10px}
+p{margin:0 0 17px;max-width:70ch}
+strong{font-weight:600;color:var(--ink)}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--surface-2);padding:.1em .34em;border-radius:3px}
+ul{margin:0 0 17px;padding-left:20px;max-width:70ch}
+li{margin-bottom:8px}
+li::marker{color:var(--muted)}
+
+/* ---------- the three-beat story ---------- */
+.story{
+  display:grid;gap:14px;margin:0 0 8px;
+  grid-template-columns:1fr;
+}
+@media(min-width:760px){.story{grid-template-columns:repeat(3,1fr)}}
+.beat{
+  background:var(--surface);border:1px solid var(--line);
+  border-top:2px solid var(--accent);
+  padding:16px 18px 18px;
+}
+.beat .k{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--accent);display:block;margin-bottom:6px;
+}
+.beat p{margin:0;font-size:14.5px;color:var(--ink-2);line-height:1.5}
+.beat.t{border-top-color:var(--warn)}
+.beat.t .k{color:var(--warn)}
+.beat.c{border-top-color:var(--ok)}
+.beat.c .k{color:var(--ok)}
+
+/* ---------- callouts ---------- */
+.note{
+  background:var(--surface);border:1px solid var(--line);
+  border-left:2px solid var(--accent);
+  padding:18px 20px;margin:24px 0;font-size:15px;
+}
+.note.warn{border-left-color:var(--warn)}
+.note.crit{border-left-color:var(--crit)}
+.note p:last-child{margin-bottom:0}
+.note-tag{
+  font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent);display:block;margin-bottom:7px;
+}
+.note.warn .note-tag{color:var(--warn)}
+.note.crit .note-tag{color:var(--crit)}
+
+/* ---------- chips ---------- */
+.chip{
+  display:inline-block;font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:3px;white-space:nowrap;
+  background:var(--surface-2);color:var(--muted);border:1px solid var(--line);
+}
+.chip.cut{background:var(--crit-soft);color:var(--crit);border-color:transparent}
+.chip.desc{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.build{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+
+/* ---------- figures ---------- */
+figure{margin:32px 0;padding:0}
+.figbox{background:var(--surface);border:1px solid var(--line);padding:24px 20px}
+.figscroll{overflow-x:auto}
+.fig svg{display:block;width:100%;min-width:600px;height:auto;color:var(--ink)}
+.fig .lbl{fill:var(--ink);font-family:var(--sans);font-size:13px}
+.fig .lbl-b{fill:var(--ink);font-family:var(--sans);font-size:13px;font-weight:600}
+.fig .lbl-s{fill:var(--muted);font-family:var(--mono);font-size:10.5px}
+.fig .lbl-n{fill:var(--ink);font-family:var(--mono);font-size:12.5px}
+.fig .lbl-inv{fill:var(--surface);font-family:var(--mono);font-size:12.5px}
+.fig .loss{font-family:var(--mono);font-size:13px;font-weight:600;fill:var(--warn)}
+.fig .loss-x{font-family:var(--mono);font-size:13px;font-weight:600;fill:var(--crit)}
+.fig .bar{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1}
+.fig .bar-solid{fill:var(--accent);stroke:none}
+.fig .bar-lost{fill:var(--crit);stroke:none}
+.fig .rail{fill:var(--surface-2);stroke:var(--line);stroke-width:1}
+.fig .tick{stroke:var(--line-2);stroke-width:1;stroke-dasharray:3 3}
+figcaption{
+  font-size:13px;color:var(--muted);margin-top:12px;
+  padding-top:10px;border-top:1px solid var(--line);max-width:70ch;
+}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:24px 0;border:1px solid var(--line);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{
+  font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;background:var(--surface-2);
+}
+th.num,td.num{text-align:right}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.typ{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.destroyed td{background:var(--crit-soft)}
+tr.destroyed td.typ{font-weight:600;color:var(--crit);box-shadow:inset 3px 0 0 var(--crit)}
+tr.total td{background:var(--surface-2);font-weight:600;border-top:1px solid var(--line-2)}
+
+/* inline built-share bar inside the table */
+.mini{display:block;height:7px;width:110px;background:var(--surface-2);
+      border:1px solid var(--line);position:relative}
+.mini i{display:block;height:100%;background:var(--accent)}
+tr.destroyed .mini i{background:var(--crit)}
+
+/* ---------- provenance ---------- */
+footer{padding:44px 0 0;border-top:1px solid var(--line);
+       font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.75}
+footer b{color:var(--ink-2);font-weight:500}
+footer p{max-width:78ch;margin:0 0 12px}
+</style>
+
+<div class="shell">
+
+<header>
+  <div class="eyebrow">Sentinel · ring detection · AMLworld HI-Small</div>
+  <h1>Where the loss lives</h1>
+  <p class="standfirst">Of 259 labelled fraud rings active in the evaluation
+  window, 49 reach an analyst's top-50 queue. This is the stage-by-stage
+  account of the other 210 — and of which single stage is worth fixing.</p>
+  <div class="meta">
+    <span>source <b>data/funnel.json</b> · <b>data/funnel.csv</b></span>
+    <span>run <b>34 generation runs</b></span>
+    <span>rank_k <b>50</b></span>
+    <span>rings <b>259</b></span>
+  </div>
+</header>
+
+<section>
+  <span class="h2num">01 / THE STORY IN ONE LINE</span>
+  <h2>The funnel diagnoses. The re-ranker treats. The paired bootstrap confirms.</h2>
+  <p class="deck">Three artefacts, one argument. None of them is a claim on its
+  own.</p>
+
+  <div class="story">
+    <div class="beat">
+      <span class="k">Diagnose</span>
+      <p>The funnel splits ring recall into four stages and names the expensive
+      one: <strong>ranking, −43.6 points</strong>, larger than seeding and
+      building combined.</p>
+    </div>
+    <div class="beat t">
+      <span class="k">Treat</span>
+      <p>A supervised re-ranker attacks exactly that stage and reaches
+      <strong>p@10 0.2778</strong> against the shipped hand-set blend's 0.0500
+      — trained on ground-truth ring labels, which a deployment does not have.</p>
+    </div>
+    <div class="beat c">
+      <span class="k">Confirm</span>
+      <p>Paired bootstrap over the same held-out cycles, not two separate runs:
+      <strong>+0.2278 [+0.1167, +0.3500]</strong>. The interval excludes zero,
+      so the lift survives resampling.</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="note-tag">Caveat, in the same breath</span>
+    <p>The 0.2778 is a <strong>label-advantaged</strong> number: the model is
+    fitted on ground-truth ring labels that no deployment has on day one. It is
+    what these features support when the labels are perfect, and it is never
+    quoted as a production figure. The re-ranker figures come from
+    <code>data/eval_oracle.json</code>, not from the funnel run on this page.</p>
+  </div>
+</section>
+
+<section>
+  <span class="h2num">02 / THE FUNNEL</span>
+  <h2>Four stages, and where each one costs</h2>
+  <p class="deck">Distinct rings, counted once if they clear a stage in any
+  cycle. Percentages are of the 259 rings that are structurally reachable at
+  all; the loss column is the drop in percentage points of ring recall.</p>
+
+  <figure class="fig">
+    <div class="figbox figscroll">
+      <svg viewBox="0 0 760 330" role="img"
+           aria-label="Detection funnel: 259 seed-reachable rings, 230 seeded, 162 built, 49 ranked into the top 50.">
+        <!-- 100% rail -->
+        <line class="tick" x1="196" y1="18" x2="196" y2="312"></line>
+        <line class="tick" x1="676" y1="18" x2="676" y2="312"></line>
+        <text class="lbl-s" x="676" y="326" text-anchor="end">100% of 259 rings</text>
+
+        <!-- stage 1: seed-reachable 259 / 100.0% -->
+        <text class="lbl-b" x="186" y="44" text-anchor="end">seed-reachable</text>
+        <text class="lbl-s" x="186" y="60" text-anchor="end">in the graph at all</text>
+        <rect class="bar-solid" x="196" y="26" width="480" height="42"></rect>
+        <text class="lbl-inv" x="208" y="52">259 · 100.0%</text>
+
+        <!-- loss 1 -->
+        <text class="loss" x="196" y="88">▼ −11.2 pts</text>
+        <text class="lbl-s" x="286" y="88">seeding — 29 rings never carry a pass-through account</text>
+
+        <!-- stage 2: seeded 230 / 88.8% -->
+        <text class="lbl-b" x="186" y="120" text-anchor="end">seeded</text>
+        <text class="lbl-s" x="186" y="136" text-anchor="end">a seed fired inside it</text>
+        <rect class="rail" x="196" y="102" width="480" height="42"></rect>
+        <rect class="bar-solid" x="196" y="102" width="426" height="42"></rect>
+        <text class="lbl-inv" x="208" y="128">230 · 88.8%</text>
+
+        <!-- loss 2 -->
+        <text class="loss" x="196" y="164">▼ −26.3 pts</text>
+        <text class="lbl-s" x="286" y="164">build — expansion or pruning discards 68 rings that were found</text>
+
+        <!-- stage 3: built 162 / 62.5% -->
+        <text class="lbl-b" x="186" y="196" text-anchor="end">built</text>
+        <text class="lbl-s" x="186" y="212" text-anchor="end">a candidate covers it</text>
+        <rect class="rail" x="196" y="178" width="480" height="42"></rect>
+        <rect class="bar-solid" x="196" y="178" width="300" height="42"></rect>
+        <text class="lbl-inv" x="208" y="204">162 · 62.5%</text>
+
+        <!-- loss 3 -->
+        <text class="loss-x" x="196" y="240">▼ −43.6 pts</text>
+        <text class="lbl-s" x="286" y="240">ranking — 113 covered rings miss the top 50</text>
+        <text class="loss-x" x="676" y="240" text-anchor="end">LARGEST LOSS</text>
+
+        <!-- stage 4: ranked 49 / 18.9% -->
+        <text class="lbl-b" x="186" y="272" text-anchor="end">ranked</text>
+        <text class="lbl-s" x="186" y="288" text-anchor="end">inside the top 50</text>
+        <rect class="rail" x="196" y="254" width="480" height="42"></rect>
+        <rect class="bar-lost" x="196" y="254" width="91" height="42"></rect>
+        <text class="lbl-n" x="299" y="280">49 · 18.9%</text>
+      </svg>
+    </div>
+    <figcaption>Stage counts and recalls from
+    <code>data/funnel.json</code> → <code>funnel_by_typology</code> (TOTAL row);
+    losses from <code>stage_losses_pts</code>, computed in
+    <code>scripts/eval_funnel.py</code> from the measured recalls. Bar lengths
+    are proportional to recall.</figcaption>
+  </figure>
+
+  <div class="note crit">
+    <span class="note-tag">The headline</span>
+    <p><strong>Ranking is the single largest loss in the funnel, at 43.6
+    points</strong> — more rings are lost between <em>built</em> and
+    <em>ranked</em> than at seeding and building put together. A candidate that
+    structurally covers the ring already exists; the scorer does not put it in
+    the top 50. On this same run the shipped scorer measures
+    <strong>p@10 = 0.097 [0.068, 0.126]</strong>
+    (<code>data/funnel.json</code> → <code>metric_cis</code>).</p>
+  </div>
+</section>
+
+<section>
+  <span class="h2num">03 / PER TYPOLOGY</span>
+  <h2>The build stage's 26 points are two typologies, not eight</h2>
+  <p class="deck">Six of the eight ring shapes carry 77–96% of their seeded
+  rings through the build stage. Two do not. The interpretation label is derived
+  in code from each row's own build retention — built ÷ seeded — not from a
+  hand-written per-typology lookup.</p>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr>
+          <th>typology</th>
+          <th class="num">total</th>
+          <th class="num">seeded</th>
+          <th class="num">built</th>
+          <th>built share</th>
+          <th class="num">ranked</th>
+          <th class="num">retention</th>
+          <th>interpretation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="destroyed">
+          <td class="typ">BIPARTITE</td>
+          <td class="num">31</td><td class="num">28 · 90.3%</td>
+          <td class="num">5 · 16.1%</td>
+          <td><span class="mini"><i style="width:16.1%"></i></span></td>
+          <td class="num">1 · 3.2%</td><td class="num">0.18</td>
+          <td><span class="chip cut">build-destroyed</span></td>
+        </tr>
+        <tr class="destroyed">
+          <td class="typ">STACK</td>
+          <td class="num">30</td><td class="num">30 · 100.0%</td>
+          <td class="num">9 · 30.0%</td>
+          <td><span class="mini"><i style="width:30.0%"></i></span></td>
+          <td class="num">2 · 6.7%</td><td class="num">0.30</td>
+          <td><span class="chip cut">build-destroyed</span></td>
+        </tr>
+        <tr>
+          <td class="typ">SCATTER-GATHER</td>
+          <td class="num">31</td><td class="num">28 · 90.3%</td>
+          <td class="num">27 · 87.1%</td>
+          <td><span class="mini"><i style="width:87.1%"></i></span></td>
+          <td class="num">10 · 32.3%</td><td class="num">0.96</td>
+          <td><span class="chip desc">ranking-limited</span></td>
+        </tr>
+        <tr>
+          <td class="typ">GATHER-SCATTER</td>
+          <td class="num">38</td><td class="num">35 · 92.1%</td>
+          <td class="num">31 · 81.6%</td>
+          <td><span class="mini"><i style="width:81.6%"></i></span></td>
+          <td class="num">9 · 23.7%</td><td class="num">0.89</td>
+          <td><span class="chip desc">ranking-limited</span></td>
+        </tr>
+        <tr>
+          <td class="typ">CYCLE</td>
+          <td class="num">37</td><td class="num">31 · 83.8%</td>
+          <td class="num">28 · 75.7%</td>
+          <td><span class="mini"><i style="width:75.7%"></i></span></td>
+          <td class="num">7 · 18.9%</td><td class="num">0.90</td>
+          <td><span class="chip desc">ranking-limited</span></td>
+        </tr>
+        <tr>
+          <td class="typ">FAN-OUT</td>
+          <td class="num">36</td><td class="num">30 · 83.3%</td>
+          <td class="num">24 · 66.7%</td>
+          <td><span class="mini"><i style="width:66.7%"></i></span></td>
+          <td class="num">9 · 25.0%</td><td class="num">0.80</td>
+          <td><span class="chip">ordinary attrition</span></td>
+        </tr>
+        <tr>
+          <td class="typ">FAN-IN</td>
+          <td class="num">30</td><td class="num">26 · 86.7%</td>
+          <td class="num">21 · 70.0%</td>
+          <td><span class="mini"><i style="width:70.0%"></i></span></td>
+          <td class="num">4 · 13.3%</td><td class="num">0.81</td>
+          <td><span class="chip">ordinary attrition</span></td>
+        </tr>
+        <tr>
+          <td class="typ">RANDOM</td>
+          <td class="num">26</td><td class="num">22 · 84.6%</td>
+          <td class="num">17 · 65.4%</td>
+          <td><span class="mini"><i style="width:65.4%"></i></span></td>
+          <td class="num">7 · 26.9%</td><td class="num">0.77</td>
+          <td><span class="chip">ordinary attrition</span></td>
+        </tr>
+        <tr class="total">
+          <td class="typ">TOTAL</td>
+          <td class="num">259</td><td class="num">230 · 88.8%</td>
+          <td class="num">162 · 62.5%</td>
+          <td><span class="mini"><i style="width:62.5%"></i></span></td>
+          <td class="num">49 · 18.9%</td><td class="num">0.70</td>
+          <td><span class="chip">aggregate</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The three <span class="chip desc">ranking-limited</span> rows lose almost
+  nothing at build and 55–58 points at ranking. The three
+  <span class="chip">ordinary attrition</span> rows lose steadily at every
+  stage. The two <span class="chip cut">build-destroyed</span> rows are a
+  different failure entirely — and together they are the build stage's 26
+  points.</p>
+</section>
+
+<section>
+  <span class="h2num">04 / THE NAMED BUG</span>
+  <h2>STACK is found 30 times out of 30, and then thrown away</h2>
+
+  <p><strong>Nothing is wrong with <em>finding</em> these rings.</strong> STACK
+  is seeded 30 of 30 — perfectly, the only typology on the page that is. All 30
+  were located by the seed rule; 21 of them never become a candidate. The step
+  that discards them runs <em>after</em> discovery, in expansion or pruning.
+  BIPARTITE is the same failure at 28 of 31 seeded and 5 built.</p>
+
+  <p>That makes it a <strong>bounded, well-localised bug hunt</strong> with a
+  known input and a known output, and the highest-value remaining engineering
+  task that is not the re-ranker. Whether it can be closed in the time remaining
+  is genuinely uncertain — the two obvious knobs have already been ruled out by
+  experiment (<code>data/build_diagnosis_h3.json</code>,
+  <code>data/build_diagnosis_h2_d500.json</code>), so this is not a tuning pass.
+  <strong>Naming it precisely is itself the deliverable.</strong></p>
+
+  <p class="deck">Why it isn't a tuning pass, in the numbers that make it one:
+  the failure splits roughly in half between two causes that want <em>opposite</em>
+  fixes, at the shipped config (<code>hops=2</code>, <code>max_degree=50</code>,
+  pre-prune counts, <code>data/build_diagnosis_h2_d50.json</code>):</p>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr>
+          <th>typology</th>
+          <th class="num">seeded</th>
+          <th class="num">containment_fail</th>
+          <th class="num">dilution_fail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="typ">BIPARTITE</td>
+          <td class="num">28</td><td class="num">12</td><td class="num">16</td>
+        </tr>
+        <tr>
+          <td class="typ">STACK</td>
+          <td class="num">30</td><td class="num">14</td><td class="num">14</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="deck"><strong>containment_fail</strong> — expansion never reached the
+  ring at all; the fix is to expand harder.
+  <strong>dilution_fail</strong> — expansion reached it, then buried it under
+  neighbourhood noise until Jaccard fell below 0.3; the fix is to expand less
+  and prune better. Both knobs have already been tried and both failed on this
+  same pre-prune measurement: <code>hops</code> 2→3 made it worse (BIPARTITE
+  built 0→0, STACK 2→1, as mean candidate size roughly doubled and best Jaccard
+  fell); the hub-degree guard 50→500 changed nothing at all on either typology.
+  That is why one knob cannot fix this — the two halves of the failure want
+  opposite treatment, and the two treatments tried so far have made things
+  worse or done nothing.</p>
+
+  <div class="note">
+    <span class="note-tag">Read alongside</span>
+    <p><code>README.md</code> → "Where the loss lives — the funnel" and
+    <code>docs/HANDOFF.md</code> §5c–§5f carry the full diagnosis, including the
+    rule that the pre-prune build-diagnosis counts above are a different
+    measurement from the post-prune funnel counts in section 03 and must not be
+    quoted against each other — the post-prune shipped pipeline reaches
+    BIPARTITE built = 5 and STACK built = 9, not the 0 and 2 shown here.</p>
+  </div>
+</section>
+
+<footer>
+  <p><b>Provenance.</b> Every funnel figure on this page is read from
+  <b>data/funnel.json</b> and <b>data/funnel.csv</b>, written by
+  <b>scripts/eval_funnel.py</b>: <b>34 generation runs</b>, <b>rank_k = 50</b>,
+  259 labelled rings. Stage losses are the <code>stage_losses_pts</code> field;
+  the interpretation labels are the <code>interpretation</code> column. The
+  re-ranker figures in section 01 are the only numbers not from that run — they
+  come from <b>data/eval_oracle.json</b> (<code>oracle_as_is</code>,
+  <code>precision_ci</code> and <code>paired</code>) and are labelled as such
+  where they appear.</p>
+  <p><b>Caveat.</b> These are <b>ring-level</b> counts over the <b>10-day
+  evaluation window</b> of AMLworld HI-Small — distinct rings with at least
+  three accounts visible in-window, each counted once if it clears a stage in
+  any cycle. They are not transaction-level rates, and they are not a
+  production deployment.</p>
+</footer>
+
+</div>

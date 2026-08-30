@@ -160,3 +160,102 @@ class TestBootstrap:
                    {"found": {2, 3}, "seen": {1, 2, 3, 4}}]
         stat = union_recall("found", "seen")
         assert stat(records) == pytest.approx(3 / 4)
+
+
+# --- the derived funnel metrics ------------------------------------------------
+#
+# `scripts/eval_funnel.py`'s stage-loss and interpretation helpers are pure
+# arithmetic over counts the tracker already produced, but they are the numbers
+# the write-up quotes directly, so a sign flip or a moved threshold would change
+# a headline claim silently. These pin them.
+
+from scripts.eval_funnel import (BUILD_DESTROYED_BELOW,  # noqa: E402
+                                 BUILD_HEALTHY_AT_OR_ABOVE, LABEL_DESTROYED,
+                                 LABEL_ORDINARY, LABEL_RANKING, annotate,
+                                 build_retention, interpret, stage_losses_pts)
+
+
+def _row(typology, total, seeded, built, ranked, seed_reachable=None):
+    reach = total if seed_reachable is None else seed_reachable
+    return {"typology": typology, "total": total,
+            "seed_reachable": reach, "seed_reachable_recall": reach / total,
+            "seeded": seeded, "seeded_recall": seeded / total,
+            "built": built, "built_recall": built / total,
+            "ranked": ranked, "ranked_recall": ranked / total}
+
+
+# The measured TOTAL row: 259 rings -> 230 seeded -> 162 built -> 49 ranked.
+TOTAL_ROW = _row("TOTAL", 259, 230, 162, 49)
+
+
+def test_stage_losses_match_the_measured_total_row():
+    losses = stage_losses_pts(TOTAL_ROW)
+    assert losses["seeding"] == pytest.approx(11.1969, abs=1e-3)
+    assert losses["build"] == pytest.approx(26.2548, abs=1e-3)
+    assert losses["ranking"] == pytest.approx(43.6293, abs=1e-3)
+
+
+def test_stage_losses_close_against_the_end_to_end_drop():
+    """The three stages must account for the whole loss, or one is mis-defined."""
+    losses = stage_losses_pts(TOTAL_ROW)
+    end_to_end = 100.0 * (TOTAL_ROW["seed_reachable_recall"]
+                          - TOTAL_ROW["ranked_recall"])
+    assert sum(losses.values()) == pytest.approx(end_to_end)
+
+
+def test_ranking_is_the_largest_loss_on_the_measured_row():
+    """The claim the write-up leads with, pinned so it cannot silently invert."""
+    losses = stage_losses_pts(TOTAL_ROW)
+    assert max(losses, key=losses.get) == "ranking"
+
+
+def test_build_retention_is_built_over_seeded_not_over_total():
+    assert build_retention(_row("STACK", 30, 30, 9, 2)) == pytest.approx(0.30)
+    assert build_retention(_row("BIPARTITE", 31, 28, 5, 1)) == pytest.approx(
+        5 / 28)
+
+
+def test_build_retention_is_undefined_when_nothing_was_seeded():
+    assert build_retention(_row("X", 10, 0, 0, 0)) is None
+    assert interpret(_row("X", 10, 0, 0, 0)) == "not seeded"
+
+
+def test_the_two_destroyed_typologies_are_classified_as_destroyed():
+    assert interpret(_row("STACK", 30, 30, 9, 2)) == LABEL_DESTROYED
+    assert interpret(_row("BIPARTITE", 31, 28, 5, 1)) == LABEL_DESTROYED
+
+
+def test_a_healthy_typology_is_classified_ranking_limited():
+    # SCATTER-GATHER: 28 seeded, 27 built -> retention .96
+    assert interpret(_row("SCATTER-GATHER", 31, 28, 27, 10)) == LABEL_RANKING
+
+
+def test_a_middling_typology_is_ordinary_attrition():
+    # FAN-IN: 26 seeded, 21 built -> retention .81, between the two cuts
+    assert interpret(_row("FAN-IN", 30, 26, 21, 4)) == LABEL_ORDINARY
+
+
+def test_the_total_row_is_never_given_a_diagnosis():
+    """Reading one blended retention as a diagnosis is the averaging mistake
+    the per-typology table exists to prevent."""
+    assert interpret(TOTAL_ROW) == "aggregate"
+
+
+def test_threshold_boundaries_behave_as_documented():
+    """`<` at .50 and `>=` at .85, per the THRESHOLDS comment."""
+    assert BUILD_DESTROYED_BELOW == 0.50
+    assert BUILD_HEALTHY_AT_OR_ABOVE == 0.85
+    exactly_half = _row("A", 100, 100, 50, 0)      # retention exactly .50
+    assert interpret(exactly_half) == LABEL_ORDINARY
+    exactly_85 = _row("B", 100, 100, 85, 0)        # retention exactly .85
+    assert interpret(exactly_85) == LABEL_RANKING
+
+
+def test_annotate_appends_and_never_reorders_existing_keys():
+    """The CSV schema stays additive only if the original keys keep their
+    positions -- `csv.DictWriter` takes field order from the first row."""
+    row = dict(TOTAL_ROW)
+    before = list(row)
+    after = list(annotate([row])[0])
+    assert after[:len(before)] == before
+    assert "interpretation" in after and "build_retention" in after
