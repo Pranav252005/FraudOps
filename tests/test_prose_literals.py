@@ -51,6 +51,12 @@ LEDGER = [
      "they are current: the marker asserts a number narrates a PAST state, "
      "and using it to silence the scanner on live numbers would be a lie that "
      "the scanner itself cannot detect."),
+    ("2026-09-01", "phase-3", 1835,
+     "+105: docs/PHASE3-LABEL-TAX-FINDINGS.md and two negative-results "
+     "entries (analyst-pool-mismatch, label-noise-non-monotone), all from the "
+     "label-tax arms run the same day against pre-registrations committed at "
+     "a4eee6e. Same reasoning as the previous entry -- these are current "
+     "measurements, so the historical marker does not apply to them."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
