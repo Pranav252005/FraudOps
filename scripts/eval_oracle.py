@@ -209,6 +209,37 @@ def label_candidate(nodes: set[int], rings: dict) -> int | None:
     return None
 
 
+def label_candidate_detailed(nodes: set[int], rings: dict) -> tuple:
+    """`label_candidate`, plus the two things it used to throw away.
+
+    Returns (ring_id_or_None, overlap_fraction, ring_members_or_empty), where
+    `overlap_fraction` is |candidate ∩ ring| / |candidate| -- the share of the
+    candidate's own members that belong to the ring.
+
+    WHY THIS EXISTS. Four places in this repository assert that `collect_pool`
+    "already returns everything the label-tax experiment needs". Verified
+    against the source in docs/inventory/collect_pool.md, that is FALSE: the
+    clean experiment is a comparison between truth labels and simulated
+    ANALYST verdicts, and `SimulatedAnalyst.dispose` needs the ring's member
+    set and the overlap share to choose between CONFIRMED_RING and
+    CONFIRMED_PARTIAL. Both were computed inside `is_hit` and discarded.
+
+    Note the denominator. `is_hit` tests |∩| / |ring| against a containment
+    floor; the analyst tests |∩| / |case members| against PARTIAL_BELOW. Those
+    are different ratios and using one for the other would silently move every
+    partial verdict. The analyst's is returned here.
+
+    A candidate that hits no ring gets (None, 0.0, frozenset()) -- an empty
+    truth set, which is exactly what `dispose` expects for a case that
+    overlaps no ring.
+    """
+    for r, members in rings.items():
+        if is_hit(nodes, members):
+            overlap = len(nodes & members) / len(nodes) if nodes else 0.0
+            return r, overlap, frozenset(members)
+    return None, 0.0, frozenset()
+
+
 def collect_pool(stream, registry, seed_perfect: bool) -> tuple[list, dict]:
     """Replay the eval window once, returning (candidate_records, ring_first_t).
 
@@ -254,8 +285,15 @@ def collect_pool(stream, registry, seed_perfect: bool) -> tuple[list, dict]:
         runs += 1
 
         for c in cands:
-            ring = label_candidate(set(c.nodes), rings)
-            records.append({"cand": c, "ring": ring, "t": graph.now})
+            nodes = set(c.nodes)
+            ring, overlap, members = label_candidate_detailed(nodes, rings)
+            # `overlap` and `ring_members` are carried so a caller can label
+            # this pool a SECOND way -- from simulated analyst verdicts rather
+            # than from truth -- without re-running the replay. They are inert
+            # for every existing caller: nothing downstream reads them, and
+            # `to_xy` still derives y from `ring` alone.
+            records.append({"cand": c, "ring": ring, "t": graph.now,
+                            "overlap": overlap, "ring_members": members})
 
         if runs % 5 == 0:
             print(f"  [{'perfect' if seed_perfect else 'as-is':>7}] "

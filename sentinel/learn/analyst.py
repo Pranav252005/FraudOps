@@ -78,3 +78,63 @@ class SimulatedAnalyst:
         self.stats["partial"] += 1
         return (Verdict.CONFIRMED_PARTIAL, "subset_confirmed",
                 sorted(overlap), sorted(members - overlap))
+
+    def dispose_candidate(self, nodes, truth_members) -> bool:
+        """Binary label for one CANDIDATE, as a simulated analyst would give it.
+
+        `dispose` is written for cases -- objects with `.members`, drawn from a
+        queue an analyst actually worked. The label-tax experiment needs the
+        same error process applied to raw candidates, so this is the adapter,
+        and it delegates rather than reimplementing: the miss rate, the false
+        confirm rate and the PARTIAL_BELOW threshold must not be able to drift
+        between the two paths.
+
+        Returns True where the analyst's verdict `is_positive`.
+
+        READ THE WARNING IN `label_rate_caveat` BEFORE APPLYING THIS TO A WHOLE
+        POOL. These rates are calibrated for a queue of tens of cases per
+        cycle, not for the ~170,000-candidate pool the oracle collects. Applied
+        to every candidate, `false_confirm` alone manufactures far more
+        positives than the pool truly contains, and a model trained on that is
+        not measuring a label tax -- it is measuring a category error.
+        """
+        class _Shim:
+            __slots__ = ("members",)
+
+            def __init__(self, m):
+                self.members = m
+
+        verdict, _, _, _ = self.dispose(_Shim(set(nodes)), set(truth_members))
+        return bool(verdict.is_positive)
+
+    @staticmethod
+    def label_rate_caveat(n_candidates: int, n_positive: int,
+                          false_confirm: float = FALSE_CONFIRM,
+                          miss_rate: float = MISS_RATE) -> dict:
+        """What applying these rates to `n_candidates` would actually produce.
+
+        Exists so the category error above is caught by arithmetic rather than
+        by review. On the shipped as-is pool -- 169,814 training candidates of
+        which 165 are positive -- a 0.005 false-confirm rate over the negatives
+        yields roughly 848 false positives against 149 surviving true ones:
+        the training signal would be 85% noise, and any "label tax" measured
+        that way is a measurement of the mismatch, not of analyst error.
+
+        The docstring at the top of this module already records the same
+        pathology at the CASE level ("at 3%, false confirmations equalled
+        genuine ones and the re-ranker learned nothing"). This makes the
+        candidate-level version computable before it is run.
+        """
+        n_negative = max(n_candidates - n_positive, 0)
+        false_pos = n_negative * false_confirm
+        true_pos = n_positive * (1.0 - miss_rate)
+        total_pos = false_pos + true_pos
+        return {
+            "n_candidates": n_candidates,
+            "n_true_positive": n_positive,
+            "expected_false_positives": false_pos,
+            "expected_surviving_true_positives": true_pos,
+            "noise_share_of_positive_labels": (
+                false_pos / total_pos if total_pos else 0.0),
+            "usable": bool(total_pos) and (false_pos / total_pos) < 0.5,
+        }
