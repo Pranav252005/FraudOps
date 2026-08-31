@@ -56,6 +56,46 @@ METRIC_TOLERANCE = 0.005
 # the fixture pipeline -- one place, so every gate measures the same thing
 # --------------------------------------------------------------------------
 
+# The three entity types are cycled, not randomised, and there are three of
+# them for a reason: the seed-dependence in bug #17 only surfaced on a TIE, and
+# `max(set(types), key=types.count)` can only tie when at least two distinct
+# types share the maximal count. Cycling guarantees ties are common across the
+# fixture's candidates rather than incidental, so the guarded path is not just
+# executed but executed in the state that broke.
+_ENTITY_TYPES = ("Corporation", "Partnership", "Sole Proprietorship")
+
+
+def _synthetic_registry(stream):
+    """Build an AccountRegistry over the fixture's node keys, deterministically.
+
+    Derived from the key string alone -- no randomness, no committed CSV, no
+    dependence on dict or set iteration order -- so the fingerprint this feeds
+    is reproducible across processes and hash seeds. That is the whole point:
+    if it were not, the determinism gate would fail for its own reasons rather
+    than for the pipeline's.
+    """
+    from sentinel.data.accounts import Account, AccountRegistry
+
+    reg = AccountRegistry()
+    for i, key in enumerate(stream.node_keys):
+        bank_id = key.split(":", 1)[0]
+        # Two countries, so `cross_border` and `n_countries` actually vary
+        # across candidates instead of being constant and therefore inert.
+        country = "UK" if (int(bank_id) if bank_id.isdigit() else len(bank_id)) % 2 else "US"
+        reg.accounts[key] = Account(
+            key=key,
+            bank_id=bank_id,
+            bank_name=f"{country} Bank #{bank_id}",
+            country=country,
+            # Entities are shared across every third account so `entity_reuse`
+            # and `n_entities` are not trivially one-per-account.
+            entity_id=f"E{i // 3}",
+            entity_type=_ENTITY_TYPES[i % 3],
+        )
+        reg.by_entity[f"E{i // 3}"].append(key)
+    return reg
+
+
 def run_fixture() -> dict:
     """Replay the committed fixture and return everything the gates read."""
     from sentinel.config import TICK_MINUTES, WINDOW_MINUTES
@@ -71,9 +111,17 @@ def run_fixture() -> dict:
     n_cycles = meta.get("n_cycles", 3)
 
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
-    # No registry: the accounts CSV is not committed, and the jurisdiction
-    # block is not what these gates measure.
-    gen = CandidateGenerator(graph, registry=None, node_key=None)
+    # A SYNTHETIC registry, not `None`. The AMLworld accounts CSV is not
+    # committed, so this used to pass `registry=None` -- which meant the
+    # jurisdiction and entity-type block of `features.build` never executed
+    # under any gate. That block is where bug #17 lived (`dominant_entity_type`
+    # decided by set iteration order, i.e. by PYTHONHASHSEED), and the
+    # determinism gate was run against the pre-fix code and PASSED. A gate that
+    # cannot fail is worse than no gate: it converts an unmeasured path into a
+    # green tick. The registry below is derived deterministically from the
+    # fixture's own node keys, so it commits no data and reproduces exactly.
+    gen = CandidateGenerator(graph, registry=_synthetic_registry(stream),
+                             node_key=stream.key)
 
     cycles = []
     for i, b in enumerate(stream.ticks(TICK_MINUTES, end=None)):
