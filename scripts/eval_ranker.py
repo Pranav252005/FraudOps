@@ -23,8 +23,15 @@ ring_time_split in scripts/eval_oracle.py for why that trade is taken):
                        Keyed "pointwise" here and "oracle" there; both are
                        trained on TRUE ring labels, which a deployment does not
                        have. It is a reference arm for the listwise comparison
-                       AND the second reading of that result: 0.2778 here and
-                       0.2778 there -- two scripts, identical to every digit.
+                       AND the second reading of that result: the two scripts
+                       agree to every digit, on the point estimate, both CI
+                       bounds and the paired deltas, at every k. The digits
+                       themselves are deliberately not written here -- they
+                       have moved twice (0.2778 -> 0.2500 -> 0.2111) while the
+                       agreement held throughout, so quoting them would decay
+                       a true sentence into a false one. The agreement is the
+                       claim, and it is checked live against both files rather
+                       than against a literal.
   lambdamart           LGBMRanker, objective=lambdarank, group = cycle
   lambdamart_intensive LGBMRanker on the SIZE-BLIND feature subset only
   pointwise_intensive  LGBMClassifier on the same subset, to separate "listwise
@@ -301,11 +308,16 @@ def group_diagnostics(t, y):
         by_t[int(tv)].append(i)
     informative_pos = informative_groups = 0
     dead_pos = dead_groups = 0
+    all_positive_groups = all_negative_groups = 0
     for idx in by_t.values():
         p = int(sum(y[i] for i in idx))
         if p == 0 or p == len(idx):          # one label only -> no pairs
             dead_groups += 1
             dead_pos += p
+            if p == 0:
+                all_negative_groups += 1
+            else:
+                all_positive_groups += 1
         else:
             informative_groups += 1
             informative_pos += p
@@ -315,6 +327,12 @@ def group_diagnostics(t, y):
         "pairwise_informative_positives": informative_pos,
         "single_label_groups": dead_groups,
         "positives_in_single_label_groups": dead_pos,
+        # Split out because the two are not the same defect. An all-negative
+        # group wastes nothing and occurs naturally; an all-positive group
+        # strands positives that the pointwise model can still see, which is
+        # what confounded the listwise-vs-pointwise head-to-head.
+        "all_positive_groups": all_positive_groups,
+        "all_negative_groups": all_negative_groups,
         "largest_group": max(len(v) for v in by_t.values()),
     }
 
@@ -468,14 +486,30 @@ def main() -> None:
           f"(mixed labels), {diag['single_label_groups']} do not.")
     print(f"  positives LambdaMART can actually learn from: "
           f"{diag['pairwise_informative_positives']} of "
-          f"{int(tr['y'].sum())}; the other "
-          f"{diag['positives_in_single_label_groups']} sit in all-positive "
-          f"groups that generate no discordant pairs and "
-          f"so contribute zero gradient.")
-    print(f"  the pointwise classifier sees all "
-          f"{int(tr['y'].sum())}. The two objectives are therefore NOT "
-          f"trained on equal signal, and the comparison below is confounded "
-          f"in the pointwise model's favour.")
+          f"{int(tr['y'].sum())}.")
+
+    # THE GUARD ON THE FIX, placed where it can actually fail: on the real
+    # pool, before anything is fitted. `ring_time_split` bounds train by the
+    # cutoff so that no cycle contributes positives without its negatives; if
+    # an all-positive group survives that, the rule has regressed and the
+    # head-to-head below is confounded again -- silently, because a confounded
+    # comparison still produces a number. See docs/negative-results/
+    # dead-query-groups.md for the 18-of-34 state this replaced.
+    assert diag["all_positive_groups"] == 0, (
+        f"{diag['all_positive_groups']} of {diag['n_groups']} training query "
+        f"groups are all-positive, stranding "
+        f"{diag['positives_in_single_label_groups']} positives that the "
+        f"pointwise model still sees. The listwise-vs-pointwise comparison is "
+        f"confounded in the pointwise model's favour. This is the defect "
+        f"ring_time_split's cutoff exists to close.")
+    print(f"  all-positive groups: 0 (asserted). The two objectives receive "
+          f"the same signal, so the head-to-head below is not confounded by "
+          f"training-set differences -- which it was, in every run before "
+          f"2026-08-31.")
+    if diag["all_negative_groups"]:
+        print(f"  all-negative groups: {diag['all_negative_groups']} -- these "
+              f"generate no pairs either, but strand no positives and arise "
+              f"naturally from cycles in which nothing hit a ring.")
     print(f"  largest group {diag['largest_group']:,} rows vs LightGBM's "
           f"{LGBM_MAX_QUERY_ROWS:,}-row ceiling; oversized groups are "
           f"negative-subsampled at cap={args.cap:,}.")

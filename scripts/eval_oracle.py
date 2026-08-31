@@ -161,9 +161,16 @@ LABEL_TAX = (
     "mechanism, not a number. What does not depend on that arithmetic: the "
     "label corpus, not the detector, is the actual product. This p@k is NEVER "
     "a production number -- it is what these features support under a label "
-    "advantage no deployment has, and it is not a ceiling on the features "
-    "(scripts/eval_ranker.py reaches 0.2778 on the same features and the same "
-    "split).")
+    "advantage no deployment has. It is also not a ceiling on the features: "
+    "scripts/eval_ranker.py's listwise arm reaches a higher p@10 on the same "
+    "features and the same split. NO LITERAL IS QUOTED HERE ON PURPOSE. This "
+    "string used to end '(scripts/eval_ranker.py reaches 0.2778 ...)', which "
+    "was printed on every run and stored in data/eval_oracle.json's "
+    "label_dependency field, and it went stale twice without anyone noticing "
+    "-- the true value moved to 0.2500 and then to 0.2111. A hardcoded number "
+    "inside the string that travels with a measurement is the exact failure "
+    "docs/STANDING-RULES.md rule 1 exists to prevent; read the live value from "
+    "data/eval_ranker.json instead.")
 
 AS_IS_FRAMING = (
     "Real seeding, no cheat anywhere in the pipeline. RING-DISJOINTNESS is\n"
@@ -270,6 +277,56 @@ def ring_time_split(records: list[dict], ring_first_t: dict[int, int],
     assigned purely by its own timestamp against the resulting cutoff. This
     keeps both the ring-identity leak and the future-information leak closed
     at once.
+
+    TRAIN IS TIME-BOUNDED TOO, and that is a change from the version that
+    produced every number written before 2026-08-31. Previously a positive
+    followed its ring unconditionally, so a train-assigned ring kept the
+    candidates it produced AFTER split_t. That was a deliberate trade -- ring
+    leakage is worse than temporal overlap -- but it had a consequence nobody
+    priced: for every cycle at or after split_t, train received that cycle's
+    positives and none of its negatives, because negatives split on time with
+    no exception. Those cycles became ALL-POSITIVE query groups.
+
+    A lambdarank group whose labels are all identical generates no discordant
+    pairs and contributes exactly zero gradient, while the pointwise
+    classifier -- which has no notion of groups -- sees every one of those
+    positives. Measured on the shipped pool: 18 of 34 training groups were
+    all-positive and held 156 of 321 training positives, so "same pool, same
+    features, same split" was true of the arrays and false of what the two
+    objectives learned from. The listwise-vs-pointwise head-to-head was
+    confounded in the pointwise model's favour. See
+    docs/inventory/query_groups.md for the per-group table.
+
+    So a positive whose ring is a TRAIN ring but whose timestamp is at or
+    after split_t is now dropped from train rather than kept. It is NOT moved
+    to test -- that would be the ring leak this split exists to close.
+
+    Three consequences, none of them hidden:
+
+      * every remaining training group has mixed labels, so the two objectives
+        finally receive the same signal and the head-to-head is unconfounded;
+      * train loses 156 of 321 positives, which the pointwise model previously
+        used. The headline number moves, and it moves DOWN. That cost is
+        recorded rather than absorbed -- see docs/negative-results/;
+      * the docstring's opening claim becomes literally true for the first
+        time. Every train record now has t < split_t and every test record has
+        t >= split_t: a test ring's first appearance is at or after split_t by
+        construction, and a candidate labelled for a ring cannot predate that
+        ring becoming active. The qualification this docstring used to carry
+        ("time-ordered on the NEGATIVE pool only") is no longer needed, and
+        the assertion below is strengthened to check the whole split rather
+        than just the negatives.
+
+    KNOWN COST, NOT FIXED HERE. A train ring whose first appearance is exactly
+    split_t now contributes no training records at all, while still being
+    excluded from test by ring-disjointness. Such a ring is wasted. It was
+    equally wasted before in every practical sense -- all of its candidates
+    were post-split_t and therefore in the dead groups -- but it is worth
+    naming. Moving those rings to test would recover them and would also
+    change the held-out denominator, so it is deliberately NOT bundled into
+    this change: keeping the test set byte-identical is what makes the
+    before/after a paired comparison on the same cycles rather than two
+    different experiments. Counted and recorded in docs/negative-results/.
     """
     ordered_rings = sorted(ring_first_t, key=lambda r: ring_first_t[r])
     if not ordered_rings:
@@ -281,11 +338,18 @@ def ring_time_split(records: list[dict], ring_first_t: dict[int, int],
     test_rings = set(ordered_rings[cut:])
 
     train, test = [], []
+    stranded_train_positives = 0
     for rec in records:
         r = rec["ring"]
         if r is not None:
             if r in train_rings:
-                train.append(rec)
+                # Ring identity decides the SIDE; the cutoff decides whether
+                # the record is usable on that side at all. A train ring's
+                # post-cutoff candidates are dropped, never handed to test.
+                if rec["t"] < split_t:
+                    train.append(rec)
+                else:
+                    stranded_train_positives += 1
             elif r in test_rings:
                 test.append(rec)
             # a ring outside both sets (shouldn't happen) is dropped, not guessed
@@ -295,21 +359,37 @@ def ring_time_split(records: list[dict], ring_first_t: dict[int, int],
             test.append(rec)
 
     # Assertions, not eyeballing. Ring identity is the primary leak this split
-    # closes: a ring assigned to train keeps ALL its candidates in train even
-    # if a few land temporally after split_t, because two near-duplicate
-    # candidates for the same ring landing on opposite sides is a worse leak
-    # than a little temporal overlap on an already-positive-labelled ring.
-    # The negative pool (no ring) is a pure temporal split with no such
-    # exception, so that invariant is checked directly.
+    # closes: a ring is wholly on one side, never both.
     train_ring_ids = {r["ring"] for r in train if r["ring"] is not None}
     test_ring_ids = {r["ring"] for r in test if r["ring"] is not None}
     assert not (train_ring_ids & test_ring_ids), \
         "a ring leaked across the train/test boundary"
-    train_neg_t = [r["t"] for r in train if r["ring"] is None]
-    test_neg_t = [r["t"] for r in test if r["ring"] is None]
-    if train_neg_t and test_neg_t:
-        assert max(train_neg_t) <= min(test_neg_t), \
-            "a negative example leaked from the future into training"
+
+    # The temporal guard, now checked over the WHOLE split rather than over
+    # the negative pool alone. The narrower version was correct for the
+    # previous rule, under which a train ring kept its post-cutoff positives;
+    # it would pass unchanged on the new rule while no longer being the
+    # strongest true statement, and a guard that has stopped being the
+    # strongest true statement is how the next overclaim gets written.
+    if train and test:
+        assert max(r["t"] for r in train) < split_t <= min(r["t"] for r in test), \
+            "train no longer strictly precedes test"
+
+    # NOT ASSERTED HERE: "no training query group is all-positive". That is the
+    # defect this change closes, but it is a property of the POOL, not of this
+    # function. A pre-cutoff cycle with positives and no negatives is
+    # all-positive under any split rule, and small fixtures are full of them.
+    # Asserting it here would either fire on legitimate fixtures or -- if
+    # narrowed to post-cutoff groups, which the cutoff now makes impossible by
+    # construction -- become a check that cannot fail. This repository has
+    # shipped one of those already (docs/HANDOFF.md 11b). It is asserted
+    # instead in scripts/eval_ranker.py, against the real pool, where it can.
+
+    if stranded_train_positives:
+        print(f"  [split] {stranded_train_positives} train-ring positives at or "
+              f"after split_t={split_t} dropped from train (they would have "
+              f"formed all-positive query groups); see "
+              f"docs/negative-results/dead-query-groups.md")
     return train, test, split_t
 
 

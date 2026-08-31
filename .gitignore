@@ -32,3 +32,8 @@ data/median_features.npz
 
 # Compiled candidate corpora (large, regenerable from a replay).
 data/corpus_*.npz
+
+# Pool/corpus snapshots kept on disk as evidence but not committed: they are
+# 62 MB each and regenerable (see docs/negative-results/dead-query-groups.md).
+# The JSON results they produced ARE committed -- those are the evidence.
+data/*.DEADGROUPS.npz.bak

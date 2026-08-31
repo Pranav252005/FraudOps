@@ -85,9 +85,18 @@ def split_mask(ring, t, ring_first_t, fraction=SPLIT_FRACTION):
     """The same rule as `scripts/eval_oracle.ring_time_split`, on arrays.
 
     Positives go wholly to one side by ring identity; negatives split purely on
-    their own timestamp. Reimplemented over arrays rather than imported because
-    that function consumes record dicts, but the RULE is identical and the two
-    invariants it asserts are asserted here too.
+    their own timestamp; and NO record on either side crosses the cutoff.
+    Reimplemented over arrays rather than imported because that function
+    consumes record dicts, but the RULE is identical and the two invariants it
+    asserts are asserted here too.
+
+    Note the third return value. Because a train ring's post-cutoff positives
+    are now dropped rather than kept (see `ring_time_split.__doc__` for why --
+    they used to form all-positive query groups), `is_train` and `~is_train`
+    no longer partition the rows: some belong to neither. Callers must select
+    with `is_train` and `is_test` rather than with `is_train` and its
+    complement, which is the whole reason this signature changed rather than
+    the mask semantics changing silently underneath the existing one.
     """
     ordered = sorted(ring_first_t, key=lambda r: ring_first_t[r])
     if not ordered:
@@ -97,18 +106,27 @@ def split_mask(ring, t, ring_first_t, fraction=SPLIT_FRACTION):
     train_rings = set(ordered[:cut])
 
     is_train = np.zeros(len(ring), dtype=bool)
+    is_test = np.zeros(len(ring), dtype=bool)
     for i in range(len(ring)):
         r = int(ring[i])
-        is_train[i] = (r in train_rings) if r >= 0 else (int(t[i]) < split_t)
+        early = int(t[i]) < split_t
+        if r >= 0:
+            if r in train_rings:
+                is_train[i] = early          # post-cutoff train positives: dropped
+            else:
+                is_test[i] = True
+        else:
+            is_train[i] = early
+            is_test[i] = not early
 
     tr_rings = {int(r) for r in ring[is_train] if r >= 0}
-    te_rings = {int(r) for r in ring[~is_train] if r >= 0}
+    te_rings = {int(r) for r in ring[is_test] if r >= 0}
     assert not (tr_rings & te_rings), "a ring leaked across the split"
-    tr_neg = t[is_train & (ring < 0)]
-    te_neg = t[~is_train & (ring < 0)]
-    if len(tr_neg) and len(te_neg):
-        assert tr_neg.max() <= te_neg.min(), "a negative leaked from the future"
-    return is_train, split_t
+    assert not (is_train & is_test).any(), "a row landed on both sides"
+    if is_train.any() and is_test.any():
+        assert t[is_train].max() < split_t <= t[is_test].min(), \
+            "train no longer strictly precedes test"
+    return is_train, is_test, split_t
 
 
 def fit(Xtr, ytr, Xte, seed=7, **overrides):
@@ -210,11 +228,14 @@ def compare(export_dir: Path = EXPORT_DIR, gfp_path: Path = GFP_FEATURES,
     Xs = exp["X"]
     y = (exp["ring"] >= 0).astype(np.int32)
 
-    is_train, split_t = split_mask(exp["ring"], exp["t"], exp["ring_first_t"])
-    te = ~is_train
+    # `te` is the explicit test mask, NOT ~is_train: a train ring's post-cutoff
+    # positives belong to neither side and are dropped. See split_mask.__doc__.
+    is_train, te, split_t = split_mask(exp["ring"], exp["t"], exp["ring_first_t"])
+    dropped = int(len(y) - is_train.sum() - te.sum())
     print(f"split_t={split_t}  train {is_train.sum():,} rows "
           f"/ {int(y[is_train].sum())} positive   "
-          f"test {te.sum():,} rows / {int(y[te].sum())} positive")
+          f"test {te.sum():,} rows / {int(y[te].sum())} positive   "
+          f"dropped {dropped:,} (train-ring positives at or after the cutoff)")
     print(f"feature blocks: sentinel {Xs.shape[1]}, "
           f"gfp {Xg.shape[1]} (pooled from {int(g['n_raw_gfp_features'])} raw "
           f"GFP features), both {Xs.shape[1] + Xg.shape[1]}")

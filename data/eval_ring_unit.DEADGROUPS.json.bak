@@ -1,0 +1,91 @@
+{
+  "measured_at": "2026-08-31 11:14:23",
+  "corpus_key": {
+    "dataset": "amlworld-hi-small",
+    "detector_config_hash": "ac6a01d621b21c71",
+    "candidate_provenance": "constructed",
+    "feature_version": 1
+  },
+  "k": 10,
+  "question": "scorer",
+  "candidate_provenance": "constructed",
+  "conditioning": "P(ring in top k | BUILT); blind to the 26.6-point build-stage loss, which is systematic not random",
+  "rankings": {
+    "supervised": {
+      "point": 0.3103448275862069,
+      "lo": 0.203125,
+      "hi": 0.4140127388535032,
+      "cycle_clustered": {
+        "lo": 0.2204724409448819,
+        "hi": 0.3958333333333333,
+        "width": 0.17536089238845143
+      },
+      "ring_clustered": {
+        "lo": 0.203125,
+        "hi": 0.4140127388535032,
+        "width": 0.2108877388535032
+      },
+      "n_trials": 145,
+      "n_rings": 68,
+      "n_cycles": 16
+    },
+    "blend": {
+      "point": 0.1724137931034483,
+      "lo": 0.07857142857142857,
+      "hi": 0.28368794326241137,
+      "cycle_clustered": {
+        "lo": 0.10638297872340426,
+        "hi": 0.2426470588235294,
+        "width": 0.13626408010012514
+      },
+      "ring_clustered": {
+        "lo": 0.07857142857142857,
+        "hi": 0.28368794326241137,
+        "width": 0.2051165146909828
+      },
+      "n_trials": 145,
+      "n_rings": 68,
+      "n_cycles": 16
+    },
+    "size": {
+      "point": 0.05517241379310345,
+      "lo": 0.007518796992481203,
+      "hi": 0.11805555555555555,
+      "cycle_clustered": {
+        "lo": 0.02717391304347826,
+        "hi": 0.08391608391608392,
+        "width": 0.05674217087260566
+      },
+      "ring_clustered": {
+        "lo": 0.007518796992481203,
+        "hi": 0.11805555555555555,
+        "width": 0.11053675856307435
+      },
+      "n_trials": 145,
+      "n_rings": 68,
+      "n_cycles": 16
+    }
+  },
+  "paired": {
+    "supervised_minus_blend": {
+      "point": 0.13793103448275862,
+      "lo": 0.044444444444444446,
+      "hi": 0.24113475177304963,
+      "cycle_clustered": {
+        "lo": 0.07633587786259542,
+        "hi": 0.19858156028368795,
+        "width": 0.12224568242109253
+      },
+      "ring_clustered": {
+        "lo": 0.044444444444444446,
+        "hi": 0.24113475177304963,
+        "width": 0.19669030732860518
+      },
+      "n_trials": 145,
+      "n_rings": 68,
+      "n_cycles": 16,
+      "excludes_zero": true
+    }
+  },
+  "seconds": 5.14
+}

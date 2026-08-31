@@ -97,16 +97,26 @@ def test_split_rule_matches_eval_oracle():
 
     train, test, split_t = ring_time_split(records, rings)
     train_ids = {(r["ring"], r["t"]) for r in train}
+    test_ids = {(r["ring"], r["t"]) for r in test}
 
     ring_arr = np.array([r["ring"] if r["ring"] is not None else -1
                          for r in records])
     t_arr = np.array([r["t"] for r in records])
-    is_train, split_t2 = gfp_compare.split_mask(ring_arr, t_arr, rings)
+    is_train, is_test, split_t2 = gfp_compare.split_mask(ring_arr, t_arr, rings)
 
     assert split_t == split_t2
-    got = {(records[i]["ring"], records[i]["t"])
-           for i in range(len(records)) if is_train[i]}
-    assert got == train_ids
+    got_train = {(records[i]["ring"], records[i]["t"])
+                 for i in range(len(records)) if is_train[i]}
+    got_test = {(records[i]["ring"], records[i]["t"])
+                for i in range(len(records)) if is_test[i]}
+    assert got_train == train_ids
+    assert got_test == test_ids
+
+    # The masks do not partition: dropped rows are in neither. Asserted rather
+    # than left implicit, because `~is_train` used to be the test mask and any
+    # caller still doing that would silently train on dropped positives.
+    assert not (is_train & is_test).any()
+    assert (is_train | is_test).sum() <= len(records)
 
 
 @pytest.mark.skipif(importlib.util.find_spec("snapml") is None,

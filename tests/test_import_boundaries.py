@@ -31,6 +31,13 @@ BOUNDARIES = [
     ("sentinel.eval.bootstrap", ("sentinel.llm",)),
     ("sentinel.eval.funnel", ("sentinel.llm",)),
     ("sentinel.eval.dataset", ("sentinel.llm",)),
+    # The reporting contract sits on every measured path by construction: it is
+    # what a measured number is rendered and stored through, so a
+    # non-deterministic dependency here would reach every reported interval at
+    # once rather than one script at a time.
+    ("sentinel.report", ("sentinel.llm",)),
+    ("sentinel.report.metric", ("sentinel.llm",)),
+    ("sentinel.report.store", ("sentinel.llm",)),
 ]
 
 

@@ -6,8 +6,15 @@ scorer question -- it has been fully consumed. Re-running a 55-minute replay to
 answer a ranking question therefore re-derives an artefact that did not change.
 
 The evidence that this is exact rather than approximate: refitting from the
-cached pool reproduces the stored held-out p@10 of 0.2778 [0.1500, 0.4167] to
-every digit. For scorer questions the corpus IS the replay, not a stand-in.
+cached pool reproduces the stored held-out p@10 to every digit -- checked, not
+claimed, by tests/test_corpus.py::test_corpus_refit_reproduces_the_stored_
+held_out_p_at_10, which reads both sides live rather than comparing against a
+literal. For scorer questions the corpus IS the replay, not a stand-in.
+
+This paragraph used to quote "0.2778 [0.1500, 0.4167]". That number went stale
+twice (to 0.2500, then to 0.2111) while the sentence around it stayed true, so
+the literal was doing no work except becoming wrong -- docs/STANDING-RULES.md
+rule 1. The test is the claim; the digits belong in data/eval_oracle.json.
 
 The partition this rests on, and the line not to cross:
 

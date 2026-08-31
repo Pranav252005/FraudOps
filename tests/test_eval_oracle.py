@@ -60,8 +60,74 @@ class TestRingTimeSplit:
         assert train == [] and test == [] and split_t == 0
 
     def test_all_rings_before_cutoff_go_to_train(self):
+        """Rings 0 and 1 are on the TRAIN side of the partition, and neither
+        may appear in test.
+
+        Ring 1 contributes no training RECORD: its only candidate lands at
+        t=20, which is split_t, and train is bounded by the cutoff. That is
+        the documented cost of closing the all-positive-group defect -- a ring
+        whose first appearance is exactly the cutoff has nothing before it --
+        so this asserts the partition, which is the property the split
+        guarantees, rather than record presence, which it does not.
+        """
         records = [self._rec(0, 10), self._rec(1, 20), self._rec(2, 30)]
         ring_first_t = {0: 10, 1: 20, 2: 30}
         train, test, split_t = ring_time_split(records, ring_first_t, fraction=0.67)
-        train_rings = {r["ring"] for r in train}
-        assert 0 in train_rings and 1 in train_rings
+        assert split_t == 20
+        assert {r["ring"] for r in train} == {0}
+        assert {r["ring"] for r in test} == {2}
+
+    def test_train_ring_positives_after_the_cutoff_are_dropped_not_kept(self):
+        """The defect this rule closes, stated as the behaviour that closes it.
+
+        Ring 0 is a train ring that keeps producing candidates after the
+        cutoff. Under the previous rule those post-cutoff positives stayed in
+        train, and since negatives split on time with no exception, they formed
+        an all-positive query group that contributed zero gradient to a
+        listwise objective while remaining fully visible to a pointwise one.
+        They are now dropped. They must NOT reappear in test -- that would be
+        the ring leak the split exists to close.
+        """
+        records = [self._rec(0, 10), self._rec(0, 90), self._rec(1, 50),
+                   self._rec(None, 5), self._rec(None, 95)]
+        ring_first_t = {0: 10, 1: 50}
+        train, test, split_t = ring_time_split(records, ring_first_t, fraction=0.5)
+        assert split_t == 10
+        assert [(r["ring"], r["t"]) for r in train] == [(None, 5)]
+        assert (0, 90) not in [(r["ring"], r["t"]) for r in test]
+
+    def test_post_cutoff_cycles_contribute_no_training_group_at_all(self):
+        """The mechanism behind the 18-of-34 finding, at fixture scale.
+
+        A cycle at or after the cutoff used to contribute its positives to
+        train and its negatives to test, producing an all-positive group. It
+        must now contribute nothing to train. This asserts the mechanism --
+        that no training group exists at or after split_t -- rather than the
+        downstream property "no group is all-positive", which is a property of
+        the real pool and is asserted in scripts/eval_ranker.py against it.
+        See docs/inventory/query_groups.md.
+        """
+        records = [self._rec(0, 10), self._rec(None, 10),
+                   self._rec(0, 40), self._rec(None, 40),
+                   self._rec(0, 80),                      # would be all-positive
+                   self._rec(1, 90), self._rec(None, 90)]
+        ring_first_t = {0: 10, 1: 90}
+        train, test, split_t = ring_time_split(records, ring_first_t, fraction=0.5)
+        assert split_t == 10
+        assert all(r["t"] < split_t for r in train)
+        # The t=80 positive is gone from both sides: dropped, not leaked.
+        assert (0, 80) not in [(r["ring"], r["t"]) for r in train + test]
+
+    def test_train_strictly_precedes_test_over_the_whole_split(self):
+        """Not just over the negative pool.
+
+        The previous rule could only guarantee time-ordering on negatives,
+        because a train ring kept its post-cutoff positives. This is the
+        stronger statement that replaces it.
+        """
+        records = [self._rec(0, 10), self._rec(0, 90), self._rec(1, 50),
+                   self._rec(2, 70), self._rec(None, 5), self._rec(None, 95)]
+        ring_first_t = {0: 10, 1: 50, 2: 70}
+        train, test, split_t = ring_time_split(records, ring_first_t, fraction=0.34)
+        assert train and test
+        assert max(r["t"] for r in train) < split_t <= min(r["t"] for r in test)
