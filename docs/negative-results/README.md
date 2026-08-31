@@ -39,6 +39,7 @@ measurement someone can argue with.
 | [`lambdamart-not-shippable.md`](lambdamart-not-shippable.md) | LambdaMART does not beat the pointwise model it would replace at the depths that matter. **Superseded and reversed the same day — kept, not deleted.** |
 | [`lambdamart-reversal.md`](lambdamart-reversal.md) | Removing the training confound flipped that verdict at every k — and cost the supervised model its CI-clear lead over the hand-set blend at k=10 and k=20. |
 | [`dead-query-groups.md`](dead-query-groups.md) | 18 of 34 training query groups were all-positive; the listwise-vs-pointwise comparison was confounded, and the fix costs 156 positives. |
+| [`builder-budget-refuted.md`](builder-budget-refuted.md) | Relaxing every expansion knob makes ring coverage worse, not better — on exactly the rings where a budget increase would have had to work. |
 | [`gfp-parity-unmeasured.md`](gfp-parity-unmeasured.md) | Every "feature parity with IBM's GFP" claim was struck. It was never measured and cannot be measured on this machine. |
 | [`inert-seed-sweep.md`](inert-seed-sweep.md) | A five-seed stability sweep was one fit reported five times. |
 | [`median-amount-features.md`](median-amount-features.md) | Closing a GFP coverage gap did not help and sometimes hurt. |

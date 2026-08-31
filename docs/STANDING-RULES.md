@@ -9,7 +9,7 @@ and 7 are only partially mechanised, and that is recorded rather than rounded up
 
 | # | rule | enforced by |
 |---:|---|---|
-| 1 | Never state a number that has not been measured | *partial, ratcheted* — `sentinel/report/` cannot invent a value; `tests/test_prose_literals.py` holds the 1,636 unmarked prose literals to a count that may fall and never rise |
+| 1 | Never state a number that has not been measured | *partial, ratcheted* — `sentinel/report/` cannot invent a value; `tests/test_prose_literals.py` holds the unmarked prose-literal count to a ledger where every increase must be dated and justified |
 | 2 | Always quote p@k beside its size baseline | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule2SizeBaseline` |
 | 3 | Print the conditioning banner on every ring-unit metric | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule3ConditioningBanner` |
 | 4 | Report prevalence beside any Elliptic2 p@k | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule4Prevalence` |
@@ -99,10 +99,18 @@ surrounding claim was true and only the digits rotted, so the digits came out
 and the claim is now checked live — see `tests/test_two_file_agreement.py`.
 
 What exists today is a **ratchet, not a property**:
-`tests/test_prose_literals.py` records the count and fails if it rises, plus a
-strict-xfail test for the goal state that will fail the build the day it starts
-passing. Closing it properly is Phase 4 — README becomes a template rendered
-from a metrics file, and the only literals left are ones carrying
+`tests/test_prose_literals.py` holds the count against a **ledger**, where
+every increase must carry a date, a commit, and a reason that is a sentence.
+The ratchet's job is to make a rise deliberate and visible, not impossible —
+writing up a new measurement legitimately adds literals, and those numbers were
+measured. What it stops is literals accumulating unnoticed, and numbers
+outliving the measurement behind them. It has already fired twice on its own
+commits.
+
+Alongside it, a strict-xfail test for the goal state will fail the build the
+day it starts passing. Closing it properly is Phase 4 — README becomes a
+template rendered from a metrics file, and the only literals left are ones
+carrying
 
     <!-- historical: measured at commit <sha|unknown>, <YYYY-MM-DD> -->
 

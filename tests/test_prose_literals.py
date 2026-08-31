@@ -30,10 +30,30 @@ sys.path.insert(0, str(ROOT))
 from sentinel.report.literals import (MARKER, count_unmarked, prose_files,
                                       scan)
 
-# Measured 2026-08-31 at commit 63066d1, by
-# `sentinel.report.literals.count_unmarked`. This number is allowed to go DOWN.
-# Raising it requires deleting this comment, which is the point.
-BASELINE_UNMARKED = 1636
+# The ledger. Every entry is a deliberate change to the allowed count, with the
+# reason it moved. Measured by `sentinel.report.literals.count_unmarked`.
+#
+# The ratchet's job is to make an increase VISIBLE AND JUSTIFIED, not
+# impossible. Writing up a new measurement legitimately adds literals -- those
+# numbers exist and were measured today. What the ratchet stops is literals
+# accumulating without anyone noticing, and numbers surviving in prose after the
+# measurement behind them has moved. A raise that cannot state its cause in one
+# line is the case this is designed to catch.
+#
+# Append, never edit in place.
+LEDGER = [
+    ("2026-08-31", "63066d1", 1636,
+     "baseline at first measurement"),
+    ("2026-09-01", "phase-2a", 1730,
+     "+94: docs/PHASE2-SEED-CHEAT-FINDINGS.md (68) and "
+     "docs/negative-results/builder-budget-refuted.md (26), both written up "
+     "from measurements taken the same day. Not marked historical, because "
+     "they are current: the marker asserts a number narrates a PAST state, "
+     "and using it to silence the scanner on live numbers would be a lie that "
+     "the scanner itself cannot detect."),
+]
+
+BASELINE_UNMARKED = LEDGER[-1][2]
 
 
 def test_the_unmarked_literal_count_never_increases():
@@ -44,6 +64,23 @@ def test_the_unmarked_literal_count_never_increases():
         f"measurement it came from -- which has already happened twice to "
         f"0.2778 (see docs/STANDING-RULES.md rule 1). Per file: "
         f"{dict(sorted(per_file.items(), key=lambda kv: -kv[1])[:5])}")
+
+
+def test_the_ledger_is_append_only_and_every_entry_gives_a_reason():
+    """The ledger is the audit trail; without these it is just a number.
+
+    Each entry must carry a date, a commit or tag, a count, and a reason long
+    enough to be a sentence. A raise that cannot say why in one line is exactly
+    what the ratchet exists to surface.
+    """
+    assert LEDGER, "the ledger may not be emptied"
+    for date, ref, count, reason in LEDGER:
+        assert len(date) == 10 and date[4] == "-", date
+        assert ref, date
+        assert isinstance(count, int) and count >= 0, date
+        assert len(reason) > 20, f"{date}: reason too thin to audit: {reason!r}"
+    dates = [e[0] for e in LEDGER]
+    assert dates == sorted(dates), "ledger entries must be in date order"
 
 
 def test_the_baseline_is_not_stale_by_a_wide_margin():
