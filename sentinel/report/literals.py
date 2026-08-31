@@ -34,20 +34,36 @@ from pathlib import Path
 METRIC_LITERAL = re.compile(
     r'(?<![\w.])(?:0\.\d{3,4}|\d{1,3}(?:\.\d)?%|\d\.\d{1,2}(?:x|×))(?![\w])')
 
+# Phrases where a percent-shaped token is a LABEL rather than a measurement.
+# Kept deliberately short and anchored: "95% CI" names the confidence level of
+# an interval and cannot go stale, because changing it would change the
+# estimator rather than the estimate. Every addition here weakens the scanner,
+# so each one has to be a fixed phrase whose number is part of the phrase.
+NOT_A_MEASUREMENT = re.compile(
+    r'\b9[05]%\s*(?:CI|confidence)|\bconfidence\s+interval', re.I)
+
 MARKER = re.compile(
     r'<!--\s*historical:\s*measured at commit\s+(?P<commit>[0-9a-f]{7,40}|unknown)\s*,\s*'
     r'(?P<date>\d{4}-\d{2}-\d{2}|unknown)\s*-->', re.I)
 
 
 def prose_files(root: Path) -> list[Path]:
-    """README plus docs/, excluding the machine-generated inventory.
+    """The hand-written prose, excluding generated files and the inventory.
+
+    README.template.md is scanned and README.md is NOT, because README.md is a
+    build artefact rendered from the template. Scanning both would double-count
+    every literal and, worse, would count the rendered VALUES -- which are
+    correct by construction and which nobody can fix by editing, since editing
+    them is overwritten on the next render. The template is where a human can
+    introduce a stale number, so the template is what the ratchet watches.
 
     `docs/inventory/metric_literals.csv` is the OUTPUT of counting literals; it
     is not prose and counting it would be circular. `docs/negative-results/` IS
     counted -- a negative result quoting a stale number is exactly as
     misleading as a headline doing it.
     """
-    files = [root / "README.md"]
+    template = root / "README.template.md"
+    files = [template] if template.is_file() else [root / "README.md"]
     files += sorted(p for p in (root / "docs").rglob("*.md")
                     if "inventory" not in p.parts)
     return [p for p in files if p.is_file()]
@@ -72,8 +88,10 @@ def scan(path: Path) -> list[tuple[int, str, bool]]:
                 prev = lines[j]
                 break
         exempt = bool(MARKER.search(prev)) or bool(MARKER.search(line))
+        label_spans = [m.span() for m in NOT_A_MEASUREMENT.finditer(line)]
         for m in METRIC_LITERAL.finditer(line):
-            out.append((i + 1, m.group(0), exempt))
+            inside_label = any(a <= m.start() < b for a, b in label_spans)
+            out.append((i + 1, m.group(0), exempt or inside_label))
     return out
 
 

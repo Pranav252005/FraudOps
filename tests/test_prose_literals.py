@@ -57,6 +57,14 @@ LEDGER = [
      "label-tax arms run the same day against pre-registrations committed at "
      "a4eee6e. Same reasoning as the previous entry -- these are current "
      "measurements, so the historical marker does not apply to them."),
+    ("2026-09-01", "phase-4", 1700,
+     "-135, the first fall. README became a template rendered from "
+     "results/metrics.json, so its own count went 313 -> 196: headline "
+     "literals became placeholders, superseded ones got historical markers "
+     "with a commit and a date, and README.md is no longer scanned at all "
+     "because it is now a build artefact whose numbers cannot be wrong by "
+     "hand. Also excludes the fixed phrase '95% CI', where the number names "
+     "the confidence level rather than measuring anything."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
@@ -114,10 +122,20 @@ def test_no_unmarked_metric_literals_in_prose():
 
 def test_the_scanner_finds_the_literals_it_is_supposed_to():
     """The negative control: a scanner that matched nothing would pass the
-    ratchet forever."""
+    ratchet forever.
+
+    It watches README.template.md, not README.md. Since Phase 4 the latter is
+    a build artefact rendered from the former, so its numbers are correct by
+    construction and cannot be fixed by editing -- an edit is overwritten on
+    the next render. The template is where a human can introduce a stale
+    number, so the template is what is scanned.
+    """
     total, per_file = count_unmarked(ROOT)
     assert total > 0
-    assert "README.md" in per_file
+    assert "README.template.md" in per_file
+    assert "README.md" not in per_file, (
+        "README.md is generated; scanning it would double-count every literal "
+        "and would flag rendered values nobody can edit")
 
 
 def test_the_historical_marker_actually_exempts(tmp_path):

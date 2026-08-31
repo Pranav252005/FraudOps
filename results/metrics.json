@@ -1,0 +1,891 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/collect_metrics.py",
+  "generated_at": "2026-09-01T01:02:06",
+  "commit": "d7a4fdfe502e18d9a1b1e054f949a43385924387",
+  "metrics": {
+    "supervised_p_at_10": {
+      "id": "supervised_p_at_10",
+      "value": 0.2111111111111111,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.1111111111111111,
+      "ci_upper": 0.31666666666666665,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "blend_p_at_10": {
+      "id": "blend_p_at_10",
+      "value": 0.18888888888888888,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.08333333333333333,
+      "ci_upper": 0.3,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "size_p_at_10": {
+      "id": "size_p_at_10",
+      "value": 0.044444444444444446,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.016666666666666666,
+      "ci_upper": 0.07222222222222222,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "supervised_p_at_20": {
+      "id": "supervised_p_at_20",
+      "value": 0.12777777777777777,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.07222222222222222,
+      "ci_upper": 0.18611111111111112,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "blend_p_at_20": {
+      "id": "blend_p_at_20",
+      "value": 0.1,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.044444444444444446,
+      "ci_upper": 0.16111111111111112,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "size_p_at_20": {
+      "id": "size_p_at_20",
+      "value": 0.044444444444444446,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.016666666666666666,
+      "ci_upper": 0.075,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "supervised_p_at_50": {
+      "id": "supervised_p_at_50",
+      "value": 0.06222222222222222,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.03666666666666667,
+      "ci_upper": 0.09,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "blend_p_at_50": {
+      "id": "blend_p_at_50",
+      "value": 0.04666666666666667,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.023333333333333334,
+      "ci_upper": 0.07222222222222222,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "size_p_at_50": {
+      "id": "size_p_at_50",
+      "value": 0.024444444444444446,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.012222222222222223,
+      "ci_upper": 0.03777777777777778,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_oracle.json (run 1, as-is seeding)"
+    },
+    "supervised_over_blend_delta_at_10": {
+      "id": "supervised_over_blend_delta_at_10",
+      "value": 0.022222222222222227,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": -0.033333333333333326,
+      "ci_upper": 0.0888888888888889,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.2111 minus blend 0.1889",
+        "INCLUDES ZERO"
+      ]
+    },
+    "supervised_over_blend_delta_at_20": {
+      "id": "supervised_over_blend_delta_at_20",
+      "value": 0.027777777777777762,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": -0.008333333333333318,
+      "ci_upper": 0.06666666666666667,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.1278 minus blend 0.1000",
+        "INCLUDES ZERO"
+      ]
+    },
+    "supervised_over_blend_delta_at_50": {
+      "id": "supervised_over_blend_delta_at_50",
+      "value": 0.015555555555555552,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.0022222222222222227,
+      "ci_upper": 0.031111111111111117,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.0622 minus blend 0.0467",
+        "excludes zero"
+      ]
+    },
+    "supervised_over_random_delta_at_10": {
+      "id": "supervised_over_random_delta_at_10",
+      "value": 0.2111111111111111,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.1111111111111111,
+      "ci_upper": 0.31666666666666665,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.2111 minus random 0.0000",
+        "excludes zero"
+      ]
+    },
+    "supervised_over_random_delta_at_20": {
+      "id": "supervised_over_random_delta_at_20",
+      "value": 0.12777777777777777,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.07222222222222222,
+      "ci_upper": 0.18611111111111112,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.1278 minus random 0.0000",
+        "excludes zero"
+      ]
+    },
+    "supervised_over_random_delta_at_50": {
+      "id": "supervised_over_random_delta_at_50",
+      "value": 0.06222222222222222,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.03666666666666667,
+      "ci_upper": 0.09,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.0622 minus random 0.0000",
+        "excludes zero"
+      ]
+    },
+    "supervised_over_size_delta_at_10": {
+      "id": "supervised_over_size_delta_at_10",
+      "value": 0.16666666666666666,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.08888888888888889,
+      "ci_upper": 0.25,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.2111 minus size 0.0444",
+        "excludes zero"
+      ]
+    },
+    "supervised_over_size_delta_at_20": {
+      "id": "supervised_over_size_delta_at_20",
+      "value": 0.08333333333333331,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.044444444444444446,
+      "ci_upper": 0.12777777777777777,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.1278 minus size 0.0444",
+        "excludes zero"
+      ]
+    },
+    "supervised_over_size_delta_at_50": {
+      "id": "supervised_over_size_delta_at_50",
+      "value": 0.03777777777777777,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.021111111111111112,
+      "ci_upper": 0.05666666666666667,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_oracle.json paired bootstrap",
+      "notes": [
+        "supervised 0.0622 minus size 0.0244",
+        "excludes zero"
+      ]
+    },
+    "lambdamart_over_pointwise_delta_at_10": {
+      "id": "lambdamart_over_pointwise_delta_at_10",
+      "value": 0.06666666666666668,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.027777777777777776,
+      "ci_upper": 0.1111111111111111,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_ranker.json head_to_head_vs_pointwise",
+      "notes": [
+        "lambdamart 0.2778 minus pointwise 0.2111",
+        "excludes zero"
+      ]
+    },
+    "lambdamart_p_at_10": {
+      "id": "lambdamart_p_at_10",
+      "value": 0.2777777777777778,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.16666666666666666,
+      "ci_upper": 0.3888888888888889,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_ranker.json"
+    },
+    "lambdamart_over_pointwise_delta_at_20": {
+      "id": "lambdamart_over_pointwise_delta_at_20",
+      "value": 0.03888888888888889,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.016666666666666663,
+      "ci_upper": 0.06666666666666665,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_ranker.json head_to_head_vs_pointwise",
+      "notes": [
+        "lambdamart 0.1667 minus pointwise 0.1278",
+        "excludes zero"
+      ]
+    },
+    "lambdamart_p_at_20": {
+      "id": "lambdamart_p_at_20",
+      "value": 0.16666666666666666,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.09722222222222222,
+      "ci_upper": 0.2388888888888889,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.044444444444444446,
+      "source": "data/eval_ranker.json"
+    },
+    "lambdamart_over_pointwise_delta_at_50": {
+      "id": "lambdamart_over_pointwise_delta_at_50",
+      "value": 0.016666666666666663,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.007777777777777772,
+      "ci_upper": 0.025555555555555554,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_ranker.json head_to_head_vs_pointwise",
+      "notes": [
+        "lambdamart 0.0789 minus pointwise 0.0622",
+        "excludes zero"
+      ]
+    },
+    "lambdamart_p_at_50": {
+      "id": "lambdamart_p_at_50",
+      "value": 0.07888888888888888,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.04777777777777778,
+      "ci_upper": 0.1111111111111111,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.024444444444444446,
+      "source": "data/eval_ranker.json"
+    },
+    "distinct_ring_pointwise_p_at_10": {
+      "id": "distinct_ring_pointwise_p_at_10",
+      "value": 0.18888888888888888,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.1,
+      "ci_upper": 0.2777777777777778,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.03888888888888889,
+      "source": "data/eval_ranker.json distinct_ring_precision_at",
+      "notes": [
+        "counted once per ring; the candidate-level figure is higher because duplicate candidates for one ring each score a hit"
+      ]
+    },
+    "distinct_ring_blend_p_at_10": {
+      "id": "distinct_ring_blend_p_at_10",
+      "value": 0.1388888888888889,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.07222222222222222,
+      "ci_upper": 0.2111111111111111,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.03888888888888889,
+      "source": "data/eval_ranker.json distinct_ring_precision_at",
+      "notes": [
+        "counted once per ring; the candidate-level figure is higher because duplicate candidates for one ring each score a hit"
+      ]
+    },
+    "distinct_ring_size_p_at_10": {
+      "id": "distinct_ring_size_p_at_10",
+      "value": 0.03888888888888889,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.016666666666666666,
+      "ci_upper": 0.06111111111111111,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.03888888888888889,
+      "source": "data/eval_ranker.json distinct_ring_precision_at",
+      "notes": [
+        "counted once per ring; the candidate-level figure is higher because duplicate candidates for one ring each score a hit"
+      ]
+    },
+    "seeding_prize_blend_ratio_at_10": {
+      "id": "seeding_prize_blend_ratio_at_10",
+      "value": 2.176470588235294,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 1.6249999999999998,
+      "ci_upper": 3.4999999999999996,
+      "ci_method": "cycle_clustered_bootstrap",
+      "conditioning": "CEILING DIAGNOSTIC, not a result. The cheat arm seeds on every active ring's own members, which the real detector can never do. This is the headroom behind the seed rule, not an achievable score.",
+      "source": "data/eval_seeding_prize.json",
+      "notes": [
+        "as-is p@10 0.1889 -> cheat p@10 0.4111",
+        "paired delta +0.2222 [+0.1222, +0.3333]"
+      ]
+    },
+    "seeding_prize_oracle_ratio_at_10": {
+      "id": "seeding_prize_oracle_ratio_at_10",
+      "value": 2.6578947368421053,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 2.0943396226415096,
+      "ci_upper": 4.0,
+      "ci_method": "cycle_clustered_bootstrap",
+      "conditioning": "CEILING DIAGNOSTIC, not a result. The cheat arm seeds on every active ring's own members, which the real detector can never do. This is the headroom behind the seed rule, not an achievable score.",
+      "source": "data/eval_seeding_prize.json",
+      "notes": [
+        "as-is p@10 0.2111 -> cheat p@10 0.5611",
+        "paired delta +0.3500 [+0.2556, +0.4389]"
+      ]
+    },
+    "seeding_prize_size_ratio_at_10": {
+      "id": "seeding_prize_size_ratio_at_10",
+      "value": 2.25,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 1.2499999999999998,
+      "ci_upper": 3.7499999999999996,
+      "ci_method": "cycle_clustered_bootstrap",
+      "conditioning": "CEILING DIAGNOSTIC, not a result. The cheat arm seeds on every active ring's own members, which the real detector can never do. This is the headroom behind the seed rule, not an achievable score.",
+      "source": "data/eval_seeding_prize.json",
+      "notes": [
+        "as-is p@10 0.0444 -> cheat p@10 0.1000",
+        "paired delta +0.0556 [+0.0111, +0.1111]"
+      ]
+    },
+    "ring_unit_supervised_surfaced_at_10": {
+      "id": "ring_unit_supervised_surfaced_at_10",
+      "value": 0.2361111111111111,
+      "unit": "ring",
+      "n_units": 67,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.13008130081300814,
+      "ci_upper": 0.3424657534246575,
+      "ci_method": "wider_of_cycle_and_ring_clustered_bootstrap",
+      "conditioning": "P(ring in top 10 of its cycle | the ring was BUILT). It cannot see the 26.6 points lost at the build stage, where BIPARTITE and STACK are lost systematically rather than at random, so it reads HIGHER than the unconditioned p@k and is not comparable to it. p@k with its size baseline remains the reported number.",
+      "source": "data/eval_ring_unit.json",
+      "notes": [
+        "144 ring-trials from 67 distinct rings across 16 cycles",
+        "cycle-clustered width 0.1517 vs ring-clustered 0.2124; the wider is reported"
+      ]
+    },
+    "ring_unit_blend_surfaced_at_10": {
+      "id": "ring_unit_blend_surfaced_at_10",
+      "value": 0.1736111111111111,
+      "unit": "ring",
+      "n_units": 67,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.08163265306122448,
+      "ci_upper": 0.2857142857142857,
+      "ci_method": "wider_of_cycle_and_ring_clustered_bootstrap",
+      "conditioning": "P(ring in top 10 of its cycle | the ring was BUILT). It cannot see the 26.6 points lost at the build stage, where BIPARTITE and STACK are lost systematically rather than at random, so it reads HIGHER than the unconditioned p@k and is not comparable to it. p@k with its size baseline remains the reported number.",
+      "source": "data/eval_ring_unit.json",
+      "notes": [
+        "144 ring-trials from 67 distinct rings across 16 cycles",
+        "cycle-clustered width 0.1351 vs ring-clustered 0.2041; the wider is reported"
+      ]
+    },
+    "ring_unit_size_surfaced_at_10": {
+      "id": "ring_unit_size_surfaced_at_10",
+      "value": 0.0625,
+      "unit": "ring",
+      "n_units": 67,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.014705882352941176,
+      "ci_upper": 0.125,
+      "ci_method": "wider_of_cycle_and_ring_clustered_bootstrap",
+      "conditioning": "P(ring in top 10 of its cycle | the ring was BUILT). It cannot see the 26.6 points lost at the build stage, where BIPARTITE and STACK are lost systematically rather than at random, so it reads HIGHER than the unconditioned p@k and is not comparable to it. p@k with its size baseline remains the reported number.",
+      "source": "data/eval_ring_unit.json",
+      "notes": [
+        "144 ring-trials from 67 distinct rings across 16 cycles",
+        "cycle-clustered width 0.0764 vs ring-clustered 0.1103; the wider is reported"
+      ]
+    },
+    "label_tax_noise_slope_per_0_1": {
+      "id": "label_tax_noise_slope_per_0_1",
+      "value": -0.0065555555555555645,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": -0.011944444444444438,
+      "ci_upper": -0.0015555555555555583,
+      "ci_method": "cycle_clustered_bootstrap",
+      "source": "data/eval_label_tax_noise.json",
+      "notes": [
+        "delta p@10 per 0.1 increase in the positive-label flip rate",
+        "raw minus prevalence-matched control; the control alone includes zero, so this is not prevalence drift",
+        "pre-registered at prereg/label_tax_noise.md commit a4eee6e"
+      ]
+    },
+    "label_tax_budget_slope_per_halving": {
+      "id": "label_tax_budget_slope_per_halving",
+      "value": -0.029528165539530436,
+      "unit": "cycle",
+      "n_units": 18,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": -0.04704956152975541,
+      "ci_upper": -0.01437261120898883,
+      "ci_method": "cycle_clustered_bootstrap",
+      "source": "data/eval_label_tax_budget.json",
+      "notes": [
+        "delta p@10 per halving of the label budget; negated so the sign reads as a cost",
+        "NOT comparable to the noise arm and never to be averaged with it -- different interventions, separate preregistrations",
+        "pre-registered at prereg/label_tax_budget.md commit a4eee6e"
+      ]
+    },
+    "shipped_score_p_at_10": {
+      "id": "shipped_score_p_at_10",
+      "value": 0.2911764705882353,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.2235294117647059,
+      "ci_upper": 0.36176470588235293,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.09411764705882353,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_size_p_at_10": {
+      "id": "shipped_size_p_at_10",
+      "value": 0.09411764705882353,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.058823529411764705,
+      "ci_upper": 0.13529411764705881,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.09411764705882353,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_degree_p_at_10": {
+      "id": "shipped_degree_p_at_10",
+      "value": 0.06470588235294118,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.03529411764705882,
+      "ci_upper": 0.09705882352941177,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.09411764705882353,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_random_p_at_10": {
+      "id": "shipped_random_p_at_10",
+      "value": 0.0,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.0,
+      "ci_upper": 0.0,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.09411764705882353,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_score_over_size_delta_at_10": {
+      "id": "shipped_score_over_size_delta_at_10",
+      "value": 0.1970588235294118,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.12352941176470589,
+      "ci_upper": 0.2676470588235294,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 10,
+      "size_baseline": 0.09411764705882353,
+      "source": "data/eval_phase2.json score_minus_size",
+      "notes": [
+        "score 0.2912 minus size 0.0941",
+        "excludes zero"
+      ]
+    },
+    "shipped_score_p_at_20": {
+      "id": "shipped_score_p_at_20",
+      "value": 0.15735294117647058,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.12058823529411765,
+      "ci_upper": 0.19411764705882353,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.07352941176470588,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_size_p_at_20": {
+      "id": "shipped_size_p_at_20",
+      "value": 0.07352941176470588,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.05,
+      "ci_upper": 0.09852941176470588,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.07352941176470588,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_degree_p_at_20": {
+      "id": "shipped_degree_p_at_20",
+      "value": 0.07205882352941176,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.052941176470588235,
+      "ci_upper": 0.09117647058823529,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.07352941176470588,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_random_p_at_20": {
+      "id": "shipped_random_p_at_20",
+      "value": 0.004411764705882353,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.0,
+      "ci_upper": 0.010294117647058823,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.07352941176470588,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_score_over_size_delta_at_20": {
+      "id": "shipped_score_over_size_delta_at_20",
+      "value": 0.0838235294117647,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.04705882352941178,
+      "ci_upper": 0.11764705882352941,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 20,
+      "size_baseline": 0.07352941176470588,
+      "source": "data/eval_phase2.json score_minus_size",
+      "notes": [
+        "score 0.1574 minus size 0.0735",
+        "excludes zero"
+      ]
+    },
+    "shipped_score_p_at_50": {
+      "id": "shipped_score_p_at_50",
+      "value": 0.07588235294117647,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.05941176470588235,
+      "ci_upper": 0.09294117647058824,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.05058823529411765,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_size_p_at_50": {
+      "id": "shipped_size_p_at_50",
+      "value": 0.05058823529411765,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.036470588235294116,
+      "ci_upper": 0.06529411764705882,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.05058823529411765,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_degree_p_at_50": {
+      "id": "shipped_degree_p_at_50",
+      "value": 0.0488235294117647,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.03529411764705882,
+      "ci_upper": 0.06294117647058824,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.05058823529411765,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_random_p_at_50": {
+      "id": "shipped_random_p_at_50",
+      "value": 0.00411764705882353,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.0017647058823529412,
+      "ci_upper": 0.007058823529411765,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.05058823529411765,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_score_over_size_delta_at_50": {
+      "id": "shipped_score_over_size_delta_at_50",
+      "value": 0.02529411764705882,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.008823529411764702,
+      "ci_upper": 0.041176470588235294,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 50,
+      "size_baseline": 0.05058823529411765,
+      "source": "data/eval_phase2.json score_minus_size",
+      "notes": [
+        "score 0.0759 minus size 0.0506",
+        "excludes zero"
+      ]
+    },
+    "shipped_score_p_at_100": {
+      "id": "shipped_score_p_at_100",
+      "value": 0.04058823529411765,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.032058823529411765,
+      "ci_upper": 0.049705882352941176,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 100,
+      "size_baseline": 0.035,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_size_p_at_100": {
+      "id": "shipped_size_p_at_100",
+      "value": 0.035,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.02588235294117647,
+      "ci_upper": 0.04441176470588235,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 100,
+      "size_baseline": 0.035,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_degree_p_at_100": {
+      "id": "shipped_degree_p_at_100",
+      "value": 0.03470588235294118,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.026470588235294117,
+      "ci_upper": 0.043823529411764706,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 100,
+      "size_baseline": 0.035,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_random_p_at_100": {
+      "id": "shipped_random_p_at_100",
+      "value": 0.002058823529411765,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.0008823529411764706,
+      "ci_upper": 0.0035294117647058825,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 100,
+      "size_baseline": 0.035,
+      "source": "data/eval_phase2.json cycle_rows, bootstrapped here",
+      "notes": [
+        "shipped v1 hand-set scorer over all 34 generation cycles -- a DIFFERENT experiment from run 1's 18 held-out cycles, and not comparable to it"
+      ]
+    },
+    "shipped_score_over_size_delta_at_100": {
+      "id": "shipped_score_over_size_delta_at_100",
+      "value": 0.005588235294117644,
+      "unit": "cycle",
+      "n_units": 34,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": -0.0032352941176470584,
+      "ci_upper": 0.013529411764705884,
+      "ci_method": "cycle_clustered_bootstrap",
+      "k": 100,
+      "size_baseline": 0.035,
+      "source": "data/eval_phase2.json score_minus_size",
+      "notes": [
+        "score 0.0406 minus size 0.0350",
+        "INCLUDES ZERO"
+      ]
+    }
+  },
+  "counts": {
+    "n_held_out_cycles": 18,
+    "n_train": 169814,
+    "n_train_positive": 165,
+    "n_test": 176584,
+    "n_test_positive": 163,
+    "split_t": 7980,
+    "n_active_rings": 259,
+    "n_rings_seeded_honestly": 230,
+    "n_rings_rescued_by_cheat": 49,
+    "n_train_query_groups": 16,
+    "n_all_positive_groups": 0,
+    "n_generation_cycles": 34,
+    "n_rings_seen": 259,
+    "hit_share": 0.5,
+    "min_jaccard": 0.3,
+    "ring_recall_score": 0.2394,
+    "ring_recall_size": 0.1853,
+    "funnel_seeded_recall": 0.888,
+    "funnel_built_recall": 0.6216,
+    "funnel_ranked_recall": 0.2239,
+    "funnel_largest_loss_stage": "ranking"
+  }
+}
