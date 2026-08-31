@@ -840,6 +840,31 @@ is a property of this system.
 | # | item | expected effect — pre-registered |
 |---|---|---|
 | **0.1** | **Re-run the oracle post-prune.** | The whole centrepiece rests on a number measured on a candidate pool that no longer exists. **I expect oracle p@10 to fall somewhat (smaller, tighter pool) but the oracle/blend ratio to stay ≥ 2×. If the ratio collapses below ~1.5×, §1 is wrong and should be re-scoped toward features before a week is spent on the ranker.** |
+
+> **OUTCOME, 2026-08-31 — this item fired, and it killed the centrepiece.**
+> The ratio came back **1.47× / 1.50× / 1.48×** at k=10/20/50
+> (`data/eval_ranker.json`, supervised 0.2778 / 0.1500 / 0.0689 against the
+> post-fix blend 0.1889 / 0.1000 / 0.0467). That is **at the ~1.5× kill line,
+> against a pre-registration that expected ≥ 2×**, so the rule above applies as
+> written: §1 is wrong and the work re-scopes away from a ranker rewrite.
+>
+> The cause is not the one this item anticipated. The oracle did not fall — it
+> is unchanged to every digit. The **blend rose**, because `a0cbbec` deleted two
+> weight terms that were pointing the wrong way. The headroom this plan was
+> built on was substantially a measurement of those two weights.
+>
+> Two further things the item did not anticipate, both in
+> `docs/CENTREPIECE-INVALIDATED.md`:
+> - The **perfect-seeding arm gives 1.53×** — i.e. the gap also collapses if you
+>   repair *seeding* instead of the weights. Two independent repairs each erase
+>   the headroom, which is one fact seen twice: the scorer was never the binding
+>   constraint. The indicated stage is seeding, which §5b/§5c forbid as scoped.
+> - The branch that writes the verdict turns on one ULP: `0.15 / 0.1 ==
+>   1.4999999999999998`. Knife-edge branch, robust decision — k=10 and k=50 are
+>   below 1.5 by margins no rounding touches.
+>
+> **Item 0.5 (more independent evaluation cycles) is now the live top item.**
+
 | **0.2** | Evaluate the v1 blend restricted to the oracle's held-out cycles. | Small change to 0.097; makes the "2.8×" apples-to-apples. Also delete the stale `interpretation` field in `eval_oracle.json`. |
 | **0.3** | Efficiency items **1, 2, 3, 5** (§5.2 — all exact). | **Cycle time to ~40% of current; every metric byte-identical.** Assert identical candidate sets on a fixture — if any metric moves, one of the four is not exact and must be reverted. |
 | **0.4** | Stand up CI: GitHub Actions, 363 tests + the determinism gate (§6.5.4). | **I expect the determinism gate to fire.** |

@@ -6,7 +6,7 @@ session can pick up without re-deriving anything.
 **Repo:** https://github.com/Pranav252005/FraudOps
 **Target:** Razorpay AI Buildathon, AI Risk Manager track. One class of loss:
 money-movement / mule rings. Defence only.
-**Tests:** 510 passing + 1 xfailed, 0 skipped. `python -m pytest -q` is the only authority for this figure.
+**Tests:** 514 passing + 1 xfailed, 0 skipped. `python -m pytest -q` is the only authority for this figure.
 (Read 450 when written and 480 after the corpus drift check landed. Corrected in
 place each time rather than rewritten — the drift of this one number across three
 sessions is itself the argument for why the line defers to the suite.)
@@ -217,6 +217,18 @@ ring-disjoint split (`split_t` 7980, 169,947 train / 176,576 test, 18 held-out
 cycles). It reaches **p@10 0.2778 [0.1500, 0.4167]** with a paired delta over
 the v1 blend of **+0.2278 [+0.1167, +0.3500]** (`data/eval_ranker.json`,
 `precision_ci["pointwise@10"]` and `paired["pointwise-blend@10"]`).
+
+> **SUPERSEDED 2026-08-31 — the two fits no longer agree, and the paragraph
+> below is kept only because it is the thing that broke.** Commit `a0cbbec`
+> retired two inverted hand-set blend terms. It changed **weights only**, so the
+> supervised row is unchanged to every digit and `size`/`degree`/`random` are
+> unchanged — but the **blend row moved**, and `data/eval_oracle.json` was not
+> re-run. The two files now report **disjoint** intervals for the same quantity
+> on the same 18 cycles: blend p@10 [0.0222, 0.0778] here, [0.0833, 0.3000] in
+> `data/eval_ranker.json`. The paired delta is +0.2278 in one and +0.0889 in the
+> other. See `docs/CENTREPIECE-INVALIDATED.md`. This is the failure mode the
+> "general lesson" three paragraphs below states in the abstract, re-incurred in
+> the concrete by the very next commit.
 
 That second fit is why this result is quoted at all, and the agreement is
 **exact, to every digit**: p@10 0.2778 [0.1500, 0.4167] in both files, paired
