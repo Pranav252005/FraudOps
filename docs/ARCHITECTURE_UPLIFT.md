@@ -842,11 +842,18 @@ is a property of this system.
 | **0.1** | **Re-run the oracle post-prune.** | The whole centrepiece rests on a number measured on a candidate pool that no longer exists. **I expect oracle p@10 to fall somewhat (smaller, tighter pool) but the oracle/blend ratio to stay ≥ 2×. If the ratio collapses below ~1.5×, §1 is wrong and should be re-scoped toward features before a week is spent on the ranker.** |
 
 > **OUTCOME, 2026-08-31 — this item fired, and it killed the centrepiece.**
-> The ratio came back **1.47× / 1.50× / 1.48×** at k=10/20/50
-> (`data/eval_ranker.json`, supervised 0.2778 / 0.1500 / 0.0689 against the
-> post-fix blend 0.1889 / 0.1000 / 0.0467). That is **at the ~1.5× kill line,
-> against a pre-registration that expected ≥ 2×**, so the rule above applies as
-> written: §1 is wrong and the work re-scopes away from a ranker rewrite.
+> A clean end-to-end re-run of `scripts/eval_oracle.py` (both arms replayed
+> post-fix, one provenance) gives **1.32× / 1.42× / 1.31×** at k=10/20/50 —
+> supervised 0.2500 / 0.1417 / 0.0611 against the blend's 0.1889 / 0.1000 /
+> 0.0467. That is **well below the ~1.5× kill line, against a pre-registration
+> that expected ≥ 2×**, so the rule above applies as written: §1 is wrong and
+> the work re-scopes away from a ranker rewrite. `scripts/eval_oracle.py` wrote
+> that verdict itself — the branch is pre-registered in the script.
+>
+> (An earlier note here read 1.47× / 1.50× / 1.48×, from `data/eval_ranker.json`.
+> That file pairs a **post-fix blend column with a pre-fix candidate set**,
+> because `compile_corpus.py --rescore` rescores the pool without regenerating
+> it. Both provenances are below 1.5×; the clean one is the headline.)
 >
 > The cause is not the one this item anticipated. The oracle did not fall — it
 > is unchanged to every digit. The **blend rose**, because `a0cbbec` deleted two
@@ -855,8 +862,11 @@ is a property of this system.
 >
 > Two further things the item did not anticipate, both in
 > `docs/CENTREPIECE-INVALIDATED.md`:
-> - The **perfect-seeding arm gives 1.53×** — i.e. the gap also collapses if you
->   repair *seeding* instead of the weights. Two independent repairs each erase
+> - The **perfect-seeding arm gives 1.18× / 1.13× / 1.22×**, with the k=20
+>   interval INCLUDING ZERO — i.e. the gap collapses even harder if you repair
+>   *seeding* instead of the weights. The same blend gains ~2.2× at k=10 from
+>   the seed cheat alone (0.1889 -> 0.4111), against 1.32× from replacing the
+>   scorer with a true-label model. Two independent repairs each erase
 >   the headroom, which is one fact seen twice: the scorer was never the binding
 >   constraint. The indicated stage is seeding, which §5b/§5c forbid as scoped.
 > - The branch that writes the verdict turns on one ULP: `0.15 / 0.1 ==

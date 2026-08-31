@@ -226,7 +226,10 @@ the v1 blend of **+0.2278 [+0.1167, +0.3500]** (`data/eval_ranker.json`,
 > re-run. The two files now report **disjoint** intervals for the same quantity
 > on the same 18 cycles: blend p@10 [0.0222, 0.0778] here, [0.0833, 0.3000] in
 > `data/eval_ranker.json`. The paired delta is +0.2278 in one and +0.0889 in the
-> other. See `docs/CENTREPIECE-INVALIDATED.md`. This is the failure mode the
+> other. A clean end-to-end re-run supersedes BOTH: supervised 0.2500, blend
+> 0.1889, paired **+0.0611 [+0.0111, +0.1167]** — and `data/eval_ranker.json`
+> turns out to pair a post-fix blend column with a pre-fix candidate set. See
+> `docs/CENTREPIECE-INVALIDATED.md`. This is the failure mode the
 > "general lesson" three paragraphs below states in the abstract, re-incurred in
 > the concrete by the very next commit.
 
