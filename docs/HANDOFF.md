@@ -6,7 +6,7 @@ session can pick up without re-deriving anything.
 **Repo:** https://github.com/Pranav252005/FraudOps
 **Target:** Razorpay AI Buildathon, AI Risk Manager track. One class of loss:
 money-movement / mule rings. Defence only.
-**Tests:** 494 passing + 1 xfailed, 0 skipped. `python -m pytest -q` is the only authority for this figure.
+**Tests:** 510 passing + 1 xfailed, 0 skipped. `python -m pytest -q` is the only authority for this figure.
 (Read 450 when written and 480 after the corpus drift check landed. Corrected in
 place each time rather than rewritten — the drift of this one number across three
 sessions is itself the argument for why the line defers to the suite.)
@@ -793,6 +793,41 @@ roughly **7×** (ring recall 15.4% vs 2.3%) to **1.09×** (20.1% vs 18.5%) —
 and **at p@50 the size baseline now beats the score outright** (0.049 vs
 0.043).
 
+> **RESOLVED, 2026-08-31. The tables in this section are superseded; they are
+> kept because the diagnosis they prompted was half wrong and that is the
+> instructive part.**
+>
+> The re-tie was not the baselines catching up. Two blend terms were pointing
+> the wrong way. `gargaml` and `stack` fire on 100% and 99.6% of candidates at
+> means of 0.915 and 0.910, so only their variance reaches the ranking, and
+> that variance correlates with node count at —0.50. With node count held
+> exactly constant they score AUC 0.4534 and 0.4552 — below 0.5 on their own
+> terms. They carried 0.14 of the weight and spent it ordering the queue by
+> smallness, drowning out terms that fire on under 1% of candidates but fire
+> precisely.
+>
+> Retiring them (no fitting, no new features) gives, over the same 34 cycles:
+>
+> | ranking | p@10 | p@20 | p@50 | ring recall |
+> |---|---:|---:|---:|---:|
+> | **score** | **0.291** | **0.157** | **0.076** | **23.9%** |
+> | size | 0.094 | 0.074 | 0.051 | 18.5% |
+> | degree | 0.065 | 0.072 | 0.049 | 16.6% |
+> | random | 0.000 | 0.004 | 0.004 | 5.4% |
+>
+> Paired, score minus size: +0.197 [+0.124, +0.268] at k=10, +0.084 [+0.047,
+> +0.118] at k=20, +0.025 [+0.009, +0.041] at k=50, +0.006 [—0.003, +0.014]
+> at k=100. Size no longer wins anywhere; at k=100 the two are tied.
+>
+> One caveat that changes how the delta should be read: `suppress()` is greedy
+> non-maximum suppression ORDERED BY SCORE, so the score also decides which
+> overlapping candidate survives to be ranked. The candidate set changed, which
+> is why the `size` row moved (0.088 to 0.094) despite ignoring the score. On a
+> FIXED candidate set the ranking effect alone is +0.144 [+0.056, +0.244] at
+> k=10. The rest is survivor selection.
+>
+> Full measurement: `docs/SCORE-VS-SIZE-FINDINGS.md`, `scripts/eval_blend_v2.py`.
+
 Read honestly: **pruning is a real improvement to candidate generation and a
 real problem for the scoring function.** More rings are reachable (recall
 15.4% → 20.1%, and that part is genuine), but almost all of that gain is
@@ -1249,6 +1284,7 @@ scripts/               verify_patterns, build_stream, eval_phase2/4,
                        eval_vs_published, build_queue, run_replay
 docs/                  PHASE0-FINDINGS, PHASE2-FINDINGS, PHASE4-FINDINGS,
                        PHASE5-FINDINGS (Elliptic2 schema: expansion cancelled),
+                       SCORE-VS-SIZE-FINDINGS (two anti-signal blend terms),
                        ARCHITECTURE-V2, sentinel-design.html, this file
 ```
 

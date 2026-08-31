@@ -20,7 +20,7 @@ answer. Both are computed here and the WIDER is reported.
 What this metric structurally cannot see, printed with every number for the
 same reason `CostModel.unsourced()` prints its placeholders: it conditions on
 BUILT, and BIPARTITE and STACK are absent from the built set systematically
-rather than at random. The 26.3 points lost at the build stage are invisible
+rather than at random. The 26.6 points lost at the build stage are invisible
 here, and the conditioning flatters every ranker it scores.
 
 p@k with its size baseline remains the reported number. This is the faster
@@ -66,7 +66,7 @@ SEED = 7
 BANNER = """\
 CONDITIONING -- read with every number below.
   This is P(ring in top %d of its cycle | the ring was BUILT).
-  It cannot see the 26.3 points lost at the build stage, where BIPARTITE
+  It cannot see the 26.6 points lost at the build stage, where BIPARTITE
   (16%% built) and STACK (30%% built) are lost systematically, not at random.
   It therefore reads HIGHER than the unconditioned p@k and is not comparable
   to it. p@k with its size baseline remains the reported number."""
@@ -162,7 +162,7 @@ def main() -> int:
     out = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
            "corpus_key": key.to_dict(), "k": K,
            "question": QUESTION, "candidate_provenance": provenance,
-           "conditioning": "P(ring in top k | BUILT); blind to the 26.3-point "
+           "conditioning": "P(ring in top k | BUILT); blind to the 26.6-point "
                            "build-stage loss, which is systematic not random",
            "rankings": {}, "paired": {}}
 

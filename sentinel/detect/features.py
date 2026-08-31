@@ -1,6 +1,12 @@
-"""Candidate features and the transparent v1 score.
+"""Candidate features and the transparent hand-set score.
 
-Two measured findings shape this file.
+Three measured findings shape this file.
+
+Two of the thirteen blend terms were pointing the wrong way, and they were the
+reason the score did not beat a node-count baseline. `gargaml` and `stack` are
+near-saturated across almost every candidate, so only their variance reaches
+the ranking, and that variance is an inverse proxy for candidate size. See
+RETIRED_TERMS.
 
 Value conservation is a *ring-level* property, not a node-level one. Measured as
 a per-account trigger it gives 4.0x lift at only 3.9% recall, because laundering
@@ -19,19 +25,23 @@ from dataclasses import asdict, dataclass
 
 from sentinel.detect.motifs import Motifs
 
-# Weights for the v1 score. Deliberately a transparent linear blend: every term
-# is displayed separately in the case file, so an analyst can see which evidence
-# drove the rank. The learned re-ranker replaces this in v2 -- it does not
-# replace the features.
-WEIGHTS = {
-    # Rebalanced to sum to exactly 1.0 when the layered terms were added, so a
-    # saturated score is 1.0 and remains comparable across versions. A test
-    # asserts the sum; adding a term without rebalancing would silently inflate
-    # every score in the queue.
-    #
-    # A temporally valid cycle leads: in a 244k-node graph triangles arise by
-    # chance constantly, but triangles whose timestamps let value actually
-    # travel the loop do not.
+# The hand-set weights as originally shipped. Kept literally, because two of
+# them turned out to be pointing the wrong way and the correction below is only
+# legible next to what it corrects.
+#
+# Deliberately a transparent linear blend: every term is displayed separately in
+# the case file, so an analyst can see which evidence drove the rank. The
+# learned re-ranker is a separate artefact -- it does not replace the features.
+#
+# Rebalanced to sum to exactly 1.0 when the layered terms were added, so a
+# saturated score is 1.0 and remains comparable across versions. A test asserts
+# the sum; adding a term without rebalancing would silently inflate every score
+# in the queue.
+#
+# A temporally valid cycle leads: in a 244k-node graph triangles arise by
+# chance constantly, but triangles whose timestamps let value actually travel
+# the loop do not.
+_V1_WEIGHTS = {
     "temporal_cycle": 0.22,
     "conservation": 0.15,
     "fast_passthrough": 0.12,
@@ -46,6 +56,39 @@ WEIGHTS = {
     "burstiness": 0.01,
     "round_amounts": 0.01,
 }
+
+# RETIRED: measured anti-signal. These two terms were the reason the score did
+# not beat a node-count baseline, and the mechanism is specific enough to state.
+#
+# Both are near-saturated and near-universal -- `gargaml` fires on 100% of
+# candidates with mean 0.915, `stack` on 99.6% with mean 0.910. A term that is
+# almost always ~0.91 contributes almost nothing but its VARIANCE to the
+# ranking, and their variance is an inverse proxy for candidate size:
+# Spearman(gargaml, n_nodes) = -0.495, Spearman(stack, n_nodes) = -0.499.
+# Post-pruning, size became a genuine positive signal (AUC 0.710), so those two
+# terms were ordering the queue by smallness, carrying 0.14 of the weight while
+# doing it, and drowning out the rare high-precision terms that fire on well
+# under 1% of candidates.
+#
+# The inversion is not a size artefact. Holding node count EXACTLY constant --
+# stratifying on the 41 distinct values and pooling -- gargaml scores AUC 0.4534
+# and stack 0.4552 against the label. Both are below 0.5 on their own terms.
+#
+# Zeroed rather than deleted, so the case file still shows the analyst a stack
+# or GARG-AML reading as evidence; it just no longer drives the rank. Read this
+# as "these two do not discriminate on AMLworld HI-Small after pruning", NOT as
+# a claim about GARG-AML as a method.
+#
+# Measured by scripts/eval_blend_v2.py. Removing them takes held-out p@10 from
+# 0.0500 to 0.1889 against a size baseline of 0.0444.
+RETIRED_TERMS = ("gargaml", "stack")
+
+_KEPT = sum(v for k, v in _V1_WEIGHTS.items() if k not in RETIRED_TERMS)
+
+# Renormalised over the surviving terms rather than hand-retyped, so the
+# sum-to-1.0 property is structural and cannot drift from the literal above.
+WEIGHTS = {k: (0.0 if k in RETIRED_TERMS else v / _KEPT)
+           for k, v in _V1_WEIGHTS.items()}
 
 
 def _norm(x: float, cap: float) -> float:

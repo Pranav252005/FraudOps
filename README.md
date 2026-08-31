@@ -15,10 +15,10 @@ review.
 Built for the Razorpay AI Buildathon, **AI Risk Manager** track. One class of
 loss: **merchant-account abuse rings / money movement**. Strictly defence-only.
 
-**494 tests passing, 1 xfail.** `python -m pytest -q`
-(Read 450 when this line was written and 480 after the corpus drift check landed;
-corrected in place rather than rewritten. The number moves every session and the
-only authority for it is a run of the suite, never this line.)
+**510 tests passing, 1 xfail.** `python -m pytest -q`
+(Read 450 when this line was written, then 480, then 494; corrected in place
+rather than rewritten. The number moves every session and the only authority for
+it is a run of the suite, never this line.)
 
 ---
 
@@ -93,25 +93,51 @@ reaches Jaccard 0.3 or better against it.
 
 | ranking | p@10 | p@20 | p@50 | ring recall |
 |---|---:|---:|---:|---:|
-| **score** | **0.097** | **0.079** | 0.043 | **20.1%** |
-| size | 0.088 | 0.074 | **0.049** | 18.5% |
-| degree | 0.062 | 0.071 | 0.047 | 16.6% |
-| random | 0.000 | 0.001 | 0.002 | 5.0% |
+| **score** | **0.291** | **0.157** | **0.076** | **23.9%** |
+| size | 0.094 | 0.074 | 0.051 | 18.5% |
+| degree | 0.065 | 0.072 | 0.049 | 16.6% |
+| random | 0.000 | 0.004 | 0.004 | 5.4% |
 
-**The `size` baseline is quoted beside every number on purpose, and it is not
-flattering.** A baseline that ranks candidates by node count and nothing else is
-currently within noise of the scoring function. Paired bootstrap over the same
-cycles, score minus size:
+**The `size` baseline is quoted beside every number on purpose.** A baseline
+that ranks candidates by node count and nothing else used to be within noise of
+the scoring function, and at k=100 it beat it. Paired bootstrap over the same 34
+cycles, score minus size (`data/eval_phase2.json`, `score_minus_size`):
 
 | k | delta | 95% CI | verdict |
 |---:|---:|---|---|
-| 10 | +0.009 | [-0.027, +0.041] | not distinguishable |
-| 20 | +0.006 | [-0.021, +0.031] | not distinguishable |
-| 50 | -0.007 | [-0.019, +0.005] | not distinguishable |
-| 100 | -0.009 | [-0.016, -0.002] | **size beats score** |
+| 10 | **+0.197** | [+0.124, +0.268] | **beats size** |
+| 20 | **+0.084** | [+0.047, +0.118] | **beats size** |
+| 50 | **+0.025** | [+0.009, +0.041] | **beats size** |
+| 100 | +0.006 | [−0.003, +0.014] | not distinguishable |
 
-This is the most important honest statement in the repository, and it is
-[an open problem](#open-problems-stated-not-buried), not a footnote.
+**This table used to be the most important honest statement in the repository,
+and it read the other way.** Until the retirement of two blend terms it was
++0.009 [−0.027, +0.041], +0.006 [−0.021, +0.031], −0.007 [−0.019, +0.005] and
+−0.009 [−0.016, −0.002] — three ties and a loss. `gargaml` and `stack`
+were measured as **anti-signal**: both fire on ~100% of candidates at a mean of
+~0.91, so only their variance reaches the ranking, and that variance is an
+inverse proxy for node count. They carried 0.14 of the weight and spent it
+ordering the queue by smallness. Zeroing them, with no fitting and no new
+features, is the whole change.
+
+Read the k=100 row carefully: size no longer wins there, but the score does not
+beat it either. **"The score beats node count where the alert budget lives, and
+ties with it at a depth no analyst reaches"** is the accurate claim, and it is
+not the same as winning everywhere.
+
+Full measurement, including the controls that had to come back negative first,
+in [`docs/SCORE-VS-SIZE-FINDINGS.md`](docs/SCORE-VS-SIZE-FINDINGS.md).
+
+*One caveat that belongs beside the table, not in a footnote.* `suppress()` is
+greedy non-maximum suppression **ordered by score**, so the score decides which
+of several overlapping views of a neighbourhood survives to be ranked at all.
+Changing it therefore changed the candidate set, not just the order — which is
+why the `size` row moved too (0.088 to 0.094 at k=10) despite ignoring the score
+entirely. The paired comparison within each cycle is still valid, but the
+improvement above is the joint effect of better ranking and better survivor
+selection. On a **fixed** candidate set the ranking effect alone is
++0.144 [+0.056, +0.244] at k=10. Decomposing the split exactly is a *must
+measure*.
 
 ### Where the loss lives — the funnel
 
@@ -129,8 +155,13 @@ Source: `data/funnel.json` / `data/funnel.csv` — 34 generation runs, `rank_k`
 |---|---:|---:|---:|
 | seed-reachable | 259 | 100.0% | — |
 | seeded | 230 | 88.8% | **−11.2 pts** |
-| built (candidate generated) | 162 | 62.5% | **−26.3 pts** |
-| ranked into top 50 | 49 | 18.9% | **−43.6 pts** |
+| built (candidate generated) | 161 | 62.2% | **−26.6 pts** |
+| ranked into top 50 | 58 | 22.4% | **−39.8 pts** |
+
+The ranking row moved when two anti-signal blend terms were retired: 49 rings
+ranked (−43.6 pts) before, 58 (−39.8 pts) now. **Ranking is still the largest
+single loss by a wide margin**, which is the point of keeping this table — the
+fix improved the stage without changing which stage is worst.
 
 The losses are stated in percentage points because that is the only form in
 which they can be compared, and `scripts/eval_funnel.py` computes them from the
@@ -140,23 +171,37 @@ measured recalls rather than from a hand-typed table (`stage_losses_pts` in
 **Structural ceiling is 73.3%** — 88 of 370 rings have two or fewer accounts and
 no community structure to detect.
 
-#### Ranking is the largest single loss, at 43.6 points
+#### Ranking is the largest single loss, at 39.8 points
 
-More rings are lost between *built* and *ranked* (162 → 49) than at seeding and
+More rings are lost between *built* and *ranked* (161 → 58) than at seeding and
 building combined. A candidate that structurally covers the ring exists; the
 scorer does not put it in the top 50.
 
 That is exactly the loss the supervised re-ranker addresses, and it moves it:
-**p@10 0.2778 [0.1500, 0.4167] against the shipped v1 hand-set blend's 0.0500,
+**p@10 0.2778 [0.1500, 0.4167] against the v1 hand-set blend's 0.0500,
 a paired delta of +0.2278 [+0.1167, +0.3500] on a ring-disjoint held-out split
 — and it is trained on ground-truth ring labels, which a deployment does not
 have.** (`scripts/eval_oracle.py` run 1, `data/eval_oracle.json`; independently
-reproduced by the pointwise arm of `scripts/eval_ranker.py`.) Both halves of
-that sentence are the result; [The label tax](#the-label-tax--why-the-caveat-is-the-argument)
+reproduced by the pointwise arm of `scripts/eval_ranker.py`.)
+
+> **Read that comparison with its date, because the correction is large.** The
+> 0.0500 it beats is the blend *before* `gargaml` and `stack` were retired.
+> Measured on the shared pool after the retirement
+> (`scripts/eval_ranker.py --use-cache`), the pointwise model reaches **0.2778
+> against the corrected blend's 0.1889, a paired delta of +0.0889 [+0.0333,
+> +0.1500]** — where it was +0.2278 before. **The supervised model's lead over
+> the hand-set score has fallen by roughly 60%.** It is still real and still
+> excludes zero, and it is still bought with ground-truth ring labels no
+> deployment has; it is simply a much smaller prize than this section used to
+> claim. `data/eval_oracle.json` itself is deliberately not re-run — doing so
+> would desync it from the corpus its regression test checks against — so
+> restating the oracle figure on a consistent pool is a **must measure**.
+
+Both halves of that sentence are the result; [The label tax](#the-label-tax--why-the-caveat-is-the-argument)
 below is why the caveat is the argument rather than a hedge. 0.2778 is not a
 production number and is not quoted as one anywhere in this repository.
 
-#### The build stage's 26 points are concentrated in exactly two typologies
+#### The build stage's 27 points are concentrated in exactly two typologies
 
 Per typology, from `data/funnel.csv`. The `interpretation` column is derived in
 code from each row's own build retention (built ÷ seeded), not from a
@@ -165,20 +210,20 @@ are documented at the top of `scripts/eval_funnel.py`.
 
 | typology | total | seeded | built | ranked (top-50) | interpretation |
 |---|---:|---:|---:|---:|---|
-| BIPARTITE | 31 | 28 (90.3%) | **5 (16.1%)** | 1 (3.2%) | **build-destroyed** |
-| STACK | 30 | **30 (100.0%)** | **9 (30.0%)** | 2 (6.7%) | **build-destroyed** |
-| SCATTER-GATHER | 31 | 28 (90.3%) | 27 (87.1%) | 10 (32.3%) | ranking-limited |
-| GATHER-SCATTER | 38 | 35 (92.1%) | 31 (81.6%) | 9 (23.7%) | ranking-limited |
+| **BIPARTITE** | 31 | 28 (90.3%) | **5 (16.1%)** | 1 (3.2%) | **build-destroyed** |
+| **STACK** | 30 | **30 (100.0%)** | **9 (30.0%)** | 2 (6.7%) | **build-destroyed** |
+| SCATTER-GATHER | 31 | 28 (90.3%) | 27 (87.1%) | 16 (51.6%) | ranking-limited |
+| GATHER-SCATTER | 38 | 35 (92.1%) | 30 (78.9%) | 9 (23.7%) | ranking-limited |
 | CYCLE | 37 | 31 (83.8%) | 28 (75.7%) | 7 (18.9%) | ranking-limited |
-| FAN-OUT | 36 | 30 (83.3%) | 24 (66.7%) | 9 (25.0%) | ordinary attrition |
-| FAN-IN | 30 | 26 (86.7%) | 21 (70.0%) | 4 (13.3%) | ordinary attrition |
+| FAN-OUT | 36 | 30 (83.3%) | 24 (66.7%) | 11 (30.6%) | ordinary attrition |
+| FAN-IN | 30 | 26 (86.7%) | 21 (70.0%) | 5 (16.7%) | ordinary attrition |
 | RANDOM | 26 | 22 (84.6%) | 17 (65.4%) | 7 (26.9%) | ordinary attrition |
-| **TOTAL** | **259** | **230 (88.8%)** | **162 (62.5%)** | **49 (18.9%)** | aggregate |
+| **TOTAL** | **259** | **230 (88.8%)** | **161 (62.2%)** | **58 (22.4%)** | aggregate |
 
 Six of the eight typologies keep 77–96% of their seeded rings through the build
 stage. BIPARTITE keeps 17.9% and STACK 30.0%. **Those two rows are the build
 stage's 26 points.** The three `ranking-limited` rows lose almost nothing at
-build (3–11 pts) and 55–58 points at ranking; the three `ordinary attrition`
+build (3–13 pts) and 36–57 points at ranking; the three `ordinary attrition`
 rows lose steadily at every stage.
 
 #### The STACK finding, stated plainly
@@ -263,6 +308,13 @@ cycles, not two separate runs:
 
 Generation improved and it is confirmed. Scoring did not, and the size baseline
 caught up. Both halves are reported.
+
+> **These four rows are under the OLD blend weights and are left that way on
+> purpose.** They measure what *pruning* bought, and re-running them under the
+> corrected weights would answer a different question while looking like the
+> same one. The scoring half of the sentence above has since been addressed
+> separately — see [the headline table](#honest-results) — which does not
+> change what pruning did.
 
 ### The supervised re-ranker, and what perfect labels are worth
 
@@ -560,7 +612,7 @@ produced [bug #8](#the-bug-portfolio).
 
 ## False-positive cost — the part most detectors skip
 
-A precision figure alone is not actionable. p@20 = 0.079 is either excellent or
+A precision figure alone is not actionable. p@20 = 0.157 is either excellent or
 unusable depending entirely on what a review costs and what a missed ring costs,
 and neither appears in a confusion matrix.
 
@@ -747,14 +799,32 @@ citation contract is identical in all three cases.
 
 ## Open problems, stated not buried
 
-**1. The scorer no longer clearly beats a node-count baseline.** Post-pruning,
-the score's margin over `size` has collapsed to statistical noise at k = 10, 20
-and 50, and at k = 100 size wins significantly. Pruning normalised candidate
-size (mean 17 to 8.2 nodes), so node count went from an anti-signal to a real
-one and the hand-set weights are not exploiting the tighter candidates. This is
-the next task, and the honest framing is "the score no longer clearly beats
-size", not "size now clearly beats score" — a claimed *loss* has to clear its
-own confidence interval too.
+**1. ~~The scorer no longer clearly beats a node-count baseline.~~ RESOLVED at
+k = 10, 20 and 50; downgraded at k = 100.** The original entry is kept below,
+because its diagnosis was half right and the half it got wrong is the useful
+part.
+
+> Post-pruning, the score's margin over `size` has collapsed to statistical
+> noise at k = 10, 20 and 50, and at k = 100 size wins significantly. Pruning
+> normalised candidate size (mean 17 to 8.2 nodes), so node count went from an
+> anti-signal to a real one and the hand-set weights are not exploiting the
+> tighter candidates.
+
+The weights were not failing to exploit size. **Two of them were exploiting it
+backwards.** `gargaml` and `stack` fire on 100% and 99.6% of candidates at means
+of 0.915 and 0.910, so only their variance reaches the ranking, and that
+variance correlates with node count at −0.50. Holding node count exactly
+constant they score AUC 0.4534 and 0.4552 — below 0.5 on their own terms.
+Retiring them takes the shipped p@10 from 0.097 to 0.291 and clears the ship
+criterion at every k except 100, where the two are now tied rather than the
+score losing. [`docs/SCORE-VS-SIZE-FINDINGS.md`](docs/SCORE-VS-SIZE-FINDINGS.md).
+
+What remains open here: the k=100 tie, and the fact that `cross_border` is now
+the strongest single term measured (AUC 0.7036 with size held constant) on 0.035
+of the weight. It is deliberately **not** being exploited — it has the same
+smell as `channel`, the feature this project already excluded as a generator
+artefact, and raising its weight is not on the list until it has been checked
+against a real dataset.
 
 **2. The primary p@k is not measured on a clean held-out split.** The 34 cycles
 that produced the headline numbers are the same cycles used to choose the prune
@@ -1056,10 +1126,12 @@ Production rule-based AML runs at **95 to 99% false-positive rates**; alert to
 SAR conversion is **under 5%, with one bank survey finding 2.8%**. Investigation
 burden reaches 22 hours per alert.
 
-p@20 = 0.079 means roughly 8% of the top twenty are real rings — at or above
+p@20 = 0.157 means roughly 16% of the top twenty are real rings — above
 industry alert-to-report conversion. Not because this is good, but because the
 industry standard is genuinely that bad, and because the cost model shows the
-queue clears break-even by a wide margin at that precision.
+queue clears break-even by a wide margin at that precision. (It read 0.079 and
+"roughly 8%" before two anti-signal blend terms were retired; the industry
+comparison held at that level too, which is the more telling half.)
 
 ---
 
@@ -1220,13 +1292,15 @@ creates the alert flood without anyone having to sell it.
 
 The cost model says the queue's viability is **conditional**, and the condition
 is measurable rather than assumed. At top 10 it pays only if the average
-confirmed ring carries more than **66,342** at risk
+confirmed ring carries more than **19,733** at risk (it was 66,342 before the
+retirement — a more precise queue needs less value per ring to justify itself)
 (`scripts/eval_cost.py`; the unit is deliberately unnamed — ratios are what
 the model claims, not rupees).
 
-*A note on which p@k this is.* The precisions in this subsection — 0.097,
-0.079, 0.043 — are the **shipped v1 queue's** score ranking from HANDOFF §5d,
-which is what an ops team would actually work today. They are not the
+*A note on which p@k this is.* The precisions in this subsection — 0.291,
+0.157, 0.076 — are the **shipped queue's** score ranking
+(`data/eval_phase2.json`), which is what an ops team would actually work today.
+They read 0.097 / 0.079 / 0.043 before two anti-signal blend terms were retired. They are not the
 supervised re-ranker's p@10 of 0.2778 quoted earlier: that model trains on
 ground-truth ring labels and is not deployable on day one. Costing the queue
 against the re-ranker's number would assume away exactly the label dependency
@@ -1239,8 +1313,10 @@ to 0.0864**. Note that this is harsher than doubling: review cost, benefit and
 false-positive harm are each a *product of two* of those inputs, so review cost
 and residual harm rise fourfold while the benefit falls to a quarter. At that
 corner
-**only top 10 still pays** (p@10 = 0.097); top 20 (0.079) and top 50 (0.043)
-do not.
+**top 10 and top 20 both still pay** (p@10 = 0.291, p@20 = 0.157 against a
+break-even of 0.0864); top 50 (0.076) and top 100 (0.041) do not. Before the
+blend terms were retired only top 10 survived this corner, and it did so by
+about one point of precision.
 
 **But the severity factor is doing all the work, and that is the real
 finding.** Two is a convention, not a measurement, and top 10 clears 0.0864 by

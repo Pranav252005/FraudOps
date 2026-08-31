@@ -244,7 +244,7 @@ footer p{max-width:78ch;margin:0 0 12px}
   <div class="eyebrow">Sentinel · ring detection · AMLworld HI-Small</div>
   <h1>Where the loss lives</h1>
   <p class="standfirst">Of 259 labelled fraud rings active in the evaluation
-  window, 49 reach an analyst's top-50 queue. This is the stage-by-stage
+  window, 58 reach an analyst's top-50 queue. This is the stage-by-stage
   account of the other 210 — and of which single stage is worth fixing.</p>
   <div class="meta">
     <span>source <b>data/funnel.json</b> · <b>data/funnel.csv</b></span>
@@ -264,7 +264,7 @@ footer p{max-width:78ch;margin:0 0 12px}
     <div class="beat">
       <span class="k">Diagnose</span>
       <p>The funnel splits ring recall into four stages and names the expensive
-      one: <strong>ranking, −43.6 points</strong>, larger than seeding and
+      one: <strong>ranking, −39.8 points</strong>, larger than seeding and
       building combined.</p>
     </div>
     <div class="beat t">
@@ -301,7 +301,7 @@ footer p{max-width:78ch;margin:0 0 12px}
   <figure class="fig">
     <div class="figbox figscroll">
       <svg viewBox="0 0 760 330" role="img"
-           aria-label="Detection funnel: 259 seed-reachable rings, 230 seeded, 162 built, 49 ranked into the top 50.">
+           aria-label="Detection funnel: 259 seed-reachable rings, 230 seeded, 161 built, 58 ranked into the top 50.">
         <!-- 100% rail -->
         <line class="tick" x1="196" y1="18" x2="196" y2="312"></line>
         <line class="tick" x1="676" y1="18" x2="676" y2="312"></line>
@@ -325,27 +325,27 @@ footer p{max-width:78ch;margin:0 0 12px}
         <text class="lbl-inv" x="208" y="128">230 · 88.8%</text>
 
         <!-- loss 2 -->
-        <text class="loss" x="196" y="164">▼ −26.3 pts</text>
-        <text class="lbl-s" x="286" y="164">build — expansion or pruning discards 68 rings that were found</text>
+        <text class="loss" x="196" y="164">▼ −26.6 pts</text>
+        <text class="lbl-s" x="286" y="164">build — expansion or pruning discards 69 rings that were found</text>
 
-        <!-- stage 3: built 162 / 62.5% -->
+        <!-- stage 3: built 161 / 62.2% -->
         <text class="lbl-b" x="186" y="196" text-anchor="end">built</text>
         <text class="lbl-s" x="186" y="212" text-anchor="end">a candidate covers it</text>
         <rect class="rail" x="196" y="178" width="480" height="42"></rect>
-        <rect class="bar-solid" x="196" y="178" width="300" height="42"></rect>
-        <text class="lbl-inv" x="208" y="204">162 · 62.5%</text>
+        <rect class="bar-solid" x="196" y="178" width="298" height="42"></rect>
+        <text class="lbl-inv" x="208" y="204">161 · 62.2%</text>
 
         <!-- loss 3 -->
-        <text class="loss-x" x="196" y="240">▼ −43.6 pts</text>
-        <text class="lbl-s" x="286" y="240">ranking — 113 covered rings miss the top 50</text>
+        <text class="loss-x" x="196" y="240">▼ −39.8 pts</text>
+        <text class="lbl-s" x="286" y="240">ranking — 103 covered rings miss the top 50</text>
         <text class="loss-x" x="676" y="240" text-anchor="end">LARGEST LOSS</text>
 
-        <!-- stage 4: ranked 49 / 18.9% -->
+        <!-- stage 4: ranked 58 / 22.4% -->
         <text class="lbl-b" x="186" y="272" text-anchor="end">ranked</text>
         <text class="lbl-s" x="186" y="288" text-anchor="end">inside the top 50</text>
         <rect class="rail" x="196" y="254" width="480" height="42"></rect>
-        <rect class="bar-lost" x="196" y="254" width="91" height="42"></rect>
-        <text class="lbl-n" x="299" y="280">49 · 18.9%</text>
+        <rect class="bar-lost" x="196" y="254" width="107" height="42"></rect>
+        <text class="lbl-n" x="311" y="280">58 · 22.4%</text>
       </svg>
     </div>
     <figcaption>Stage counts and recalls from
@@ -357,19 +357,25 @@ footer p{max-width:78ch;margin:0 0 12px}
 
   <div class="note crit">
     <span class="note-tag">The headline</span>
-    <p><strong>Ranking is the single largest loss in the funnel, at 43.6
+    <p><strong>Ranking is the single largest loss in the funnel, at 39.8
     points</strong> — more rings are lost between <em>built</em> and
     <em>ranked</em> than at seeding and building put together. A candidate that
     structurally covers the ring already exists; the scorer does not put it in
     the top 50. On this same run the shipped scorer measures
-    <strong>p@10 = 0.097 [0.068, 0.126]</strong>
+    <strong>p@10 = 0.291 [0.224, 0.362]</strong>
     (<code>data/funnel.json</code> → <code>metric_cis</code>).</p>
+    <p>This page previously showed −43.6 points, 49 ranked and p@10 = 0.097.
+    Those were measured before two anti-signal blend terms (<code>gargaml</code>,
+    <code>stack</code>) were retired; see
+    <code>docs/SCORE-VS-SIZE-FINDINGS.md</code>. <strong>Ranking is still the
+    largest loss</strong> — the fix improved the stage without changing which
+    stage is worst, which is the reason this figure is worth keeping.</p>
   </div>
 </section>
 
 <section>
   <span class="h2num">03 / PER TYPOLOGY</span>
-  <h2>The build stage's 26 points are two typologies, not eight</h2>
+  <h2>The build stage's 27 points are two typologies, not eight</h2>
   <p class="deck">Six of the eight ring shapes carry 77–96% of their seeded
   rings through the build stage. Two do not. The interpretation label is derived
   in code from each row's own build retention — built ÷ seeded — not from a
@@ -411,14 +417,14 @@ footer p{max-width:78ch;margin:0 0 12px}
           <td class="num">31</td><td class="num">28 · 90.3%</td>
           <td class="num">27 · 87.1%</td>
           <td><span class="mini"><i style="width:87.1%"></i></span></td>
-          <td class="num">10 · 32.3%</td><td class="num">0.96</td>
+          <td class="num">16 · 51.6%</td><td class="num">0.96</td>
           <td><span class="chip desc">ranking-limited</span></td>
         </tr>
         <tr>
           <td class="typ">GATHER-SCATTER</td>
           <td class="num">38</td><td class="num">35 · 92.1%</td>
-          <td class="num">31 · 81.6%</td>
-          <td><span class="mini"><i style="width:81.6%"></i></span></td>
+          <td class="num">30 · 78.9%</td>
+          <td><span class="mini"><i style="width:78.9%"></i></span></td>
           <td class="num">9 · 23.7%</td><td class="num">0.89</td>
           <td><span class="chip desc">ranking-limited</span></td>
         </tr>
@@ -435,7 +441,7 @@ footer p{max-width:78ch;margin:0 0 12px}
           <td class="num">36</td><td class="num">30 · 83.3%</td>
           <td class="num">24 · 66.7%</td>
           <td><span class="mini"><i style="width:66.7%"></i></span></td>
-          <td class="num">9 · 25.0%</td><td class="num">0.80</td>
+          <td class="num">11 · 30.6%</td><td class="num">0.80</td>
           <td><span class="chip">ordinary attrition</span></td>
         </tr>
         <tr>
@@ -443,7 +449,7 @@ footer p{max-width:78ch;margin:0 0 12px}
           <td class="num">30</td><td class="num">26 · 86.7%</td>
           <td class="num">21 · 70.0%</td>
           <td><span class="mini"><i style="width:70.0%"></i></span></td>
-          <td class="num">4 · 13.3%</td><td class="num">0.81</td>
+          <td class="num">5 · 16.7%</td><td class="num">0.81</td>
           <td><span class="chip">ordinary attrition</span></td>
         </tr>
         <tr>
@@ -457,20 +463,20 @@ footer p{max-width:78ch;margin:0 0 12px}
         <tr class="total">
           <td class="typ">TOTAL</td>
           <td class="num">259</td><td class="num">230 · 88.8%</td>
-          <td class="num">162 · 62.5%</td>
-          <td><span class="mini"><i style="width:62.5%"></i></span></td>
-          <td class="num">49 · 18.9%</td><td class="num">0.70</td>
+          <td class="num">161 · 62.2%</td>
+          <td><span class="mini"><i style="width:62.2%"></i></span></td>
+          <td class="num">58 · 22.4%</td><td class="num">0.70</td>
           <td><span class="chip">aggregate</span></td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  <p>The three <span class="chip desc">ranking-limited</span> rows lose almost
-  nothing at build and 55–58 points at ranking. The three
+  <p>The three <span class="chip desc">ranking-limited</span> rows lose little
+  at build (3–13 pts) and 36–57 points at ranking. The three
   <span class="chip">ordinary attrition</span> rows lose steadily at every
   stage. The two <span class="chip cut">build-destroyed</span> rows are a
-  different failure entirely — and together they are the build stage's 26
+  different failure entirely — and together they are the build stage's 27
   points.</p>
 </section>
 

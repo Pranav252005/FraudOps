@@ -19,7 +19,13 @@ the pool; adopt then keys it. Wiring the replay directly into this script is
 deliberately not done here -- it would duplicate `collect_pool`, and the point
 of the corpus is that the replay path stays single-sourced.
 
+`--rescore` regenerates the stored blend from the stored features after a SCORE
+change. It is not a shortcut around a recompile: `score()` reads only Features
+attributes and every one of them is a stored column, so the blend really is
+recoverable exactly. A FEATURE change is a different thing and needs the replay.
+
 Run:  python scripts/compile_corpus.py --adopt --provenance constructed
+      python scripts/compile_corpus.py --rescore
       python scripts/compile_corpus.py --show
 """
 from __future__ import annotations
@@ -33,7 +39,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sentinel.corpus import (CANDIDATE_PROVENANCES, CorpusKey, CorpusMismatch,
-                             load, require_consistent, save)
+                             load, require_consistent, rescore, save)
 
 ROOT = Path(__file__).resolve().parent.parent
 POOL = ROOT / "data" / "ranker_pool.npz"
@@ -51,6 +57,12 @@ def main() -> int:
                          "with --adopt; no default, because the wrong one is a "
                          "corpus that answers a different question under the "
                          "same hash")
+    ap.add_argument("--rescore", action="store_true",
+                    help="regenerate the stored blend from the stored features "
+                         "after a SCORE change (a weight, a retired term). No "
+                         "replay: score() is a pure function of columns the "
+                         "corpus already holds. Do NOT use after a FEATURE "
+                         "change -- that needs a real recompile")
     ap.add_argument("--show", action="store_true",
                     help="print the corpus key and shape, then exit")
     args = ap.parse_args()
@@ -65,8 +77,54 @@ def main() -> int:
             print(f"  {name:<14} {arrays[name].shape} {arrays[name].dtype}")
         return 0
 
+    if args.rescore:
+        if not CORPUS.exists():
+            print(f"no corpus at {CORPUS}.")
+            return 1
+        arrays, key = load(CORPUS)
+        names = [str(n) for n in arrays["names"]]
+        before = arrays["test_blend"].copy()
+        arrays = rescore(arrays, names)
+        moved = int((before != arrays["test_blend"]).sum())
+        # Rescoring is only meaningful if it makes the corpus consistent. If it
+        # does not, the disagreement was never in the score and this command
+        # was the wrong tool -- say so instead of writing a file that now
+        # passes a check it should still be failing.
+        require_consistent(arrays, names)
+        save(CORPUS, key, arrays)
+        print(f"rescored {CORPUS.name} from its own stored features")
+        print(f"  key {key.describe()}  (unchanged: the blend is not keyed)")
+        print(f"  {moved:,} of {len(before):,} test rows changed "
+              f"({100*moved/len(before):.1f}%)")
+        print("  drift check passes: the stored blend is now what this code "
+              "would produce")
+
+        # The pool is rescored too, and not as a convenience. It is the file
+        # `--adopt` reads and the one `eval_ranker.py --use-cache` takes its
+        # `blend` baseline from. Leaving it on the old score would mean the
+        # corpus and its own source disagreed -- and the next `--adopt` would
+        # produce a corpus that fails the drift check for a reason that has
+        # nothing to do with the config it just stamped. That is the staleness
+        # class this repository has already been bitten by once.
+        if POOL.exists():
+            blob = np.load(POOL, allow_pickle=True)
+            pool = {k: blob[k] for k in blob.files}
+            pnames = [str(n) for n in pool["names"]]
+            pbefore = pool["test_blend"].copy()
+            pool = rescore(pool, pnames)
+            pmoved = int((pbefore != pool["test_blend"]).sum())
+            np.savez_compressed(POOL, **pool)
+            print(f"\nrescored {POOL.name} as well "
+                  f"({pmoved:,} of {len(pbefore):,} test rows changed)")
+            print("  it is what --adopt reads and what eval_ranker.py "
+                  "--use-cache scores the\n  blend baseline from; a pool "
+                  "disagreeing with its own corpus is the bug")
+        else:
+            print(f"\nno pool at {POOL.name}; nothing else to rescore")
+        return 0
+
     if not args.adopt:
-        ap.error("nothing to do: pass --adopt or --show")
+        ap.error("nothing to do: pass --adopt, --rescore or --show")
     if not args.provenance:
         ap.error("--adopt needs --provenance {constructed|given}: the key "
                  "cannot distinguish a seed-and-expand candidate from a "

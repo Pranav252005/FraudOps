@@ -28,8 +28,14 @@ MEASURED = ROOT / "data" / "eval_phase2.json"
 # Post-pruning figures from docs/HANDOFF.md §5d, kept here only so this script
 # runs without the dataset. The size baseline is carried alongside because
 # §5d's standing rule is that no headline p@k is quoted without it.
-FALLBACK_SCORE = {10: 0.097, 20: 0.079, 50: 0.043}
-FALLBACK_SIZE = {10: 0.088, 20: 0.074, 50: 0.049}
+FALLBACK_SCORE = {10: 0.291, 20: 0.157, 50: 0.076}
+FALLBACK_SIZE = {10: 0.094, 20: 0.074, 50: 0.051}
+# Both rows moved when `gargaml` and `stack` were retired. The SIZE row moved
+# too, which looks wrong for a re-ranking and is not: `suppress()` is greedy
+# non-maximum suppression ordered by score, so the score decides which of
+# several overlapping views of a neighbourhood survives. Change the score and
+# the candidate SET changes, which every baseline is then measured on.
+# See docs/SCORE-VS-SIZE-FINDINGS.md section 5.
 
 
 def load_precision() -> tuple[dict, dict, str]:

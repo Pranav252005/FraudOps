@@ -271,6 +271,41 @@ def verify_scoring(arrays: dict, names: list[str], n_sample: int = 2000,
             "consistent": worst <= tol}
 
 
+def rescore(arrays: dict, names: list[str]) -> dict:
+    """Recompute the stored blend columns from the stored feature columns.
+
+    The cheap half of "recompile". `score()` is a pure function of Features
+    attributes, every one of which is a stored column, so when the SCORE
+    changes -- a reweighting, a retired term -- the blend can be regenerated
+    exactly without touching the stream. A replay is only needed when the
+    FEATURES change, because those depend on the graph.
+
+    This is why the blend is not part of the corpus key. Putting it there would
+    invalidate a 55-minute compile every time somebody tried a weight, which is
+    the exact iteration the corpus exists to make cheap. The blend is a cached
+    convenience column; `verify_scoring` is what keeps it honest, and this is
+    how you answer it.
+    """
+    from sentinel.detect.features import Features, score
+
+    out = dict(arrays)
+    blank = Features()
+    cols = [(j, nm) for j, nm in enumerate(names) if hasattr(blank, nm)]
+    for split in ("train", "test"):
+        xk, bk = f"{split}_X", f"{split}_blend"
+        if xk not in out or bk not in out:
+            continue
+        X = out[xk]
+        fresh = np.empty(X.shape[0], dtype=out[bk].dtype)
+        for i in range(X.shape[0]):
+            f = Features()
+            for j, nm in cols:
+                setattr(f, nm, float(X[i, j]))
+            fresh[i], _ = score(f)
+        out[bk] = fresh
+    return out
+
+
 def require_consistent(arrays: dict, names: list[str], **kw) -> dict:
     """`verify_scoring`, raising on drift. Call before computing any number."""
     r = verify_scoring(arrays, names, **kw)
@@ -279,8 +314,15 @@ def require_consistent(arrays: dict, names: list[str], **kw) -> dict:
             f"corpus disagrees with current scoring code on "
             f"{r['n_disagreeing']} of {r['n_checked']} sampled rows "
             f"(max {r['max_abs_diff']:.3e}). The key matched, so a generation "
-            f"constant did not change -- a feature's COMPUTATION did. "
-            f"Recompile; do not reinterpret.")
+            f"constant did not change -- a feature's COMPUTATION or the SCORE "
+            f"did.\n"
+            f"  If the SCORE changed (a weight, a retired term), the stored "
+            f"features are still correct and the blend can be regenerated "
+            f"exactly, with no replay:\n"
+            f"      python scripts/compile_corpus.py --rescore\n"
+            f"  If a FEATURE changed, the stream must be replayed; rescoring "
+            f"would launder the stale values into a fresh-looking blend. "
+            f"Recompile, and do not reinterpret.")
     return r
 
 

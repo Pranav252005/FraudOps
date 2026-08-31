@@ -311,7 +311,13 @@ def gate_regression() -> int:
 
 # The measured operating point the cost conclusion is quoted at
 # (data/eval_phase2.json, score p@10, post-prune).
-REPORTED_PRECISION = 0.0971
+#
+# Was 0.0971 until `gargaml` and `stack` were retired as measured anti-signal
+# (docs/SCORE-VS-SIZE-FINDINGS.md). Raising it makes the cost gate STRICTER in
+# the only direction that matters -- a queue that pays at a higher precision
+# says less than one that pays at a lower one -- so this is not the number
+# doing the work in that gate. The break-even is.
+REPORTED_PRECISION = 0.2912
 
 
 def gate_cost() -> int:

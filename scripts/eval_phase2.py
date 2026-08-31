@@ -83,6 +83,7 @@ def main() -> None:
     typ_seen: defaultdict = defaultdict(set)
     typ_found: defaultdict = defaultdict(set)
     runs = 0
+    cycle_rows: list[dict] = []
     t0 = time.time()
 
     for i, b in enumerate(stream.ticks(TICK_MINUTES, end=EVAL_END)):
@@ -108,6 +109,12 @@ def main() -> None:
             "degree": sorted(cands, key=lambda c: -c.features.max_fan),
             "size": sorted(cands, key=lambda c: -c.size),
         }
+        # Per-cycle hits are retained, not just the running totals. Without
+        # them the headline p@k has no interval and the "does the score beat
+        # size" question -- the one this whole table exists to answer -- can
+        # only be eyeballed. The cycle is the independence draw, so this is
+        # exactly the unit a paired bootstrap needs.
+        row = {"run": runs, "t": int(graph.now), "n_candidates": len(cands)}
         for name, ordered in orders.items():
             for k in KS:
                 top = ordered[:k]
@@ -127,6 +134,9 @@ def main() -> None:
                 tally[name][k][1] += len(top)
                 loose[name][k][0] += lhit
                 loose[name][k][1] += len(top)
+                row[f"{name}_hit_{k}"] = hit
+                row[f"{name}_n_{k}"] = len(top)
+        cycle_rows.append(row)
 
         print(f"  run {runs:>3} t={graph.now//1440}d{(graph.now%1440)//60:02d}h "
               f"cands={len(cands):>6,} rings={len(rings):>4} "
@@ -148,6 +158,18 @@ def main() -> None:
         row += f"{len(ring_found[name]):>13}{rec:>12.1%}"
         print(row)
 
+    # The comparison the table is for. Printed here rather than left to a
+    # reader's arithmetic, because "score 0.29 vs size 0.09" is a claim and
+    # "+0.197 [+0.128, +0.269]" is a result.
+    from sentinel.eval.bootstrap import paired_bootstrap_delta, ratio_of_sums
+    print(f"\nscore minus size, paired over the same {runs} cycles:")
+    for k in KS:
+        d = paired_bootstrap_delta(
+            cycle_rows, ratio_of_sums(f"size_hit_{k}", f"size_n_{k}"),
+            ratio_of_sums(f"score_hit_{k}", f"score_n_{k}"))
+        print(f"  k={k:<4} {d['point']:+.4f} [{d['lo']:+.4f}, {d['hi']:+.4f}]  "
+              f"{'EXCLUDES zero' if d['excludes_zero'] else 'includes zero'}")
+
     print(f"\n{'typology':<18}{'seen':>7}{'found':>7}{'recall':>9}")
     for typ in sorted(typ_seen):
         s, f = len(typ_seen[typ]), len(typ_found[typ])
@@ -166,6 +188,14 @@ def main() -> None:
         "by_typology": {t: {"seen": len(typ_seen[t]), "found": len(typ_found[t])}
                         for t in typ_seen},
         "generator_stats": gen.stats,
+        # The unit of the bootstrap, kept so the table above can be given an
+        # interval by scripts/eval_blend_v2.py without a second 6-minute replay.
+        "cycle_rows": cycle_rows,
+        "score_minus_size": {
+            str(k): paired_bootstrap_delta(
+                cycle_rows, ratio_of_sums(f"size_hit_{k}", f"size_n_{k}"),
+                ratio_of_sums(f"score_hit_{k}", f"score_n_{k}"))
+            for k in KS},
     }
     (ROOT / "data" / "eval_phase2.json").write_text(json.dumps(out, indent=2))
     print("\nwritten to data/eval_phase2.json")
