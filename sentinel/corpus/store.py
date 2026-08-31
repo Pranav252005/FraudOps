@@ -1,10 +1,19 @@
 """Content-addressed storage for a compiled candidate corpus.
 
-The key is `(dataset, detector_config_hash, feature_version)`. Any change to a
-constant that alters which candidates exist, or to the feature vector's
-composition, produces a different hash and makes an existing corpus unreadable
-for the new question -- loudly, at load time, rather than silently in a number
-somebody later quotes.
+The key is `(dataset, detector_config_hash, feature_version,
+candidate_provenance)`. Any change to a constant that alters which candidates
+exist, or to the feature vector's composition, produces a different hash and
+makes an existing corpus unreadable for the new question -- loudly, at load
+time, rather than silently in a number somebody later quotes.
+
+`candidate_provenance` was added after the key was found unable to tell two
+genuinely different objects apart. Sentinel CONSTRUCTS its candidates by
+seed-and-expand; Elliptic2 SHIPS its candidates as pre-defined connected
+components. Those are different objects answering different questions, and
+under the original key an Elliptic2 corpus built from the shipped subgraphs and
+one built by seed-and-expand over `background_edges.csv` would have collided on
+the same hash. It is folded into the digest as well as carried as a field, so
+the collision closes at the hash and not merely at the comparison.
 """
 from __future__ import annotations
 
@@ -22,6 +31,37 @@ from sentinel import config
 # counts, because `names` is part of the hash and a stale corpus would other-
 # wise be matched to the wrong column.
 FEATURE_VERSION = 1
+
+# How the candidates in a corpus came to exist. Not a detail of generation --
+# a different KIND of object.
+#
+#   constructed  seed-and-expand produced the candidate boundary. The candidate
+#                is Sentinel's hypothesis, and its recall is a property of the
+#                seeding and expansion rules.
+#   given        the dataset shipped the boundary (Elliptic2's
+#                `connected_components.csv`). There is no seeding step to have
+#                recall about; the boundary is ground truth by construction.
+#
+# Pooling the two is valid for a SCORER question -- a scorer is a function on
+# feature vectors and does not care where the boundary came from -- and invalid
+# for a RECALL question, where "did we find it" means something different on
+# each side. `require_poolable` enforces that; see it for why the corpus does
+# not decide which question is being asked.
+CANDIDATE_PROVENANCES = ("constructed", "given")
+
+# Which questions may be answered from corpora of MIXED provenance. Listed
+# explicitly rather than inferred, because the default for an unlisted question
+# is refusal, and a question that silently defaulted to "poolable" is exactly
+# the confident wrong answer this key exists to prevent.
+POOLING_VALIDITY = {
+    "scorer": True,        # a function on feature vectors; boundary origin is
+    "ranking": True,       # not an input to it
+    "calibration": True,
+    "recall": False,       # "found it" is a different event on each side
+    "seeding": False,      # there is no seeding step on `given` candidates
+    "build": False,
+    "funnel": False,       # the funnel IS the seeding/build path
+}
 
 # The constants that determine WHICH candidates exist. A corpus built under one
 # set cannot answer a question posed under another. `STRUCTURAL_RECALL_CEILING`
@@ -56,16 +96,29 @@ class CorpusDrift(CorpusMismatch):
     """
 
 
-def detector_config_hash(feature_names: list[str] | tuple[str, ...]) -> str:
-    """Stable short hash over generation constants and the feature schema.
+def detector_config_hash(feature_names: list[str] | tuple[str, ...],
+                         candidate_provenance: str) -> str:
+    """Stable short hash over generation constants, feature schema, provenance.
 
     Sorted and JSON-encoded so the digest does not depend on dict ordering or
     on a set's iteration order -- this project has already been bitten once by
     a `set` whose order changed under `PYTHONHASHSEED`.
+
+    `candidate_provenance` is required rather than defaulted. A default would
+    let a caller who has not thought about it collide a constructed corpus with
+    a given one, which is the exact failure this argument was added to close;
+    refusing at the call site is cheaper than a wrong number later.
     """
+    if candidate_provenance not in CANDIDATE_PROVENANCES:
+        raise ValueError(
+            f"candidate_provenance must be one of {CANDIDATE_PROVENANCES}, "
+            f"got {candidate_provenance!r}. Constructed candidates (seed-and-"
+            f"expand) and given ones (a shipped subgraph list) are different "
+            f"objects; there is no third default that is safe.")
     payload = {name: _stable(getattr(config, name))
                for name in _GENERATION_CONSTANTS}
     payload["feature_names"] = list(feature_names)
+    payload["candidate_provenance"] = candidate_provenance
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
@@ -82,23 +135,96 @@ class CorpusKey:
 
     dataset: str
     detector_config_hash: str
+    candidate_provenance: str
     feature_version: int = FEATURE_VERSION
+
+    def __post_init__(self) -> None:
+        if self.candidate_provenance not in CANDIDATE_PROVENANCES:
+            raise ValueError(
+                f"candidate_provenance must be one of {CANDIDATE_PROVENANCES}, "
+                f"got {self.candidate_provenance!r}")
 
     @classmethod
     def for_current_config(cls, dataset: str,
-                           feature_names: list[str] | tuple[str, ...]) -> "CorpusKey":
+                           feature_names: list[str] | tuple[str, ...],
+                           candidate_provenance: str) -> "CorpusKey":
         return cls(dataset=dataset,
-                   detector_config_hash=detector_config_hash(feature_names),
+                   detector_config_hash=detector_config_hash(
+                       feature_names, candidate_provenance),
+                   candidate_provenance=candidate_provenance,
                    feature_version=FEATURE_VERSION)
 
     def to_dict(self) -> dict:
         return {"dataset": self.dataset,
                 "detector_config_hash": self.detector_config_hash,
+                "candidate_provenance": self.candidate_provenance,
                 "feature_version": self.feature_version}
 
     def describe(self) -> str:
         return (f"{self.dataset}/{self.detector_config_hash}"
-                f"/v{self.feature_version}")
+                f"/v{self.feature_version}/{self.candidate_provenance}")
+
+
+class ProvenanceMismatch(CorpusMismatch):
+    """Corpora of different candidate provenance were pooled for a question
+    whose answer depends on where the candidate boundary came from.
+
+    Raised rather than warned, for the same reason `load` raises: a warning is
+    a number that still gets computed and still gets quoted.
+    """
+
+
+def stratify_by_provenance(keys, items=None) -> dict:
+    """Group corpora by provenance, so a caller can report per stratum.
+
+    This is the alternative to refusing. A question that cannot POOL across
+    provenance can still be ANSWERED across it -- once per stratum, reported
+    separately, never averaged into one figure.
+    """
+    keys = list(keys)
+    items = list(keys) if items is None else list(items)
+    out: dict = {}
+    for key, item in zip(keys, items):
+        out.setdefault(key.candidate_provenance, []).append(item)
+    return out
+
+
+def require_poolable(keys, question: str) -> str:
+    """The single provenance these corpora share, or a refusal.
+
+    The corpus does not know which question is being asked and must not guess,
+    so the caller names it. `question` is looked up in `POOLING_VALIDITY`, and
+    an unlisted question is REFUSED rather than assumed poolable -- the cost of
+    a wrong "yes" here is a pooled recall number that means nothing.
+
+    Returns the shared provenance when the corpora agree, or the joined name
+    ("constructed+given") when they differ and the question permits it: a value
+    that reads as mixed wherever it is printed, so a pooled number cannot be
+    mistaken later for a single-provenance one.
+    """
+    keys = list(keys)
+    if not keys:
+        raise ValueError("require_poolable needs at least one corpus key")
+    if question not in POOLING_VALIDITY:
+        raise ProvenanceMismatch(
+            f"unknown question {question!r}: it is not in POOLING_VALIDITY "
+            f"{sorted(POOLING_VALIDITY)}. An unlisted question is refused "
+            f"rather than assumed poolable -- add it there, with the reason, "
+            f"once you have decided whether its answer depends on where the "
+            f"candidate boundary came from.")
+    found = sorted({k.candidate_provenance for k in keys})
+    if len(found) == 1:
+        return found[0]
+    if not POOLING_VALIDITY[question]:
+        raise ProvenanceMismatch(
+            f"cannot pool {found} for a {question!r} question. Constructed "
+            f"candidates come from seed-and-expand and their recall is a "
+            f"property of the seeding rules; given candidates are the "
+            f"dataset's own subgraphs and have no seeding step to have recall "
+            f"about, so the same number would mean two different things. "
+            f"Report per stratum with stratify_by_provenance(), or ask a "
+            f"question that does not depend on the boundary's origin.")
+    return "+".join(found)
 
 
 def verify_scoring(arrays: dict, names: list[str], n_sample: int = 2000,
@@ -185,7 +311,19 @@ def load(path: Path, expect: CorpusKey | None = None) -> tuple[dict, CorpusKey]:
             f"cannot be verified against a detector config -- recompile it, "
             f"or stamp it with scripts/compile_corpus.py --adopt if you can "
             f"confirm which config produced it.")
-    stored = CorpusKey(**json.loads(str(blob["__key__"])))
+    payload = json.loads(str(blob["__key__"]))
+    if "candidate_provenance" not in payload:
+        raise CorpusMismatch(
+            f"{path} carries a key from before candidate_provenance existed, "
+            f"so it cannot say whether its candidates were CONSTRUCTED by "
+            f"seed-and-expand or GIVEN by the dataset. Those are different "
+            f"objects and the old key could not tell them apart -- which is "
+            f"why the field was added. Restamp it with\n"
+            f"    python scripts/compile_corpus.py --adopt --provenance "
+            f"<constructed|given>\n"
+            f"once you can say which it is; the adopt path verifies the stored "
+            f"scores behaviourally, so that promise is checked.")
+    stored = CorpusKey(**payload)
     if expect is not None and stored != expect:
         raise CorpusMismatch(
             f"corpus at {path} answers {stored.describe()}, but this question "

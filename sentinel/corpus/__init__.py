@@ -21,15 +21,29 @@ The partition this rests on, and the line not to cross:
 Serving a cached corpus for a question about a detector configuration it was
 not built from would be a confident wrong answer of exactly the kind this
 project keeps a bug catalogue for. That is why the corpus is keyed by
-`(dataset, detector_config_hash, feature_version)` and why `load` REFUSES a
-mismatch rather than warning about it. The key is the safety mechanism, not
-decoration.
-"""
-from sentinel.corpus.store import (FEATURE_VERSION, CorpusDrift, CorpusKey,
-                                   CorpusMismatch, detector_config_hash,
-                                   load, require_consistent, save,
-                                   verify_scoring)
+`(dataset, detector_config_hash, feature_version, candidate_provenance)` and
+why `load` REFUSES a mismatch rather than warning about it. The key is the
+safety mechanism, not decoration.
 
-__all__ = ["FEATURE_VERSION", "CorpusDrift", "CorpusKey", "CorpusMismatch",
-           "detector_config_hash", "load", "require_consistent", "save",
+`candidate_provenance` is the fourth field and the newest. A candidate that
+seed-and-expand CONSTRUCTED and a subgraph the dataset GAVE are different
+objects; before this field they hashed the same, so an Elliptic2 corpus built
+from `connected_components.csv` and one built by seed-and-expand over
+`background_edges.csv` would have been served interchangeably while answering
+different questions. Pooling the two is valid for a scorer question and invalid
+for a recall one -- and since the corpus cannot know which is being asked,
+`require_poolable` makes the caller name the question and refuses on the ones
+that do not survive pooling.
+"""
+from sentinel.corpus.store import (CANDIDATE_PROVENANCES, FEATURE_VERSION,
+                                   POOLING_VALIDITY, CorpusDrift, CorpusKey,
+                                   CorpusMismatch, ProvenanceMismatch,
+                                   detector_config_hash, load,
+                                   require_consistent, require_poolable, save,
+                                   stratify_by_provenance, verify_scoring)
+
+__all__ = ["CANDIDATE_PROVENANCES", "FEATURE_VERSION", "POOLING_VALIDITY",
+           "CorpusDrift", "CorpusKey", "CorpusMismatch", "ProvenanceMismatch",
+           "detector_config_hash", "load", "require_consistent",
+           "require_poolable", "save", "stratify_by_provenance",
            "verify_scoring"]

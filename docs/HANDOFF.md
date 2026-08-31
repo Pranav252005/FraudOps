@@ -6,7 +6,10 @@ session can pick up without re-deriving anything.
 **Repo:** https://github.com/Pranav252005/FraudOps
 **Target:** Razorpay AI Buildathon, AI Risk Manager track. One class of loss:
 money-movement / mule rings. Defence only.
-**Tests:** 450 passing + 1 xfail, 0 skipped. `python -m pytest -q` is the only authority for this figure.
+**Tests:** 494 passing + 1 xfailed, 0 skipped. `python -m pytest -q` is the only authority for this figure.
+(Read 450 when written and 480 after the corpus drift check landed. Corrected in
+place each time rather than rewritten — the drift of this one number across three
+sessions is itself the argument for why the line defers to the suite.)
 (Nothing skips on this machine any more: snapml 1.15.6 is installed in `.venv311`, so the
 constructor check in `tests/test_gfp_control.py` now runs for real and asserts the
 `AttributeError: ... has no attribute 'gf_allocate'` that is the actual Windows blocker.
@@ -1050,6 +1053,14 @@ Paired bootstrap, lambdamart minus pointwise, same ring-disjoint split, same
 | 20 | +0.0111 | [-0.0139, +0.0361] | no |
 | 50 | +0.0122 | [+0.0022, +0.0244] | yes |
 
+> **Superseded as a way of reporting this, 2026-08-31.** The point estimates
+> are kept above because this document keeps what it wrote, but the README no
+> longer leads with them. All three are exact integer multiples of the
+> statistic's step size, 1/(18k) — 3, 4 and 11 single-slot swaps
+> respectively — so they sit at the resolution limit of the design that
+> produced them and should not be read as rates. The intervals carry the
+> result; see the README's "Three measurements came back negative" section.
+
 The pre-registered prediction (a listwise loss beats a pointwise classifier)
 was wrong in both directions. The intervals at k=10 and k=20 are null, not
 "trending"; the one CI-clear delta is at k=50, the depth where the alert
@@ -1237,6 +1248,7 @@ frontend/              console UI
 scripts/               verify_patterns, build_stream, eval_phase2/4,
                        eval_vs_published, build_queue, run_replay
 docs/                  PHASE0-FINDINGS, PHASE2-FINDINGS, PHASE4-FINDINGS,
+                       PHASE5-FINDINGS (Elliptic2 schema: expansion cancelled),
                        ARCHITECTURE-V2, sentinel-design.html, this file
 ```
 

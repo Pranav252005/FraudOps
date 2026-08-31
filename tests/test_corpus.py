@@ -15,56 +15,62 @@ import pytest
 
 from sentinel import config
 from sentinel.corpus import (FEATURE_VERSION, CorpusDrift, CorpusKey,
-                             CorpusMismatch, detector_config_hash, load,
-                             require_consistent, save, verify_scoring)
+                             CorpusMismatch, ProvenanceMismatch,
+                             detector_config_hash, load, require_consistent,
+                             require_poolable, save, stratify_by_provenance,
+                             verify_scoring)
 
 NAMES = ["conservation", "n_nodes", "passthrough_ratio"]
+# Sentinel's own candidates are constructed by seed-and-expand. Spelled out in
+# every call rather than defaulted, because the argument exists precisely so
+# that nobody gets it by accident.
+CONSTRUCTED = "constructed"
 ARRAYS = {"test_X": np.zeros((3, 3)), "test_y": np.array([0, 1, 0])}
 
 
 def test_key_is_stable_for_the_same_config():
-    assert detector_config_hash(NAMES) == detector_config_hash(NAMES)
+    assert detector_config_hash(NAMES, CONSTRUCTED) == detector_config_hash(NAMES, CONSTRUCTED)
 
 
 def test_key_does_not_depend_on_set_iteration_order():
     """EXCLUDED_FEATURES is a frozenset; a digest over its raw repr would be
     hash-seed dependent, which this project has already been bitten by once."""
-    a = detector_config_hash(NAMES)
-    assert a == detector_config_hash(list(NAMES))
+    a = detector_config_hash(NAMES, CONSTRUCTED)
+    assert a == detector_config_hash(list(NAMES), CONSTRUCTED)
 
 
 def test_changing_a_generation_constant_changes_the_key(monkeypatch):
-    before = detector_config_hash(NAMES)
+    before = detector_config_hash(NAMES, CONSTRUCTED)
     monkeypatch.setattr(config, "EXPAND_HOPS", config.EXPAND_HOPS + 1)
-    assert detector_config_hash(NAMES) != before
+    assert detector_config_hash(NAMES, CONSTRUCTED) != before
 
 
 def test_changing_the_prune_strategy_changes_the_key(monkeypatch):
-    before = detector_config_hash(NAMES)
+    before = detector_config_hash(NAMES, CONSTRUCTED)
     monkeypatch.setattr(config, "PRUNE_STRATEGY", "definitely-not-leaf2")
-    assert detector_config_hash(NAMES) != before
+    assert detector_config_hash(NAMES, CONSTRUCTED) != before
 
 
 def test_changing_the_feature_schema_changes_the_key():
-    assert detector_config_hash(NAMES) != detector_config_hash(NAMES + ["new"])
+    assert detector_config_hash(NAMES, CONSTRUCTED) != detector_config_hash(NAMES + ["new"], CONSTRUCTED)
 
 
 def test_renaming_a_feature_changes_the_key():
     """Same width, same values, different meaning per column."""
     renamed = ["conservation", "n_nodes", "passthrough_ratio_v2"]
-    assert detector_config_hash(NAMES) != detector_config_hash(renamed)
+    assert detector_config_hash(NAMES, CONSTRUCTED) != detector_config_hash(renamed, CONSTRUCTED)
 
 
 def test_documentation_only_constants_do_not_invalidate_a_corpus(monkeypatch):
     """STRUCTURAL_RECALL_CEILING is a reported property, not an input to
     generation -- bumping it must not orphan every stored corpus."""
-    before = detector_config_hash(NAMES)
+    before = detector_config_hash(NAMES, CONSTRUCTED)
     monkeypatch.setattr(config, "STRUCTURAL_RECALL_CEILING", 0.5)
-    assert detector_config_hash(NAMES) == before
+    assert detector_config_hash(NAMES, CONSTRUCTED) == before
 
 
 def test_round_trip_preserves_arrays_and_key(tmp_path):
-    key = CorpusKey.for_current_config("test-set", NAMES)
+    key = CorpusKey.for_current_config("test-set", NAMES, CONSTRUCTED)
     save(tmp_path / "c.npz", key, ARRAYS)
     arrays, got = load(tmp_path / "c.npz", expect=key)
     assert got == key
@@ -72,26 +78,26 @@ def test_round_trip_preserves_arrays_and_key(tmp_path):
 
 
 def test_load_refuses_a_corpus_built_for_another_config(tmp_path):
-    stored = CorpusKey("test-set", "0" * 16, FEATURE_VERSION)
+    stored = CorpusKey("test-set", "0" * 16, CONSTRUCTED, FEATURE_VERSION)
     save(tmp_path / "c.npz", stored, ARRAYS)
-    wanted = CorpusKey.for_current_config("test-set", NAMES)
+    wanted = CorpusKey.for_current_config("test-set", NAMES, CONSTRUCTED)
     with pytest.raises(CorpusMismatch, match="needs"):
         load(tmp_path / "c.npz", expect=wanted)
 
 
 def test_load_refuses_a_corpus_from_another_dataset(tmp_path):
-    key = CorpusKey.for_current_config("elliptic2", NAMES)
+    key = CorpusKey.for_current_config("elliptic2", NAMES, CONSTRUCTED)
     save(tmp_path / "c.npz", key, ARRAYS)
     with pytest.raises(CorpusMismatch):
         load(tmp_path / "c.npz",
-             expect=CorpusKey.for_current_config("amlworld-hi-small", NAMES))
+             expect=CorpusKey.for_current_config("amlworld-hi-small", NAMES, CONSTRUCTED))
 
 
 def test_load_refuses_a_corpus_from_an_older_feature_version(tmp_path):
-    key = CorpusKey.for_current_config("test-set", NAMES)
+    key = CorpusKey.for_current_config("test-set", NAMES, CONSTRUCTED)
     save(tmp_path / "c.npz", key, ARRAYS)
     older = CorpusKey(key.dataset, key.detector_config_hash,
-                      FEATURE_VERSION - 1)
+                      key.candidate_provenance, FEATURE_VERSION - 1)
     with pytest.raises(CorpusMismatch):
         load(tmp_path / "c.npz", expect=older)
 
@@ -101,13 +107,13 @@ def test_load_refuses_an_unkeyed_file(tmp_path):
     np.savez_compressed(tmp_path / "bare.npz", **ARRAYS)
     with pytest.raises(CorpusMismatch, match="no corpus key"):
         load(tmp_path / "bare.npz",
-             expect=CorpusKey.for_current_config("test-set", NAMES))
+             expect=CorpusKey.for_current_config("test-set", NAMES, CONSTRUCTED))
 
 
 def test_load_without_an_expected_key_is_inspection_only(tmp_path):
     """Reading a corpus blind is allowed, but callers computing a number must
     pass the key they need -- that is the only way staleness surfaces early."""
-    key = CorpusKey.for_current_config("test-set", NAMES)
+    key = CorpusKey.for_current_config("test-set", NAMES, CONSTRUCTED)
     save(tmp_path / "c.npz", key, ARRAYS)
     _, got = load(tmp_path / "c.npz")
     assert got == key
@@ -134,7 +140,7 @@ def test_corpus_refit_reproduces_the_stored_held_out_p_at_10():
 
     names = [str(n) for n in np.load(CORPUS, allow_pickle=True)["names"]]
     arrays, _ = load(CORPUS, expect=CorpusKey.for_current_config(
-        "amlworld-hi-small", names))
+        "amlworld-hi-small", names, CONSTRUCTED))
 
     model = LGBMClassifier(n_estimators=300, max_depth=6, learning_rate=0.05,
                            class_weight="balanced", random_state=7,
@@ -224,7 +230,121 @@ def test_a_matching_key_does_not_imply_consistency():
     """The point of the whole check, stated as a test: key equality and
     scoring consistency are independent, and only one of them is cheap."""
     arrays, names = _synthetic_corpus()
-    key = CorpusKey.for_current_config("test-set", names)
+    key = CorpusKey.for_current_config("test-set", names, CONSTRUCTED)
     arrays["test_blend"] = np.nextafter(arrays["test_blend"], np.inf)
-    assert CorpusKey.for_current_config("test-set", names) == key
+    assert CorpusKey.for_current_config("test-set", names, CONSTRUCTED) == key
     assert not verify_scoring(arrays, names)["consistent"]
+
+
+# --- candidate provenance -----------------------------------------------------
+#
+# The key's fourth field, and the one added last. Constructed candidates
+# (seed-and-expand chose the boundary) and given ones (the dataset shipped it)
+# are different objects; before this field they hashed identically, so two
+# corpora answering different questions were interchangeable. These tests are
+# about that collision staying closed and about the pooling refusal firing.
+
+
+def test_provenance_changes_the_hash():
+    """The collision this field was added to close, stated directly."""
+    assert (detector_config_hash(NAMES, "constructed")
+            != detector_config_hash(NAMES, "given"))
+
+
+def test_provenance_is_in_the_digest_not_merely_beside_it():
+    """Carrying it as a field alone would leave the hashes equal, and a hash is
+    what gets compared when someone reaches past CorpusKey."""
+    a = CorpusKey.for_current_config("elliptic2", NAMES, "constructed")
+    b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    assert a.detector_config_hash != b.detector_config_hash
+
+
+def test_provenance_has_no_default():
+    with pytest.raises(TypeError):
+        detector_config_hash(NAMES)
+
+
+def test_an_unknown_provenance_is_refused():
+    with pytest.raises(ValueError, match="candidate_provenance"):
+        detector_config_hash(NAMES, "somewhere")
+    with pytest.raises(ValueError, match="candidate_provenance"):
+        CorpusKey("test-set", "0" * 16, "somewhere")
+
+
+def test_provenance_appears_in_describe():
+    """It has to be visible wherever a key is printed, or a reader comparing
+    two runs by eye cannot tell they answer different questions."""
+    key = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    assert "given" in key.describe()
+
+
+def test_load_refuses_a_corpus_of_the_other_provenance(tmp_path):
+    given = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    save(tmp_path / "c.npz", given, ARRAYS)
+    with pytest.raises(CorpusMismatch):
+        load(tmp_path / "c.npz",
+             expect=CorpusKey.for_current_config("elliptic2", NAMES,
+                                                 "constructed"))
+
+
+def test_load_refuses_a_key_written_before_provenance_existed(tmp_path):
+    """Every corpus stamped before this field cannot say which it is, and a
+    guess would be exactly the silent wrong answer the field prevents."""
+    payload = dict(ARRAYS)
+    payload["__key__"] = np.array(json.dumps(
+        {"dataset": "test-set", "detector_config_hash": "0" * 16,
+         "feature_version": FEATURE_VERSION}))
+    np.savez_compressed(tmp_path / "old.npz", **payload)
+    with pytest.raises(CorpusMismatch, match="candidate_provenance"):
+        load(tmp_path / "old.npz")
+
+
+def test_pooling_one_provenance_returns_it():
+    key = CorpusKey.for_current_config("test-set", NAMES, CONSTRUCTED)
+    assert require_poolable([key], "recall") == CONSTRUCTED
+
+
+def test_pooling_across_provenance_is_allowed_for_a_scorer_question():
+    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    assert require_poolable([a, b], "scorer") == "constructed+given"
+
+
+def test_pooling_across_provenance_is_refused_for_a_recall_question():
+    """A scorer is a function on feature vectors and does not care where the
+    boundary came from. Recall does: `given` candidates have no seeding step to
+    have recall about."""
+    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    with pytest.raises(ProvenanceMismatch, match="recall"):
+        require_poolable([a, b], "recall")
+
+
+def test_the_funnel_is_a_recall_question_and_cannot_pool():
+    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    with pytest.raises(ProvenanceMismatch):
+        require_poolable([a, b], "funnel")
+
+
+def test_an_unlisted_question_is_refused_not_assumed_poolable():
+    """The default has to be refusal. A question that silently defaulted to
+    poolable is the confident wrong answer this key exists to prevent."""
+    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    with pytest.raises(ProvenanceMismatch, match="unknown question"):
+        require_poolable([a, b], "whatever-this-is")
+
+
+def test_refusal_is_a_kind_of_mismatch():
+    """Callers already guarding with CorpusMismatch keep working."""
+    assert issubclass(ProvenanceMismatch, CorpusMismatch)
+
+
+def test_stratify_groups_by_provenance():
+    """The alternative to refusing: answer per stratum, never averaged."""
+    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
+    c = CorpusKey.for_current_config("other", NAMES, "given")
+    groups = stratify_by_provenance([a, b, c], ["A", "B", "C"])
+    assert groups == {"constructed": ["A"], "given": ["B", "C"]}

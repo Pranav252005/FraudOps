@@ -43,12 +43,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lightgbm import LGBMClassifier
 
-from sentinel.corpus import CorpusKey, load, require_consistent
+from sentinel.corpus import (CorpusKey, load, require_consistent,
+                             require_poolable)
 
 ROOT = Path(__file__).resolve().parent.parent
 CORPUS = ROOT / "data" / "corpus_amlworld_hi_small.npz"
 OUT = ROOT / "data" / "eval_ring_unit.json"
 DATASET = "amlworld-hi-small"
+# Sentinel builds its own candidate boundaries by seed-and-expand. Stated as a
+# constant rather than inferred, because the alternative -- a dataset that
+# SHIPS its subgraphs -- produces a different object under an otherwise
+# identical config, and this is the field that keeps the two apart.
+PROVENANCE = "constructed"
+# What is being asked of the corpus. `require_poolable` refuses a question it
+# has no validity entry for, so this string is load-bearing: it is the point at
+# which "may these corpora be pooled" gets a real answer instead of a default.
+QUESTION = "scorer"
 K = 10
 N_RESAMPLES = 2000
 SEED = 7
@@ -110,9 +120,13 @@ def _mean(i):
 def main() -> int:
     t0 = time.time()
     arrays, key = load(CORPUS, expect=CorpusKey.for_current_config(
-        DATASET, [str(n) for n in np.load(CORPUS, allow_pickle=True)["names"]]))
+        DATASET, [str(n) for n in np.load(CORPUS, allow_pickle=True)["names"]],
+        PROVENANCE))
+    provenance = require_poolable([key], QUESTION)
     print(f"corpus {key.describe()}  (no replay: the stream holds no further "
           f"information about a scorer question)")
+    print(f"candidate provenance: {provenance} -- a {QUESTION} question, so "
+          f"pooling across provenance would be permitted; only one is loaded")
 
     # The key proves no generation CONSTANT changed. It cannot prove no
     # feature COMPUTATION changed -- the first corpus adopted here was stale in
@@ -147,6 +161,7 @@ def main() -> int:
 
     out = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
            "corpus_key": key.to_dict(), "k": K,
+           "question": QUESTION, "candidate_provenance": provenance,
            "conditioning": "P(ring in top k | BUILT); blind to the 26.3-point "
                            "build-stage loss, which is systematic not random",
            "rankings": {}, "paired": {}}

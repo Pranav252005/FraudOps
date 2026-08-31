@@ -27,11 +27,23 @@ nothing written to disk. See `Source`.
 The archive contains these five files, which `load()` will also read from a
 directory (`data/elliptic2/`) if you did extract them:
 
-    background_nodes.csv       one row per wallet cluster; first column is
-                                the cluster id; remaining 43 columns are
-                                anonymised, pre-binned node features
-    background_edges.csv       columns `clId1,clId2` -- one background-graph
-                                transaction edge between two clusters
+    background_nodes.csv       44 columns: `clId` then `feat#1` .. `feat#43`,
+                                anonymised node features, pre-binned to
+                                integer codes (observed range 0-99)
+    background_edges.csv       98 columns: `clId1,clId2,txId` then `feat#1`
+                                .. `feat#95`. Only the two endpoint columns are
+                                read, here and in the official
+                                `preprocess_glass.py`, and NOT because the rest
+                                are absent -- because they are unusable. Every
+                                feature column is an anonymous ordinal bin code
+                                (observed ranges 0-99, 10-88, 0-9, 0-4), the
+                                paper names transaction volume and fee as being
+                                among the 95 but never says which index, and no
+                                bin edges are published. So there is no amount
+                                to read: `amount=1.0` below is a placeholder
+                                standing in for a quantity the dataset does not
+                                ship, not a simplification of one it does. See
+                                docs/PHASE5-FINDINGS.md section 2.
     connected_components.csv   one row per labelled subgraph: an id column
                                 plus `ccLabel` ("licit" / "suspicious")
     nodes.csv                  node -> connected-component membership
@@ -383,6 +395,13 @@ def load(root=None, induced: bool = True,
             src, dst = str(row[c1]), str(row[c2])
             if induced and src not in labelled_nodes and dst not in labelled_nodes:
                 continue
+            # amount=1.0 is a PLACEHOLDER, not a unit amount. Elliptic2
+            # publishes no magnitude -- see the file schema in the module
+            # docstring. Every amount-derived feature therefore degenerates:
+            # with a constant amount, `inflow`/`outflow` become boundary edge
+            # COUNTS and `conservation` becomes a boundary-degree ratio wearing
+            # the name of a flow ratio. It does not crash and it produces a
+            # plausible number in 0..1, which is what makes it dangerous.
             edges.append(Edge(ts=EPOCH, src=src, dst=dst, amount=1.0, currency="BTC"))
             if max_background_edges is not None and len(edges) >= max_background_edges:
                 break

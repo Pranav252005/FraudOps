@@ -15,7 +15,10 @@ review.
 Built for the Razorpay AI Buildathon, **AI Risk Manager** track. One class of
 loss: **merchant-account abuse rings / money movement**. Strictly defence-only.
 
-**450 tests passing, 1 xfail.** `python -m pytest -q`
+**494 tests passing, 1 xfail.** `python -m pytest -q`
+(Read 450 when this line was written and 480 after the corpus drift check landed;
+corrected in place rather than rewritten. The number moves every session and the
+only authority for it is a run of the suite, never this line.)
 
 ---
 
@@ -451,19 +454,33 @@ pointwise model itself. Paired bootstrap, lambdamart minus pointwise, same
 ring-disjoint split, same 18 held-out cycles
 (`data/eval_ranker.json`, `head_to_head_vs_pointwise`):
 
-| k | delta | 95% CI | excludes zero? |
-|---:|---:|---|---|
-| 10 | -0.0167 | [-0.0611, +0.0222] | no |
-| 20 | +0.0111 | [-0.0139, +0.0361] | no |
-| 50 | +0.0122 | [+0.0022, +0.0244] | yes |
+| k | 95% CI on the delta | excludes zero? | the delta, in queue slots |
+|---:|---|---|---|
+| 10 | [-0.0611, +0.0222] | no | 3 slots out of 180 |
+| 20 | [-0.0139, +0.0361] | no | 4 slots out of 360 |
+| 50 | [+0.0022, +0.0244] | yes | 11 slots out of 900 |
 
-The pre-registered prediction was that a ranking-native loss would beat a
-pointwise classifier; it was wrong in both directions, not merely optimistic —
-LambdaMART neither loses to the pointwise model nor clearly beats it. The two
-are statistically indistinguishable at k=10 and k=20, and the one interval
-that clears zero is at k=50, the depth where the analyst's alert budget
-matters least. There is no measured case here for shipping the listwise loss
-over the pointwise model.
+**The point estimates used to lead this table and no longer do.** They were
+-0.0167, +0.0111 and +0.0122, and they are still in `data/eval_ranker.json`
+— but stating them as the measurement invited them to be quoted on their own,
+away from the intervals that are the actual result. A delta of -0.0167 over 18
+held-out cycles at k=10 is not a rate: it is exactly three single-slot swaps
+out of 180, because the statistic can only move in steps of 1/(18k). All three
+deltas land on exact integer multiples of that step — 3, 4 and 11 slots —
+which is what a quantity at the resolution limit of its own design looks like.
+The interval is the honest object; the digit is an artefact of where 18 cycles
+happened to fall.
+
+The conclusion is unchanged and now rests where it should. At k=10 and k=20
+the intervals contain zero: the two models are statistically indistinguishable
+at the depths an analyst's alert budget actually reaches. The one interval that
+clears zero is at k=50, and it clears it by 11 slots out of 900, at the depth
+that matters least. The pre-registered prediction was that a ranking-native
+loss would beat a pointwise classifier; it was wrong in both directions, not
+merely optimistic — LambdaMART neither loses to the pointwise model nor
+clearly beats it. **There is no measured case here for shipping the listwise
+loss over the pointwise model,** which was the conclusion under the point
+estimates too. Only its evidentiary basis changed.
 
 **2. Closing a real GFP coverage gap made ranking worse, not better — and the
 seed-stability re-run that would have qualified that claim has already run.**
@@ -1145,8 +1162,24 @@ confidence interval in this README.
 dataset.** `scripts/eval_elliptic2.py` and `sentinel/data/`'s Elliptic2 reader
 are tested against a ten-node fixture in `tests/fixtures/elliptic2_sample/`,
 and `data/eval_elliptic2.json` records `"is_sample": true` for precisely that
-reason. The real data requires a manual access request. **No Elliptic2 number
-in this repository is a result**, and none is quoted as one.
+reason. **No Elliptic2 number in this repository is a result**, and none is
+quoted as one.
+
+**Corrected twice, and the second correction cancels the plan.** This paragraph
+used to say the real data "requires a manual access request". It does not:
+Elliptic2 is public on Kaggle and `scripts/download_elliptic2.bat` fetches it.
+The access blocker was never real. But a schema inspection then found the
+blocker that is — Elliptic2 ships **no transaction amount**. Its 95 edge
+features are anonymous ordinal bin codes (`feat#1`…`feat#95`, small integers
+0—99), the paper names volume and fee as being among them but never says
+which index, and no bin edges are published. Value conservation is a ratio of
+sums of amounts and cannot be computed on codes that do not add. More than half
+the v1 blend's weight (0.54, including its two largest terms) has no Elliptic2
+equivalent, and a `conservation` column carrying a bin statistic on one dataset
+and a flow ratio on the other would hash identically under `feature_version`.
+**Pooling the two datasets is invalid, and the cross-dataset expansion below is
+cancelled rather than deferred.** Full inspection in
+[`docs/PHASE5-FINDINGS.md`](docs/PHASE5-FINDINGS.md) §2.
 
 The intended use is a **second dataset for cross-dataset generalisation**, and
 explicitly **not** a change of market. One caution on what that can mean:
@@ -1154,9 +1187,14 @@ training on Elliptic2 and testing on HI-Small would be a category error — the
 feature set depends on bank and jurisdiction metadata (`n_banks`,
 `n_countries`, `cross_border`, `entity_reuse`) that a Bitcoin cluster graph has
 no equivalent for, and a synthetic injected typology is not the same object as
-a real investigative outcome. What transfers is the *funnel*: does seed-and-
+a real investigative outcome. What was to transfer is the *funnel*: does seed-and-
 expand recover real suspicious subgraphs on a domain it was never tuned
-against? That is a structural validation, not a trained-model transfer. Repositioning onto crypto would walk
+against? That is a structural validation, not a trained-model transfer — and
+it is the plan that the schema inspection above cancelled. Seed-and-expand
+seeds on a pass-through vertex **where conservation holds**, and with no
+amounts there is no criterion for it to fire on; what is left is a degree test
+that fires across a large fraction of a 49M-node graph. The caution about the
+category error stands and is now the smaller of the two problems. Repositioning onto crypto would walk
 into Chainalysis, Elliptic and TRM, and away from Indian payments. The dataset
 is worth taking; the market is not.
 
