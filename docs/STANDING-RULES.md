@@ -9,12 +9,12 @@ and 7 are only partially mechanised, and that is recorded rather than rounded up
 
 | # | rule | enforced by |
 |---:|---|---|
-| 1 | Never state a number that has not been measured | *partial* — `sentinel/report/` cannot invent a value; the prose literal scan is not yet written |
+| 1 | Never state a number that has not been measured | *partial, ratcheted* — `sentinel/report/` cannot invent a value; `tests/test_prose_literals.py` holds the 1,636 unmarked prose literals to a count that may fall and never rise |
 | 2 | Always quote p@k beside its size baseline | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule2SizeBaseline` |
 | 3 | Print the conditioning banner on every ring-unit metric | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule3ConditioningBanner` |
 | 4 | Report prevalence beside any Elliptic2 p@k | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule4Prevalence` |
 | 5 | Cluster the bootstrap on the unit the trials are nested in; where they nest in rings, report the wider of the two | `sentinel/report/metric.py`, `scripts/eval_ring_unit.py::interval`, `tests/test_standing_rules.py::TestRule5IntervalNamesItsClustering` |
-| 6 | Keep `sentinel.llm` out of every measured path | `tests/test_import_boundaries.py` (transitive, in a subprocess, with a negative control) |
+| 6 | Keep `sentinel.llm` out of every measured path | `tests/test_import_boundaries.py` (runtime, subprocess, transitive) **and** `tests/test_measured_path_closure.py` (static AST walk from every `scripts/eval_*.py` and `ci_gates.py`, plus a ban on computed dynamic imports); both carry a negative control |
 | 7 | Record negative results; never delete them | `docs/negative-results/`, `tests/test_standing_rules.py::TestRule7NegativeResultsAreAppendOnly` |
 
 ---
@@ -78,19 +78,36 @@ which is the direction that costs the project something.
 defaults, or infers a value, so a number cannot be created by the reporting
 layer. That covers numbers going *out*.
 
-It does **not** cover the 1,699 metric-shaped literals already sitting in prose
-across README and `docs/` (`docs/inventory/metric_literals.csv`). `0.2778` alone
-appears 40 times. Two are known to be wrong right now:
+It does **not** yet cover the metric-shaped literals already sitting in prose
+across README and `docs/`. The Phase 0 inventory counted **1,699** across prose
+and code (`docs/inventory/metric_literals.csv`); the prose-only scanner in
+`sentinel/report/literals.py` counts **1,636**. `0.2778` alone appeared 40
+times, and had already gone stale twice while the sentences around it stayed
+put:
 
-- `scripts/eval_oracle.py`'s `LABEL_TAX` constant asserts
-  "`scripts/eval_ranker.py` reaches 0.2778", printed every run and stored in
-  `data/eval_oracle.json`. The live value is different.
-- README's correction block at lines 186–197 states that
-  `data/eval_oracle.json` "is deliberately not re-run". It has been re-run, and
-  the block's numbers came from a cached, stale pool.
+<!-- historical: measured at commit unknown, 2026-08-31 -->
+the supervised p@10 was written as 0.2778, was 0.2500 by the time the blend
+weights were fixed, and is 0.2111 after the dead query groups were closed.
+(The first of those three predates a reliable commit attribution, hence
+`unknown` — an auditable admission rather than an invented sha.)
 
-The scan that would close this is Phase 4 work and is **not written**. Until it
-is, rule 1 is a practice, not a property.
+Three of those were in **code that printed them into results on every run**, and
+have been removed rather than updated: `scripts/eval_oracle.py`'s `LABEL_TAX`
+constant (stored verbatim in `data/eval_oracle.json`), `scripts/eval_ranker.py`'s
+module docstring, and `sentinel/corpus/__init__.py`'s. In each case the
+surrounding claim was true and only the digits rotted, so the digits came out
+and the claim is now checked live — see `tests/test_two_file_agreement.py`.
+
+What exists today is a **ratchet, not a property**:
+`tests/test_prose_literals.py` records the count and fails if it rises, plus a
+strict-xfail test for the goal state that will fail the build the day it starts
+passing. Closing it properly is Phase 4 — README becomes a template rendered
+from a metrics file, and the only literals left are ones carrying
+
+    <!-- historical: measured at commit <sha|unknown>, <YYYY-MM-DD> -->
+
+Until then, rule 1 is a practice for prose and a property only for numbers that
+leave through `sentinel/report/`.
 
 ---
 
