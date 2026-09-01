@@ -76,6 +76,12 @@ LEDGER = [
      "historical marker does not apply; the per-configuration numbers stay in "
      "data/identity_background.json rather than being copied into prose, "
      "which is why this is ten literals and not a hundred."),
+    ("2026-09-01", "phase-C-identity", 1722,
+     "+4: docs/PHASEC-IDENTITY-FEATURES.md, the identity feature gate. The "
+     "attribute-ceiling table is the exclusion's evidence and its six numbers "
+     "are the argument, not decoration; the per-feature AUC table stays in "
+     "data/identity_features.json rather than in prose. Current measurements, "
+     "so the historical marker does not apply."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
