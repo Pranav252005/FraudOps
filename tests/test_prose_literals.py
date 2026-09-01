@@ -90,6 +90,11 @@ LEDGER = [
      "coverage points with intervals, twelve sweep points, and the two-domain "
      "contrast -- so these literals are the argument rather than narration. "
      "Current measurements, so the historical marker does not apply."),
+    ("2026-09-01", "phase-E-case-files", 1780,
+     "+1: docs/PHASEE-CASE-FILES.md. The escalation profile is counted in "
+     "whole candidates rather than rates, and the one metric-shaped literal is "
+     "rare_multiplicity's 0.0000 from Phase A -- quoted because the point of "
+     "the paragraph is that the triage rule inherits that exact result."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
