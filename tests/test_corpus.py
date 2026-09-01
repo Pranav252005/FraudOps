@@ -15,10 +15,11 @@ import pytest
 
 from sentinel import config
 from sentinel.corpus import (FEATURE_VERSION, CorpusDrift, CorpusKey,
-                             CorpusMismatch, ProvenanceMismatch,
-                             detector_config_hash, load, require_consistent,
-                             require_poolable, save, stratify_by_provenance,
-                             verify_scoring)
+                             CorpusMismatch, DatasetMismatch,
+                             ProvenanceMismatch, detector_config_hash, load,
+                             require_consistent, require_poolable,
+                             require_same_dataset, save, stratify_by_dataset,
+                             stratify_by_provenance, verify_scoring)
 
 NAMES = ["conservation", "n_nodes", "passthrough_ratio"]
 # Sentinel's own candidates are constructed by seed-and-expand. Spelled out in
@@ -305,7 +306,16 @@ def test_pooling_one_provenance_returns_it():
 
 
 def test_pooling_across_provenance_is_allowed_for_a_scorer_question():
-    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    """Both corpora are Elliptic2 -- the shipped components and a seed-and-
+    expand pass over the same background edges. That pair is the collision
+    `candidate_provenance` was invented for, and it is the case where pooling
+    is legitimate: a scorer is a function on feature vectors.
+
+    This test used to spell the two sides as different DATASETS, which made it
+    read as a licence to pool across domains. It never was one; see
+    `test_pooling_across_datasets_is_refused_for_every_question`.
+    """
+    a = CorpusKey.for_current_config("elliptic2", NAMES, "constructed")
     b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
     assert require_poolable([a, b], "scorer") == "constructed+given"
 
@@ -314,14 +324,14 @@ def test_pooling_across_provenance_is_refused_for_a_recall_question():
     """A scorer is a function on feature vectors and does not care where the
     boundary came from. Recall does: `given` candidates have no seeding step to
     have recall about."""
-    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    a = CorpusKey.for_current_config("elliptic2", NAMES, "constructed")
     b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
     with pytest.raises(ProvenanceMismatch, match="recall"):
         require_poolable([a, b], "recall")
 
 
 def test_the_funnel_is_a_recall_question_and_cannot_pool():
-    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    a = CorpusKey.for_current_config("elliptic2", NAMES, "constructed")
     b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
     with pytest.raises(ProvenanceMismatch):
         require_poolable([a, b], "funnel")
@@ -330,7 +340,7 @@ def test_the_funnel_is_a_recall_question_and_cannot_pool():
 def test_an_unlisted_question_is_refused_not_assumed_poolable():
     """The default has to be refusal. A question that silently defaulted to
     poolable is the confident wrong answer this key exists to prevent."""
-    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    a = CorpusKey.for_current_config("elliptic2", NAMES, "constructed")
     b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
     with pytest.raises(ProvenanceMismatch, match="unknown question"):
         require_poolable([a, b], "whatever-this-is")
@@ -343,8 +353,76 @@ def test_refusal_is_a_kind_of_mismatch():
 
 def test_stratify_groups_by_provenance():
     """The alternative to refusing: answer per stratum, never averaged."""
-    a = CorpusKey.for_current_config("test-set", NAMES, "constructed")
+    a = CorpusKey.for_current_config("elliptic2", NAMES, "constructed")
     b = CorpusKey.for_current_config("elliptic2", NAMES, "given")
     c = CorpusKey.for_current_config("other", NAMES, "given")
     groups = stratify_by_provenance([a, b, c], ["A", "B", "C"])
     assert groups == {"constructed": ["A"], "given": ["B", "C"]}
+
+
+# -- the cross-domain guard --------------------------------------------------
+#
+# Added when a second domain (synthetic identity) was built. Provenance was
+# assumed to be this guard and is not: seed-and-expand candidates are
+# `constructed` in every domain, so the provenance check agrees with itself
+# across two domains that share no feature space.
+
+
+def test_pooling_across_datasets_is_refused_for_every_question():
+    """Including the ones provenance lets through.
+
+    `scorer` is poolable across PROVENANCE because a scorer is a function on
+    feature vectors. It is not poolable across DATASETS, because the two sides
+    do not have the same feature vectors: one is built from `passthrough_ratio`
+    and the other from attribute rotation. Averaging them describes neither.
+    """
+    a = CorpusKey.for_current_config("amlworld-hi-small", NAMES, CONSTRUCTED)
+    b = CorpusKey.for_current_config("synthetic-identity-v1", NAMES, CONSTRUCTED)
+    for question in ("scorer", "ranking", "calibration", "recall", "funnel"):
+        with pytest.raises(DatasetMismatch, match="different domains"):
+            require_poolable([a, b], question)
+
+
+def test_provenance_alone_would_have_passed_this():
+    """The negative control: the guard that was assumed to cover this, doesn't.
+
+    Both keys are `constructed`, so the provenance sets agree and the old
+    implementation -- which looked at nothing else -- returned "constructed"
+    and pooled two domains. This test asserts the premise of the bug, so the
+    fix cannot be mistaken for a fix to something else.
+    """
+    a = CorpusKey.for_current_config("amlworld-hi-small", NAMES, CONSTRUCTED)
+    b = CorpusKey.for_current_config("synthetic-identity-v1", NAMES, CONSTRUCTED)
+    assert {a.candidate_provenance, b.candidate_provenance} == {CONSTRUCTED}
+
+
+def test_one_dataset_is_returned_not_refused():
+    a = CorpusKey.for_current_config("amlworld-hi-small", NAMES, CONSTRUCTED)
+    b = CorpusKey.for_current_config("amlworld-hi-small", NAMES, CONSTRUCTED)
+    assert require_same_dataset([a, b]) == "amlworld-hi-small"
+
+
+def test_dataset_refusal_is_a_kind_of_mismatch():
+    """Callers already guarding with CorpusMismatch keep working."""
+    assert issubclass(DatasetMismatch, CorpusMismatch)
+
+
+def test_dataset_refusal_is_not_a_provenance_refusal():
+    """They are different failures and a caller may want to tell them apart.
+
+    A provenance refusal has a sanctioned workaround -- ask a question that
+    does not depend on the boundary's origin. A dataset refusal does not: there
+    is no question that survives it, only per-domain reporting.
+    """
+    assert not issubclass(DatasetMismatch, ProvenanceMismatch)
+    assert not issubclass(ProvenanceMismatch, DatasetMismatch)
+
+
+def test_stratify_groups_by_dataset():
+    """The sanctioned cross-domain path: two answers, side by side."""
+    a = CorpusKey.for_current_config("amlworld-hi-small", NAMES, CONSTRUCTED)
+    b = CorpusKey.for_current_config("synthetic-identity-v1", NAMES, CONSTRUCTED)
+    c = CorpusKey.for_current_config("synthetic-identity-v1", NAMES, CONSTRUCTED)
+    groups = stratify_by_dataset([a, b, c], ["A", "B", "C"])
+    assert groups == {"amlworld-hi-small": ["A"],
+                      "synthetic-identity-v1": ["B", "C"]}

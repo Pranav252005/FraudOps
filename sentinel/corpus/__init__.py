@@ -66,18 +66,30 @@ different questions. Pooling the two is valid for a scorer question and invalid
 for a recall one -- and since the corpus cannot know which is being asked,
 `require_poolable` makes the caller name the question and refuses on the ones
 that do not survive pooling.
+
+**It is not the cross-domain guard, and was assumed to be one.** When a second
+domain was added, `candidate_provenance` looked like the field that would keep
+its corpus apart from AMLworld's. It is not: seed-and-expand produces
+`constructed` candidates in every domain, so `require_poolable` would have
+found one shared provenance and pooled two domains that share no feature space.
+The `dataset` field was always the separator and nothing was checking it, which
+`require_same_dataset` now does -- before the question is even looked up,
+because unlike provenance there is no question that survives it.
 """
 from sentinel.corpus.store import (CANDIDATE_PROVENANCES, FEATURE_VERSION,
                                    POOLING_VALIDITY, CorpusDrift, CorpusKey,
-                                   CorpusMismatch, ProvenanceMismatch,
+                                   CorpusMismatch, DatasetMismatch,
+                                   ProvenanceMismatch,
                                    detector_config_hash, load,
                                    require_consistent, require_poolable,
-                                   rescore, save,
+                                   require_same_dataset, rescore, save,
+                                   stratify_by_dataset,
                                    stratify_by_provenance, verify_scoring)
 
 __all__ = ["CANDIDATE_PROVENANCES", "FEATURE_VERSION", "POOLING_VALIDITY",
-           "CorpusDrift", "CorpusKey", "CorpusMismatch", "ProvenanceMismatch",
+           "CorpusDrift", "CorpusKey", "CorpusMismatch", "DatasetMismatch",
+           "ProvenanceMismatch",
            "detector_config_hash", "load", "require_consistent",
-           "require_poolable", "rescore", "save",
-           "stratify_by_provenance",
+           "require_poolable", "require_same_dataset", "rescore", "save",
+           "stratify_by_dataset", "stratify_by_provenance",
            "verify_scoring"]

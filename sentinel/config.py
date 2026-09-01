@@ -77,3 +77,24 @@ PRUNE_STRATEGY = "leaf2"
 # from one column, and a generator artifact rather than a real signal. Using it
 # would inflate every reported metric while teaching nothing that transfers.
 EXCLUDED_FEATURES = frozenset({"channel"})
+
+
+# --- Synthetic identity (second domain) -------------------------------------
+
+# The exogenous seed signal: a chargeback, a manual report, a failed step-up.
+# PRE-REGISTERED in prereg/synthetic_identity_kill_rule.md before the generator
+# existed, because seed generosity sets recall before a single feature does --
+# a seed rule chosen after seeing a funnel is a knob that produces whichever
+# number is wanted.
+#
+# The legitimate rate is non-zero on purpose. An investigation that only ever
+# starts from a true positive is not an investigation, and false-alarm seeds are
+# what make expansion's precision cost visible.
+IDENTITY_SEED_RATE_FRAUD = 0.15
+IDENTITY_SEED_RATE_LEGIT = 0.002
+
+# There is no window in this domain. The graph is built in one static pass, for
+# the reason argued in sentinel/eval/identity.py: the adversary's strategy
+# includes deliberate temporal spacing, so a window would make fragmentation
+# partly its own artefact. WINDOW_MINUTES above is an AMLworld constant and does
+# not travel.

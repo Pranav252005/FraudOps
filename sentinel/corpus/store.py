@@ -174,6 +174,28 @@ class ProvenanceMismatch(CorpusMismatch):
     """
 
 
+class DatasetMismatch(CorpusMismatch):
+    """Corpora from different datasets were pooled, for any question.
+
+    Provenance was the wrong guard for this and would have passed it silently.
+    AMLworld candidates and synthetic-identity candidates are BOTH
+    `constructed` -- both come from seed-and-expand -- so the provenance check
+    finds one shared value, returns it, and pools two domains that share no
+    feature space, no unit of observation and no adversary.
+
+    Unlike provenance, there is no question in `POOLING_VALIDITY` that survives
+    this. A scorer pooled across constructed corpora is still one function on
+    one feature space; a scorer pooled across DATASETS is a function on
+    `passthrough_ratio` and a function on `attribute_rotation_path_length`
+    averaged into a number that describes neither. So the refusal is
+    unconditional and takes no question argument.
+
+    The sanctioned path across domains is `stratify_by_dataset`: answer the
+    question once per domain and report the answers side by side, which is what
+    a cross-domain claim is made of anyway.
+    """
+
+
 def stratify_by_provenance(keys, items=None) -> dict:
     """Group corpora by provenance, so a caller can report per stratum.
 
@@ -189,8 +211,52 @@ def stratify_by_provenance(keys, items=None) -> dict:
     return out
 
 
+def stratify_by_dataset(keys, items=None) -> dict:
+    """Group corpora by dataset, so a cross-domain claim is made of two answers.
+
+    The counterpart to `stratify_by_provenance`, and the only sanctioned way to
+    say anything about two domains at once: run the question inside each, then
+    put the answers beside each other. Nothing here averages them.
+    """
+    keys = list(keys)
+    items = list(keys) if items is None else list(items)
+    out: dict = {}
+    for key, item in zip(keys, items):
+        out.setdefault(key.dataset, []).append(item)
+    return out
+
+
+def require_same_dataset(keys) -> str:
+    """The single dataset these corpora share, or a refusal.
+
+    Checked BEFORE provenance and independently of the question, because the
+    question does not enter: see `DatasetMismatch`. Returns the shared dataset
+    name so a caller can label what it just pooled.
+    """
+    keys = list(keys)
+    if not keys:
+        raise ValueError("require_same_dataset needs at least one corpus key")
+    found = sorted({k.dataset for k in keys})
+    if len(found) > 1:
+        raise DatasetMismatch(
+            f"cannot pool corpora from {found}. These are different domains, "
+            f"not different runs: they share no feature space and no unit of "
+            f"observation, and pooling them produces a number that describes "
+            f"neither. Note that `candidate_provenance` does NOT catch this -- "
+            f"seed-and-expand corpora are `constructed` in every domain, so "
+            f"the provenance check would find one shared value and agree. "
+            f"Report per dataset with stratify_by_dataset().")
+    return found[0]
+
+
 def require_poolable(keys, question: str) -> str:
     """The single provenance these corpora share, or a refusal.
+
+    Refuses on a differing DATASET first, via `require_same_dataset`, and that
+    check is not conditioned on the question. Provenance was assumed to be the
+    cross-domain guard when a second domain was first contemplated; it is not,
+    because seed-and-expand corpora are `constructed` in every domain and this
+    function would have returned "constructed" and pooled them.
 
     The corpus does not know which question is being asked and must not guess,
     so the caller names it. `question` is looked up in `POOLING_VALIDITY`, and
@@ -205,6 +271,7 @@ def require_poolable(keys, question: str) -> str:
     keys = list(keys)
     if not keys:
         raise ValueError("require_poolable needs at least one corpus key")
+    require_same_dataset(keys)
     if question not in POOLING_VALIDITY:
         raise ProvenanceMismatch(
             f"unknown question {question!r}: it is not in POOLING_VALIDITY "
