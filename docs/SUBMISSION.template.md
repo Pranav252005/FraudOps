@@ -1,7 +1,7 @@
 # Sentinel — submission
 
-**A money-laundering ring detector, and a record of everything that went wrong
-while measuring it.**
+**A fraud-ring investigation engine measured on two domains, and a record of
+everything that went wrong while measuring it.**
 
 This document is **rendered** from [`results/metrics.json`](../results/metrics.json)
 by `scripts/render_docs.py`. No number in it is typed. That is not a
@@ -108,7 +108,7 @@ was bought by deleting 156 training positives and both absolute numbers fell.
 
 ## 4. What the measurement actually found
 
-Three results survive, and none is the one the plan was built on.
+Four results survive, and none is the one the plan was built on.
 
 ### The bottleneck is seeding, not scoring
 
@@ -161,6 +161,59 @@ Separately, and never averaged with it: **Δ p@10 =
 {{signed:label_tax_budget_slope_per_halving}}
 {{ci_signed:label_tax_budget_slope_per_halving}} per halving of the label
 budget.** [`docs/PHASE3-LABEL-TAX-FINDINGS.md`](PHASE3-LABEL-TAX-FINDINGS.md).
+
+### The engine generalises; the claim that motivated the generalisation does not
+
+A second domain — **synthetic identity in onboarding data** — was added because
+`prereg/cycles.md` had already established that `n` cannot be raised by
+generating more AMLworld cycles, and a second dataset was the only rejected
+option rejected on cost rather than on principle.
+
+**It had to survive a kill rule committed before the generator existed.** Four
+trivial baselines, any of which solving the problem would have thrown the domain
+out: degree, attribute multiplicity, component size, and rare-attribute
+multiplicity. {{count:n_identity_configs_passing}} of
+{{count:n_identity_configs}} configurations pass against a pre-registered floor
+of {{count:n_identity_configs_required}}; the rest are marked `TOO_EASY` and
+excluded from every later phase.
+
+**The same harness runs both domains.** `WindowedGraph`, `CandidateGenerator`,
+`FunnelTracker` and `is_hit` are the same objects, and the identity path adds no
+second implementation of any of them. Three things did not transfer and are
+argued where they are decided: no window (this adversary spaces registrations
+deliberately, so a window would make fragmentation its own artefact), an
+exogenous seed rule (the co-occurrence graph is undirected, so pass-through
+would seed the entire population), and the Jaccard floor inherited **unchanged**
+so the two domains stay comparable.
+
+**The pre-registered prediction was a dose-response, and it holds.** Seed-reach
+coverage — what a 2-hop expansion from a group's own seeds can see of it —
+falls monotonically as the adversary's rotation rises:
+
+**{{signed:identity_coverage_delta_rotation}}
+{{ci_signed:identity_coverage_delta_rotation}}** for
+coverage(rotation 0.7) − coverage(rotation 0.3), paired on the same worlds. The
+mechanism holds too: cluster diameter rises with rotation, and the effect
+vanishes at cluster size 3, where a chain fits inside two hops however hard it
+rotates.
+
+**The cross-domain claim is refuted.** Measured on the same definition,
+identity coverage is {{metric_ci:identity_seed_reach_coverage}} against
+AMLworld's {{metric_ci:amlworld_seed_reach_coverage}} — it fragments *less*,
+not more, which is the opposite of the prediction the domain was proposed on.
+That prediction was demoted to secondary-descriptive **before** measuring, on
+the grounds that the identity domain's difficulty is a dial this project sets;
+it is recorded in
+[`identity-fragments-worse-refuted`](negative-results/identity-fragments-worse-refuted.md)
+rather than absorbed.
+
+The two numbers are reported side by side and never pooled.
+`require_same_dataset` refuses — a guard added in this work after
+`candidate_provenance`, which looked like the cross-domain guard, was found to
+agree with itself across two domains that both construct their candidates.
+
+[`docs/PHASEA-IDENTITY-BACKGROUND.md`](PHASEA-IDENTITY-BACKGROUND.md),
+[`docs/PHASED-FRAGMENTATION.md`](PHASED-FRAGMENTATION.md).
 
 ---
 
@@ -232,25 +285,51 @@ the committed files match a fresh render. Unmarked metric literals in prose
 fell from 1,835 to {{count:n_prose_literals}} repository-wide, held by a ledger
 in which every increase must carry a date, a commit and a reason.
 
+### The guard that was assumed to exist, and did not
+
+Adding a second domain exposed one. `require_poolable` compared
+`candidate_provenance` and nothing else — and seed-and-expand candidates are
+`constructed` in *every* domain, so it would have found one shared value and
+pooled two domains sharing no feature space. The separator was always `dataset`
+and nothing looked at it. `require_same_dataset` now refuses before the question
+is even considered, and `tests/test_corpus.py` carries the negative control
+asserting the two keys agree on provenance — so the fix cannot be mistaken for a
+fix to something else.
+
 ---
 
 ## 7. What this is not
 
-- **Not a deployment.** Trained and evaluated on one synthetic benchmark.
+- **Not a deployment.** Trained and evaluated on one synthetic benchmark and
+  one generated one.
 - **Not a supervised result.** What ships trains on nothing. The supervised
   number exists, is reported, and does not clear the shipped scorer.
 - **Not comparable to published transaction-level F1.** Different unit,
   different population.
 - **Not verified against IBM's Graph Feature Preprocessor.** Every parity claim
   was struck; the comparison needs Linux and has never been run.
-- **Not measured at adequate `n`.** {{count:n_held_out_cycles}} held-out
-  cycles. The intervals are wide and every one of them is printed.
+- **Not measured at adequate `n` on AMLworld.** {{count:n_held_out_cycles}}
+  held-out cycles. The intervals are wide and every one of them is printed.
+- **Not a claim that the second domain resembles real onboarding data.** It is
+  generated, its prevalence is a parameter, and its difficulty is a dial. What
+  it buys is a randomness knob AMLworld does not have and an adversary whose
+  strength can be swept — not external validity.
+- **Not causal on the identity side.** That path is a static full-graph pass, so
+  every feature sees applications that arrived after the one under review. No
+  identity number is a claim about what was detectable at the time.
+- **Not a calibrated identity risk score.** The case file has no confidence
+  field to fill in, and the merchant brief refuses to quote a likelihood,
+  because none has been calibrated for that population.
 
 `n` was **not** raised by generating more cycles, and the decision is
 pre-registered in [`prereg/cycles.md`](../prereg/cycles.md): the pipeline is
 fully deterministic, so re-running produces byte-identical output, and the only
 cheap way to add cycles produces correlated observations — a narrower interval
 with no more information behind it.
+
+It was raised instead by paying for the one option that file rejected on cost
+rather than principle: a second domain with genuine independence between draws.
+That does not repair the AMLworld intervals, and it is not offered as doing so.
 
 ---
 

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_by": "scripts/collect_metrics.py",
-  "generated_at": "2026-09-01T13:53:09",
-  "commit": "487c73f7d9d77c441f120a943c679e8d37f29a6b",
+  "generated_at": "2026-09-01T14:10:36",
+  "commit": "a7ee53ec0042f07c3f72ff3354a5224bafe9668a",
   "metrics": {
     "supervised_p_at_10": {
       "id": "supervised_p_at_10",
@@ -863,6 +863,55 @@
         "score 0.0406 minus size 0.0350",
         "INCLUDES ZERO"
       ]
+    },
+    "identity_seed_reach_coverage": {
+      "id": "identity_seed_reach_coverage",
+      "value": 0.8964559683522533,
+      "unit": "world",
+      "n_units": 20,
+      "dataset": "synthetic-identity-v1",
+      "ci_lower": 0.875900549613785,
+      "ci_upper": 0.9158537190793383,
+      "ci_method": "world_clustered_bootstrap",
+      "prevalence": 0.04986198513406209,
+      "conditioning": "P(group members reachable | the group had at least one seeded member). Groups no seed landed in are excluded rather than scored zero, so this cannot see what seeding lost -- it measures reach, not detection, and is not comparable to a p@k.",
+      "source": "data/fragmentation.json primary, rotation 0.5 / size 8 / overlap 0.1",
+      "notes": [
+        "seed-reach coverage under the shipped expansion constants",
+        "NOT a p@k and not comparable to one"
+      ]
+    },
+    "identity_coverage_delta_rotation": {
+      "id": "identity_coverage_delta_rotation",
+      "value": -0.16531665090235176,
+      "unit": "world",
+      "n_units": 20,
+      "dataset": "synthetic-identity-v1",
+      "ci_lower": -0.19504046574770265,
+      "ci_upper": -0.13617912351344041,
+      "ci_method": "paired_world_clustered_bootstrap",
+      "prevalence": 0.04986198513406209,
+      "conditioning": "P(group members reachable | the group had at least one seeded member). Groups no seed landed in are excluded rather than scored zero, so this cannot see what seeding lost -- it measures reach, not detection, and is not comparable to a p@k.",
+      "source": "data/fragmentation.json predictions, overlap=0.1",
+      "notes": [
+        "coverage(rotation 0.7) - coverage(rotation 0.3), paired on the same worlds",
+        "the pre-registered P2, which decides"
+      ]
+    },
+    "amlworld_seed_reach_coverage": {
+      "id": "amlworld_seed_reach_coverage",
+      "value": 0.8058409224538894,
+      "unit": "ring",
+      "n_units": 309,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.7626769378374855,
+      "ci_upper": 0.849898750021647,
+      "ci_method": "wider_of_cycle_and_ring_clustered_bootstrap",
+      "conditioning": "P(group members reachable | the group had at least one seeded member). Groups no seed landed in are excluded rather than scored zero, so this cannot see what seeding lost -- it measures reach, not detection, and is not comparable to a p@k.",
+      "source": "data/fragmentation.json amlworld",
+      "notes": [
+        "the same quantity as identity_seed_reach_coverage, measured on the same definition -- reported beside it, never pooled"
+      ]
     }
   },
   "counts": {
@@ -881,6 +930,14 @@
     "n_rings_seen": 259,
     "hit_share": 0.5,
     "min_jaccard": 0.3,
+    "n_identity_configs": 36,
+    "n_identity_configs_passing": 25,
+    "n_identity_configs_required": 18,
+    "n_identity_features": 35,
+    "n_identity_features_excluded": 3,
+    "n_identity_candidates_scored": 470,
+    "identity_relabelling_invariant": true,
+    "n_identity_features_tripping_leak_auc": 0,
     "ring_recall_score": 0.2394,
     "ring_recall_size": 0.1853,
     "funnel_seeded_recall": 0.888,

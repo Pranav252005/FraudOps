@@ -141,16 +141,42 @@ class TestIntervalsNameTheirClustering:
             "it -- otherwise the number cannot be rendered under rule 5")
         assert "wider_of_cycle_and_ring_clustered_bootstrap" in src
 
-    def test_the_identity_clustering_is_deliberately_not_a_metric_name(self):
-        """World-clustered is a real unit here and not one Metric accepts.
+    def test_the_identity_clustering_is_a_metric_name_and_carries_its_unit(self):
+        """Reverses what this test asserted when Phase D was written.
 
-        That is on purpose: no Phase A-D identity number is a candidate-level
-        p@k, and refusing to render them through `Metric` is what stops one
-        being mistaken for one later.
+        It previously asserted that `world_clustered_bootstrap` was NOT in
+        `CI_METHODS`, on the reasoning that keeping identity numbers out of
+        `Metric` would stop one being mistaken for a candidate-level p@k. That
+        was the wrong guard in the wrong place: what distinguishes a coverage
+        number from a p@k is `unit` and `dataset`, which travel with the metric
+        and print beside it -- while the exclusion pushed identity numbers out
+        of the rendered path and into hand-typed prose, which is the failure
+        rule 1 exists to prevent.
+
+        The reversal is recorded in the comment beside `CI_METHODS` rather than
+        by editing the old reasoning away.
         """
-        from sentinel.report.metric import CI_METHODS
-        assert "world_clustered_bootstrap" not in CI_METHODS
-        assert "paired_world_clustered_bootstrap" not in CI_METHODS
+        from sentinel.report.metric import (CI_METHODS,
+                                            CONDITIONING_REQUIRED_UNITS,
+                                            Metric, MetricContractError)
+        assert "world_clustered_bootstrap" in CI_METHODS
+        assert "world" in CONDITIONING_REQUIRED_UNITS
+
+        with pytest.raises(MetricContractError, match="conditioning"):
+            Metric(id="x", value=0.5, n_units=20, unit="world",
+                   ci_lower=0.4, ci_upper=0.6,
+                   ci_method="world_clustered_bootstrap",
+                   dataset="synthetic-identity-v1", prevalence=0.05)
+
+    def test_an_identity_metric_must_carry_its_prevalence(self):
+        """Prevalence there is a GENERATOR PARAMETER, so a number from that
+        population is uninterpretable without it."""
+        from sentinel.report.metric import Metric, MetricContractError
+        with pytest.raises(MetricContractError, match="prevalence"):
+            Metric(id="x", value=0.5, n_units=20, unit="world",
+                   ci_lower=0.4, ci_upper=0.6,
+                   ci_method="world_clustered_bootstrap",
+                   dataset="synthetic-identity-v1", conditioning="stated")
 
 
 class TestTheDomainsStayApart:

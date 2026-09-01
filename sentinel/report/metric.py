@@ -34,7 +34,11 @@ from typing import Literal
 
 # The resampling units this project reports over. See `docs/STANDING-RULES.md`
 # rule 5 for why the choice is not free and not always "ring".
-Unit = Literal["cycle", "ring"]
+#
+# `world` arrived with the second domain. Unlike AMLworld, the identity
+# generator HAS a randomness knob (prereg/cycles.md records that AMLworld's
+# measured path has none), so its resampling unit is the generated world.
+Unit = Literal["cycle", "ring", "world"]
 
 # Clustering methods that may appear in `ci_method`. A bare "bootstrap" is not
 # admissible: the whole finding in scripts/eval_ring_unit.py is that cycle- and
@@ -44,10 +48,33 @@ CI_METHODS = frozenset({
     "cycle_clustered_bootstrap",
     "ring_clustered_bootstrap",
     "wider_of_cycle_and_ring_clustered_bootstrap",
+    # The second domain's units. Admitted deliberately, reversing an earlier
+    # decision that is recorded rather than quietly dropped: Phase D kept these
+    # OUT of this set, reasoning that refusing to render identity numbers
+    # through `Metric` would stop one being mistaken for a candidate-level p@k.
+    # That was the wrong guard in the wrong place. What distinguishes a coverage
+    # number from a p@k is `unit` and `dataset`, both of which travel with the
+    # metric and are printed beside it -- while the exclusion pushed identity
+    # numbers OUT of the rendered path and into hand-typed prose, which is the
+    # failure rule 1 exists to prevent. The guard should make the honest path
+    # easy, not closed.
+    "world_clustered_bootstrap",
+    "paired_world_clustered_bootstrap",
 })
 
 # Datasets for which standing rule 4 requires prevalence beside any p@k.
-PREVALENCE_REQUIRED_DATASETS = frozenset({"elliptic2"})
+#
+# `synthetic-identity-v1` is added because prevalence there is a GENERATOR
+# PARAMETER. A number from a constructed population whose positive rate was
+# chosen is uninterpretable without saying what it was chosen to be.
+PREVALENCE_REQUIRED_DATASETS = frozenset({"elliptic2", "synthetic-identity-v1"})
+
+# Units whose metrics must carry a conditioning banner. Every unit except the
+# cycle: a cycle-unit p@k is measured over whatever the cycle contained, while
+# ring-, cluster- and world-unit numbers in this project are all conditioned on
+# something (BUILT, or "the group had at least one seeded member") that changes
+# what the number means.
+CONDITIONING_REQUIRED_UNITS = frozenset({"ring", "world"})
 
 
 class MetricContractError(ValueError):
@@ -132,9 +159,10 @@ class Metric:
             raise MetricContractError(
                 f"{self.id}: n_units must be a positive integer, got "
                 f"{self.n_units!r}")
-        if self.unit not in ("cycle", "ring"):
+        if self.unit not in ("cycle", "ring", "world"):
             raise MetricContractError(
-                f"{self.id}: unit must be 'cycle' or 'ring', got {self.unit!r}")
+                f"{self.id}: unit must be 'cycle', 'ring' or 'world', got "
+                f"{self.unit!r}")
 
         # --- rule 2: p@k carries its size baseline --------------------------
         if self.is_precision_at_k and not _is_number(self.size_baseline):
@@ -144,8 +172,8 @@ class Metric:
                 f"claims are re-tied against; a p@k without it does not say "
                 f"whether the scorer beat counting nodes.")
 
-        # --- rule 3: ring-unit metrics carry their conditioning -------------
-        if self.unit == "ring" and not (self.conditioning or "").strip():
+        # --- rule 3: non-cycle units carry their conditioning ---------------
+        if self.unit in CONDITIONING_REQUIRED_UNITS                 and not (self.conditioning or "").strip():
             raise MetricContractError(
                 f"{self.id}: a ring-unit metric must carry its conditioning "
                 f"banner (rule 3). This project's ring-unit metric conditions "

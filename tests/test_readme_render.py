@@ -203,11 +203,33 @@ class TestTheMetricsFileIsTheSourceOfTruth:
             if m.is_precision_at_k:
                 assert m.size_baseline is not None, mid
 
-    def test_every_ring_unit_metric_carries_its_banner(self, metrics):
-        ring = [m for m in metrics.values() if m.unit == "ring"]
-        assert ring, "expected at least one ring-unit metric"
-        for m in ring:
-            assert m.conditioning and "BUILT" in m.conditioning, m.id
+    def test_every_conditioned_unit_metric_carries_its_banner(self, metrics):
+        """Every unit except the cycle conditions on something.
+
+        This used to require the substring "BUILT" of every ring-unit metric,
+        which was right while the ring-unit p@k was the only one. A second
+        ring-unit metric now exists -- seed-reach coverage, conditioned on the
+        group having been SEEDED rather than BUILT -- so the general form is
+        that the banner names the event, and the BUILT check stays pinned to
+        the metric it was written for, below.
+        """
+        conditioned = [m for m in metrics.values() if m.unit in ("ring", "world")]
+        assert conditioned, "expected at least one conditioned-unit metric"
+        for m in conditioned:
+            assert m.conditioning and m.conditioning.strip(), m.id
+            assert "|" in m.conditioning, (
+                f"{m.id}: a conditioning banner must name what it is "
+                f"conditioned ON, not merely carry prose")
+
+    def test_the_ring_unit_metric_still_names_BUILT(self, metrics):
+        """The specific banner rule 3 exists for: the ring-unit p@k reads
+        HIGHER than the unconditioned p@k because it cannot see the build
+        stage, where BIPARTITE and STACK are lost systematically."""
+        surfaced = [m for mid, m in metrics.items()
+                    if mid.startswith("ring_unit_")]
+        assert surfaced, "the ring-unit surfaced metrics are expected to exist"
+        for m in surfaced:
+            assert "BUILT" in m.conditioning, m.id
 
     def test_the_seed_cheat_metrics_carry_their_ceiling_banner(self, metrics):
         """Run 2 is a diagnostic. Anything derived from it must say so at the

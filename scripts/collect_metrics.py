@@ -44,6 +44,17 @@ RING_UNIT_CONDITIONING = (
     "unconditioned p@k and is not comparable to it. p@k with its size "
     "baseline remains the reported number.")
 
+WORLD = "world_clustered_bootstrap"
+PAIRED_WORLD = "paired_world_clustered_bootstrap"
+
+# The conditioning that must travel with every seed-reach coverage number, in
+# either domain: a group with no seeded member is EXCLUDED, not scored zero.
+COVERAGE_CONDITIONING = (
+    "P(group members reachable | the group had at least one seeded member). "
+    "Groups no seed landed in are excluded rather than scored zero, so this "
+    "cannot see what seeding lost -- it measures reach, not detection, and is "
+    "not comparable to a p@k.")
+
 SEED_CHEAT_CONDITIONING = (
     "CEILING DIAGNOSTIC, not a result. The cheat arm seeds on every active "
     "ring's own members, which the real detector can never do. This is the "
@@ -247,6 +258,54 @@ def main() -> int:
             notes=(f"score {d['b']:.4f} minus size {d['a']:.4f}",
                    "excludes zero" if d["excludes_zero"] else "INCLUDES ZERO")))
 
+    # --- the second domain ---------------------------------------------------
+    # Read from the artefacts the identity measurements wrote, exactly as
+    # everything above is. Nothing here computes.
+    frag = _load("data/fragmentation.json")
+    background = _load("data/identity_background.json")
+    features = _load("data/identity_features.json")
+
+    primary = next(r for r in frag["primary"]
+                   if r["params"]["rotation_rate"] == 0.5
+                   and r["params"]["overlap"] == 0.1)
+    identity_prevalence = next(
+        r["prevalence"] for r in background["results"]
+        if all(r["params"][k] == v for k, v in
+               {"rotation_rate": 0.5, "cluster_size": 8, "overlap": 0.1}.items()))
+
+    cov = primary["coverage"]
+    metrics.append(Metric(
+        id="identity_seed_reach_coverage", value=cov["point"],
+        n_units=primary["n_worlds"], unit="world",
+        ci_lower=cov["lo"], ci_upper=cov["hi"], ci_method=WORLD,
+        dataset="synthetic-identity-v1", prevalence=identity_prevalence,
+        conditioning=COVERAGE_CONDITIONING,
+        source="data/fragmentation.json primary, rotation 0.5 / size 8 / overlap 0.1",
+        notes=("seed-reach coverage under the shipped expansion constants",
+               "NOT a p@k and not comparable to one")))
+
+    delta = frag["predictions"]["overlap=0.1"]["P2_delta"]
+    metrics.append(Metric(
+        id="identity_coverage_delta_rotation", value=delta["point"],
+        n_units=delta["n_pairs"], unit="world",
+        ci_lower=delta["lo"], ci_upper=delta["hi"], ci_method=PAIRED_WORLD,
+        dataset="synthetic-identity-v1", prevalence=identity_prevalence,
+        conditioning=COVERAGE_CONDITIONING,
+        source="data/fragmentation.json predictions, overlap=0.1",
+        notes=("coverage(rotation 0.7) - coverage(rotation 0.3), paired on the "
+               "same worlds",
+               "the pre-registered P2, which decides")))
+
+    aml = frag["amlworld"]["coverage"]
+    metrics.append(Metric(
+        id="amlworld_seed_reach_coverage", value=aml["point"],
+        n_units=frag["amlworld"]["n_rings"], unit="ring",
+        ci_lower=aml["lo"], ci_upper=aml["hi"], ci_method=WIDER,
+        conditioning=COVERAGE_CONDITIONING,
+        source="data/fragmentation.json amlworld",
+        notes=("the same quantity as identity_seed_reach_coverage, measured on "
+               "the same definition -- reported beside it, never pooled",)))
+
     written = write(OUT, metrics, generated_by="scripts/collect_metrics.py")
 
     # Counts that README quotes as facts but which are not intervals, so they
@@ -273,6 +332,17 @@ def main() -> int:
         "n_rings_seen": phase2["rings_seen"],
         "hit_share": phase2["hit_share"],
         "min_jaccard": phase2["min_jaccard"],
+        "n_identity_configs": background["verdict"]["n_configs"],
+        "n_identity_configs_passing": background["verdict"]["n_passing"],
+        "n_identity_configs_required": background["verdict"][
+            "min_configs_passing"],
+        "n_identity_features": len(features["auc"]),
+        "n_identity_features_excluded": len(features["excluded"]),
+        "n_identity_candidates_scored": features["n_candidates"],
+        "identity_relabelling_invariant": features["verdict"][
+            "arm1_relabelling_invariant"],
+        "n_identity_features_tripping_leak_auc": len(
+            features["verdict"]["arm2_features_tripping_leak_auc"]),
         "ring_recall_score": round(phase2["ring_recall"]["score"], 4),
         "ring_recall_size": round(phase2["ring_recall"]["size"], 4),
     }
