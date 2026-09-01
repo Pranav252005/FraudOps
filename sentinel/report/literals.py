@@ -117,3 +117,161 @@ def count_unmarked(root: Path) -> tuple[int, dict[str, int]]:
             per_file[str(path.relative_to(root)).replace("\\", "/")] = n
             total += n
     return total, per_file
+
+
+# --------------------------------------------------------------------------
+# the superseded-value check -- the hole the ratchet did not cover
+# --------------------------------------------------------------------------
+#
+# WHAT THIS EXISTS FOR. Phase 4 made README a template rendered from
+# results/metrics.json and asserted that the rendered file matches a fresh
+# render. That check is real, and it is blind in exactly one direction: it
+# compares the OUTPUT to the TEMPLATE, so a hardcoded number in the template
+# renders faithfully and is certified correct. Six unmarked instances of
+# `0.278` -- a superseded reading of `supervised_p_at_10`, which is 0.2111 --
+# survived in README.template.md that way, inside the document whose §6 claims
+# the render system prevents precisely this. See
+# docs/negative-results/template-literal-leak.md.
+#
+# The ratchet did not catch it either: the ratchet counts literals, and six
+# literals that were already counted do not raise the count when the
+# measurement behind them moves. A count cannot see staleness. This can.
+#
+# THE TWO SOURCES, AND WHY BOTH ARE NEEDED. Git history of the metrics file is
+# the live half: it grows on its own as measurements move, with no one to
+# remember to update it. It cannot reach back before the file existed, and
+# every value in this project's first defect predates it -- so the values that
+# rotted are declared explicitly. The explicit half is a ledger, not a
+# workaround, and it is small on purpose: anything git can establish is not
+# written here.
+
+# Values a live metric id has held and no longer holds, from before
+# results/metrics.json existed to record them. Append, never edit in place.
+#
+# Format them as they would appear in prose, at whatever precision they were
+# written -- `0.278` and `0.2778` are the same wrong number and both must be
+# caught, because METRIC_LITERAL matches either.
+PRE_HISTORY_SUPERSEDED: dict[str, list[tuple[str, str, str]]] = {
+    "supervised_p_at_10": [
+        ("0.2778", "6253ac5",
+         "the reading before `gargaml` and `stack` were retired as "
+         "anti-signal; the blend's floor rose and this did not move"),
+        ("0.2500", "0b4debd",
+         "the clean re-run, before the dead training query groups were "
+         "closed at 63066d1"),
+        ("0.278", "unknown",
+         "the 3dp rounding of 0.2778. This is the one that survived six times "
+         "in README.template.md after both corrections above were written up "
+         "three paragraphs earlier in the same file"),
+    ],
+}
+
+
+def _as_written(value: float) -> set[str]:
+    """Every rendering of `value` that METRIC_LITERAL would match.
+
+    Three and four decimal places, because prose in this repository uses both
+    and the scanner accepts both. Trailing-zero forms are included rather than
+    normalised away: `0.2500` and `0.250` are different strings in a file and
+    the check reads files, not floats.
+    """
+    return {f"{value:.3f}", f"{value:.4f}"}
+
+
+def _metrics_at_commit(root: Path, sha: str) -> dict[str, float]:
+    """`{id: value}` from results/metrics.json as of `sha`, or `{}`.
+
+    Returns empty rather than raising for any commit where the file is absent,
+    unparseable, or shaped differently -- the file's schema has changed once
+    already and a history walk must survive its own past.
+    """
+    import json
+    import subprocess
+
+    try:
+        blob = subprocess.run(
+            ["git", "show", f"{sha}:results/metrics.json"],
+            cwd=root, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if blob.returncode != 0:
+        return {}
+    try:
+        payload = json.loads(blob.stdout)
+        return {k: v["value"] for k, v in payload.get("metrics", {}).items()
+                if isinstance(v, dict) and isinstance(v.get("value"),
+                                                      (int, float))}
+    except (ValueError, TypeError, AttributeError):
+        return {}
+
+
+def superseded_values(root: Path, current: dict[str, float],
+                      use_git: bool = True) -> dict[str, set[str]]:
+    """`{literal_as_written: {metric ids it is a superseded value of}}`.
+
+    A value counts as superseded for an id when that id held it at some point
+    and does not hold it now. A value the id still holds is not superseded --
+    quoting the current number in prose is a staleness risk the ratchet already
+    tracks, and is not this check's business.
+    """
+    import subprocess
+
+    out: dict[str, set[str]] = {}
+
+    def add(literal: str, mid: str) -> None:
+        out.setdefault(literal, set()).add(mid)
+
+    live_forms = {mid: _as_written(v) for mid, v in current.items()}
+
+    for mid, entries in PRE_HISTORY_SUPERSEDED.items():
+        if mid not in current:
+            continue
+        for literal, _commit, _why in entries:
+            if literal in live_forms[mid]:
+                continue
+            add(literal, mid)
+
+    if not use_git:
+        return out
+
+    try:
+        log = subprocess.run(
+            ["git", "log", "--format=%H", "--", "results/metrics.json"],
+            cwd=root, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return out
+    if log.returncode != 0:
+        return out
+
+    for sha in log.stdout.split():
+        for mid, value in _metrics_at_commit(root, sha).items():
+            if mid not in current:
+                continue
+            for literal in _as_written(value):
+                if literal in live_forms[mid]:
+                    continue
+                add(literal, mid)
+    return out
+
+
+def stale_literals(root: Path, current: dict[str, float],
+                   use_git: bool = True
+                   ) -> list[tuple[str, int, str, set[str]]]:
+    """Unmarked literals in prose that are superseded values of live metrics.
+
+    Returns `(relative_path, line_number, literal, metric_ids)`. A literal
+    carrying a well-formed historical marker is not reported: narrating a past
+    state is the marker's whole purpose, and the two corrections written up in
+    README.template.md are exactly that.
+    """
+    bad = superseded_values(root, current, use_git=use_git)
+    if not bad:
+        return []
+    found: list[tuple[str, int, str, set[str]]] = []
+    for path in prose_files(root):
+        rel = str(path.relative_to(root)).replace("\\", "/")
+        for line_no, literal, exempt in scan(path):
+            if exempt or literal not in bad:
+                continue
+            found.append((rel, line_no, literal, bad[literal]))
+    return found

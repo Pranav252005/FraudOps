@@ -104,6 +104,16 @@ LEDGER = [
      "data/identity_features.json -- each quoted because it is the evidence "
      "for the sentence around it. Placeholders are used everywhere a metric "
      "id exists."),
+    ("2026-09-01", "template-literal-leak", 1776,
+     "-8 net, and the composition matters more than the number. OUT: six "
+     "unmarked `0.278` and three `2.25x` in README.template.md, all stale "
+     "readings of supervised_p_at_10 or ratios built from one -- bound to "
+     "placeholders, and the leak recorded in "
+     "docs/negative-results/template-literal-leak.md. IN: the case-file "
+     "excerpt on the first screen, whose temporal_cycle_coverage=0.043 is the "
+     "case's own feature value and is the point of the WHY line -- an analyst "
+     "who cannot see what caused the classification can only disagree with "
+     "the score. Baseline lowered from 1784 so the ratchet keeps biting."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
@@ -259,3 +269,210 @@ def test_generated_documents_are_not_scanned():
             assert generated.resolve() not in scanned, (
                 f"{generated.name} is generated from {template.name} and must "
                 f"not be scanned")
+
+
+# ==========================================================================
+# The superseded-value check -- rule 1 as a property, where it can be one
+# ==========================================================================
+#
+# The ratchet above counts literals. It cannot see staleness, because a literal
+# that was already counted does not raise the count when the measurement behind
+# it moves. That is how six unmarked `0.278` -- a superseded reading of
+# `supervised_p_at_10` -- survived in README.template.md while every test
+# passed, inside the document whose SUBMISSION.md section 6 claims the render
+# system prevents exactly this.
+#
+# See docs/negative-results/template-literal-leak.md.
+
+def _live_metric_values() -> dict[str, float]:
+    import json
+    payload = json.loads(
+        (ROOT / "results" / "metrics.json").read_text(encoding="utf-8"))
+    return {k: v["value"] for k, v in payload["metrics"].items()}
+
+
+def _requires_metrics():
+    if not (ROOT / "results" / "metrics.json").exists():
+        pytest.skip("results/metrics.json not built")
+
+
+# The narrative half of the repository: session records and findings documents,
+# which narrate past states by nature. `docs/HANDOFF.md` describes itself as
+# the session record; `docs/CENTREPIECE-INVALIDATED.md` is *about* the run in
+# which the number was 0.2500. Marking every one of them would mean editing
+# documents this project deliberately leaves alone as historical records.
+#
+# So they get a ratchet rather than an assertion, and the number is stated
+# rather than implied -- the same honesty the standing rules apply to rule 1
+# itself, which is recorded as "partial" rather than rounded up.
+#
+# Append, never edit in place.
+STALE_IN_NARRATIVE_LEDGER = [
+    ("2026-09-01", "template-literal-leak", 49,
+     "baseline at first measurement. 49 unmarked superseded readings of "
+     "supervised_p_at_10 across docs/, concentrated in HANDOFF.md (19) and "
+     "ARCHITECTURE_UPLIFT.md (12), both of which are session records. The "
+     "TEMPLATES are held at zero by the assertion below; this number exists "
+     "so the narrative half cannot grow quietly while the enforced half "
+     "looks clean."),
+]
+
+STALE_NARRATIVE_BASELINE = STALE_IN_NARRATIVE_LEDGER[-1][2]
+
+
+def test_no_superseded_metric_value_survives_unmarked_in_a_template():
+    """The assertion, not a ratchet. Templates carry the project's live claims.
+
+    A template is where a human types a number that will be presented as
+    current. Zero is the only defensible count there, and unlike the goal in
+    `test_no_unmarked_metric_literals_in_prose` this one is reachable today --
+    it forbids stale values, not all values.
+    """
+    _requires_metrics()
+    from sentinel.report.literals import stale_literals
+
+    hits = [h for h in stale_literals(ROOT, _live_metric_values())
+            if h[0].endswith(".template.md")]
+    assert not hits, (
+        "a template states a value that a live metric id used to hold and no "
+        "longer does:\n" + "\n".join(
+            f"  {path}:{line} -- {literal!r} is a superseded value of "
+            f"{sorted(ids)}" for path, line, literal, ids in hits) +
+        "\n\nBind it to a placeholder, or mark it "
+        "<!-- historical: measured at commit <sha>, <YYYY-MM-DD> --> if the "
+        "sentence is narrating a past state. Rendering faithfully is not the "
+        "same as being right: the render check compares output to template "
+        "and cannot see a number typed into the template itself.")
+
+
+def test_stale_values_in_the_narrative_documents_never_increase():
+    """The ratchet for docs/, where narration of past states is the point."""
+    _requires_metrics()
+    from collections import Counter
+
+    from sentinel.report.literals import stale_literals
+
+    hits = [h for h in stale_literals(ROOT, _live_metric_values())
+            if not h[0].endswith(".template.md")]
+    assert len(hits) <= STALE_NARRATIVE_BASELINE, (
+        f"unmarked superseded values in docs/ rose from "
+        f"{STALE_NARRATIVE_BASELINE} to {len(hits)}. Per file: "
+        f"{dict(Counter(h[0] for h in hits).most_common(5))}")
+
+
+def test_the_narrative_ledger_is_append_only_and_gives_reasons():
+    assert STALE_IN_NARRATIVE_LEDGER, "the ledger may not be emptied"
+    for date, ref, count, reason in STALE_IN_NARRATIVE_LEDGER:
+        assert len(date) == 10 and date[4] == "-", date
+        assert ref, date
+        assert isinstance(count, int) and count >= 0, date
+        assert len(reason) > 20, f"{date}: reason too thin to audit: {reason!r}"
+    dates = [e[0] for e in STALE_IN_NARRATIVE_LEDGER]
+    assert dates == sorted(dates), "ledger entries must be in date order"
+
+
+# --------------------------------------------------------------------------
+# negative controls -- a check that cannot fail measures nothing
+# --------------------------------------------------------------------------
+
+def test_the_check_fires_on_a_planted_superseded_literal(tmp_path,
+                                                         monkeypatch):
+    """The control this project's own doctrine requires.
+
+    A planted `0.278` in a template must be caught. Without this, the
+    assertion above would pass forever the day the scanner stopped matching.
+    """
+    from sentinel.report import literals as lit
+
+    tmpl = tmp_path / "X.template.md"
+    tmpl.write_text("The model reaches 0.278 on held-out data.\n",
+                    encoding="utf-8")
+    monkeypatch.setattr(lit, "prose_files", lambda root: [tmpl])
+
+    hits = lit.stale_literals(tmp_path, {"supervised_p_at_10": 0.2111},
+                              use_git=False)
+    assert hits, "the planted superseded literal was not caught"
+    assert hits[0][2] == "0.278"
+    assert hits[0][3] == {"supervised_p_at_10"}
+
+
+def test_a_marked_superseded_literal_is_allowed(tmp_path, monkeypatch):
+    """Narrating a past state is the marker's entire purpose.
+
+    README.template.md's correction blockquote quotes 0.2778 and 0.2500 on
+    purpose. If the check flagged those it would be pressuring the project to
+    delete its own history, which is the opposite of standing rule 7.
+    """
+    from sentinel.report import literals as lit
+
+    tmpl = tmp_path / "X.template.md"
+    tmpl.write_text(
+        "<!-- historical: measured at commit 0b4debd, 2026-08-31 -->\n"
+        "It read 0.278 before the dead query groups were closed.\n",
+        encoding="utf-8")
+    monkeypatch.setattr(lit, "prose_files", lambda root: [tmpl])
+
+    assert not lit.stale_literals(tmp_path, {"supervised_p_at_10": 0.2111},
+                                  use_git=False)
+
+
+def test_the_current_value_is_not_treated_as_superseded(tmp_path, monkeypatch):
+    """The check forbids stale values, not all values.
+
+    Quoting the CURRENT number is a different risk -- one the count ratchet
+    already tracks -- and conflating the two would make this check fire on
+    every correct sentence in the repository.
+    """
+    from sentinel.report import literals as lit
+
+    tmpl = tmp_path / "X.template.md"
+    tmpl.write_text("The model reaches 0.2111 on held-out data.\n",
+                    encoding="utf-8")
+    monkeypatch.setattr(lit, "prose_files", lambda root: [tmpl])
+
+    assert not lit.stale_literals(tmp_path, {"supervised_p_at_10": 0.2111},
+                                  use_git=False)
+
+
+def test_the_pre_history_ledger_names_a_commit_and_a_reason():
+    """Every declared superseded value must be auditable.
+
+    `unknown` is an acceptable commit for the same reason the historical
+    marker accepts it -- an admission beats an invented sha -- but a bare value
+    with no reason is a number somebody could add to silence the check.
+    """
+    from sentinel.report.literals import PRE_HISTORY_SUPERSEDED
+
+    assert PRE_HISTORY_SUPERSEDED, "the pre-history ledger may not be emptied"
+    for mid, entries in PRE_HISTORY_SUPERSEDED.items():
+        assert entries, mid
+        for literal, commit, why in entries:
+            assert literal[0].isdigit(), literal
+            assert commit == "unknown" or len(commit) >= 7, (mid, commit)
+            assert len(why) > 20, f"{mid}/{literal}: reason too thin: {why!r}"
+
+
+def test_git_history_is_actually_walked():
+    """The live half must do work, or the check is only its explicit ledger.
+
+    Without this, `superseded_values` could silently degrade to reading
+    PRE_HISTORY_SUPERSEDED alone -- for instance if the subprocess call started
+    failing -- and nothing would notice, because the explicit ledger already
+    catches the literal that motivated the check.
+    """
+    _requires_metrics()
+    import subprocess
+
+    from sentinel.report.literals import _metrics_at_commit
+
+    log = subprocess.run(["git", "log", "--format=%H", "-1", "--",
+                          "results/metrics.json"],
+                         cwd=ROOT, capture_output=True, text=True)
+    if log.returncode != 0 or not log.stdout.strip():
+        pytest.skip("no git history for results/metrics.json")
+
+    at_head = _metrics_at_commit(ROOT, log.stdout.split()[0])
+    assert at_head, (
+        "walking git history for results/metrics.json returned nothing. The "
+        "check has silently degraded to its explicit ledger.")
+    assert "supervised_p_at_10" in at_head

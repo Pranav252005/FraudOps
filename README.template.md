@@ -20,16 +20,98 @@ review.
 Built for the Razorpay AI Buildathon, **AI Risk Manager** track. One class of
 loss: **merchant-account abuse rings / money movement**. Strictly defence-only.
 
-**777 tests passing, 1 skipped, 2 xfail.** `python -m pytest -q`
-(Read 450 when this line was written, then 480, then 494, then 510, then 777
-with the second domain landed; corrected in place rather than rewritten. The
-number moves every session and the only authority for it is a run of the suite,
-never this line.)
+---
+
+## In one screen
+
+| | value | baseline | 95% interval |
+|---|---:|---:|---:|
+| **ring-level p@10** | **{{metric:shipped_score_p_at_10}}** | {{baseline:shipped_score_p_at_10}} (node count) | {{ci:shipped_score_p_at_10}} |
+| ring recall | {{count_pct:ring_recall_score}} | {{count_pct:ring_recall_size}} (node count) | of {{count:n_rings_seen}} in-window rings |
+| seeding ceiling | {{ratio:seeding_prize_blend_ratio_at_10}} | {{count:oracle_over_blend_ratio_at_10_NO_INTERVAL}}× from a perfect *scorer* | {{ci_ratio:seeding_prize_blend_ratio_at_10}} |
+
+Measured over {{count:n_generation_cycles}} generation cycles of the AMLworld
+`HI-Small` benchmark. Every number on this page is rendered from
+[`results/metrics.json`](results/metrics.json); none is typed.
+
+**What makes this different is not the score.** The reporting layer *cannot*
+print a number it has not measured. Four of the seven standing rules are
+constructor preconditions in [`sentinel/report/metric.py`](sentinel/report/metric.py):
+a p@k without its size baseline, or an interval that does not name its
+clustering, **cannot be constructed** — so it cannot be printed, stored, or
+rendered. Two pre-registered kill rules fired against this project's own plan
+and both are published, one of them having cancelled the plan's centrepiece.
+
+**What it refuses to do**, each refusal costing something measured:
+
+- **The 7.3× payment-format leak in the benchmark is left unused.** A test
+  asserts it can never re-enter a feature vector.
+- **`cross_border` is the strongest single term measured and its weight is not
+  raised.** It has the same smell as the feature already excluded as a
+  generator artefact.
+- **The two domains are never pooled.** `require_same_dataset` refuses; a
+  negative control asserts the guard that *looked* like it did this never did.
+- **No confidence number reaches the identity case file.** The dataclass has no
+  field for one, because none has been calibrated for that population.
+
+**Test suite:** `python -m pytest -q`, plus `python scripts/ci_gates.py all`
+for the four gates a green suite would not catch. The count is deliberately not
+quoted here — it moved five times in five sessions, and the only authority for
+it is a run.
+
+→ [What it hands an analyst](#what-this-is) · [Honest results](#honest-results)
+· [What is wrong with it](#open-problems-stated-not-buried) ·
+[Run it from a clean clone](#from-a-clean-clone-one-command-no-data-download)
+
+### What actually lands on the analyst's screen
+
+Abridged but **verbatim** from `python scripts/demo_case_files.py`, which
+renders this case file, an identity case file and a merchant brief side by
+side. Every bracketed id is a citation the verifier resolved against the case
+file's own contents; a fact-shaped sentence without one is a hard stop.
+
+```
+WHO: 47 account(s) are involved in this suspected cycle pattern [CASE-00026].
+Account 6:8047C6800 acted as pass through, with 9 inbound and 29 outbound
+  transfer(s) inside the flagged window [TXN-00009184] [TXN-00122191] ...
+Account 6:804A2D9B0 acted as pass through, with 1 inbound and 33 outbound
+  transfer(s) inside the flagged window [TXN-00046233] [TXN-00046234] ...
+  ... 45 more accounts, each with its role and its transactions
+
+WHAT: 141 transaction(s) totalling Rupee 1,284,916,259.56 moved between the
+  accounts above [TXN-00002047] [TXN-00009184] [TXN-00040304] ...
+
+WHEN: the earliest transaction in this pattern occurred at 2022-09-01T00:00:00
+  [TXN-00002047] and the latest at 2022-09-03T12:47:00 [TXN-01460949]. Filing
+  timeline: the applicable STR filing clock, understood to be seven working
+  days from the date suspicion is formed [PMLA-MAINTENANCE-OF-RECORDS-RULES-2005],
+  should be confirmed against the current Rules before this report is filed.
+
+WHY: this activity is classified CYCLE based on has_temporal_cycle=True;
+  shortest_temporal_cycle=2; temporal_cycle_coverage=0.043 [CASE-00026].
+
+HOW: 8 of 47 account(s) received and forwarded funds within the observation
+  window [6:8047C6800] [6:804A2D9B0] [112637:804BDB030] ..., consistent with a
+  cycle layering structure.
+
+citations verified: True, 147 distinct ids
+```
+
+**Three things in that output are the argument.** The statutory sentence cites
+the instrument *and says the clock should be confirmed against the current
+Rules* rather than asserting it. The `WHY` line names the feature values that
+caused the classification, so the analyst can disagree with the machine on the
+evidence rather than on the score. And the same run prints an identity case
+file whose recommendation for one group is *monitor* — because the address
+shared across it is held queue-wide and is reported as shared infrastructure,
+not as evidence.
 
 ---
 
 ## Contents
 
+- [In one screen](#in-one-screen)
+- [What lands on the analyst's screen](#what-actually-lands-on-the-analysts-screen)
 - [What this is](#what-this-is)
 - [What changed, and why](#what-changed-and-why-read-this-first)
 - [Honest results](#honest-results)
@@ -424,8 +506,9 @@ independently reproduced by the pointwise arm of `scripts/eval_ranker.py`.
 > `data/eval_oracle.json` was "deliberately not re-run". It has since been
 > re-run twice, and that assertion was false by the time anyone read it.
 >
+> <!-- historical: measured at commit 0b4debd, 2026-08-31 -->
 > The supervised figure then fell again — to 0.2500 on a clean re-run, and to
-> its current value once the dead training query groups were closed
+> {{metric:supervised_p_at_10}} once the dead training query groups were closed
 > ([`docs/negative-results/dead-query-groups.md`](docs/negative-results/dead-query-groups.md)).
 > **Each correction reduced the claim.** A number that has been revised
 > downward three times by three unrelated fixes is a number to hold loosely,
@@ -554,8 +637,8 @@ caught up. Both halves are reported.
 ### The supervised re-ranker, and what perfect labels are worth
 
 **A supervised re-ranker over ground-truth ring labels, ring-disjoint held-out
-split, p@10 0.278 [0.150, 0.417] — trained on ground-truth ring labels, which a
-deployment does not have on day one.** Both halves of that sentence are the
+split, p@10 {{metric_ci:supervised_p_at_10}} — trained on ground-truth ring
+labels, which a deployment does not have on day one.** Both halves of that sentence are the
 result. `scripts/eval_oracle.py`, run 1 (`oracle_as_is` in
 `data/eval_oracle.json`); the same LightGBM model on the same candidate
 features the shipped scorer already computes, with no cheat anywhere in the
@@ -710,7 +793,8 @@ cheats at seeding and is a ceiling diagnostic rather than a result.
 
 ### The label tax — why the caveat is the argument
 
-0.278 is what these features support **when the labels are perfect**. A
+{{metric:supervised_p_at_10}} is what these features support **when the labels
+are perfect**. A
 deployment does not get ground truth; it gets analyst verdicts. Phase 4's
 learned re-ranker, trained on *simulated analyst verdicts* instead of truth,
 reached **p@10 = 0.124 against 0.106 for the v1 hand-set** over 17 held-out
@@ -735,14 +819,15 @@ just a softer version of the same claim:
 
 **What can honestly be said.** A verdict-trained re-ranker on 680 labelled cases
 reached p@10 0.124 over 17 held-out cycles; a truth-trained model on ~170k
-candidates reached 0.278 over a different 18. The gap is *consistent with* a
-label-quality tax, and it is not a measurement of one — training-set size,
-feature block, model family, split rule and evaluation window all differ, and
-any one of them could carry the whole 2.25×.
+candidates reached {{metric:supervised_p_at_10}} over a different
+{{count:n_held_out_cycles}}. The gap is *consistent with* a label-quality tax,
+and it is not a measurement of one — training-set size, feature block, model
+family, split rule and evaluation window all differ, and any one of them could
+carry the whole difference.
 
 **The clean experiment is the same model, on the same pool, on the same split,
 fitted twice: once on true ring labels, once on simulated verdicts. It has not
-been run.** Naming it is the honest position; calling the 2.25× the tax is not.
+been run.** Naming it is the honest position; calling that ratio the tax is not.
 And it is cheap — `collect_pool` in `scripts/eval_oracle.py` already returns
 exactly what it needs (the candidate records plus `ring_first_t`), so the second
 arm is a relabelling of an existing pool and a second `fit`, not a new
@@ -751,14 +836,14 @@ runs, "the label tax" is a hypothesis with a plausible mechanism, not a number.
 
 The strategic claim does not depend on the arithmetic, which is why it survives
 the correction: **the label corpus, not the detector, is the actual product.**
-The detector reaches 0.278 when someone hands it clean ring labels, and nobody
-will hand it those. What would close whatever gap is real is the verdict
-pipeline — the case store, the control lane, the calibration loop — not a better
-model. That was the argument before the 2.25× was quoted and it is the argument
-after it is withdrawn.
+The detector reaches {{metric:supervised_p_at_10}} when someone hands it clean
+ring labels, and nobody will hand it those. What would close whatever gap is
+real is the verdict pipeline — the case store, the control lane, the calibration
+loop — not a better model. That was the argument before the ratio was quoted and
+it is the argument after it is withdrawn.
 
-**0.278 is never a production number, and it is not quoted as one anywhere in
-this repository.** It is what these features support under a label advantage no
+**{{metric:supervised_p_at_10}} is never a production number, and it is not
+quoted as one anywhere in this repository.** It is what these features support under a label advantage no
 deployment has — and it is not a ceiling on the features either, only the best
 these features have been made to do so far.
 
@@ -937,8 +1022,9 @@ error rate rather than being assumed to zero.
 
 There is no graph neural network here. There *is* a trained model, in fact two
 of them, and the distance between what they score is the argument: a supervised
-re-ranker trained on ground-truth ring labels reaches [p@10 0.278 on a
-ring-disjoint held-out split](#the-supervised-re-ranker-and-what-perfect-labels-are-worth),
+re-ranker trained on ground-truth ring labels reaches [p@10
+{{metric:supervised_p_at_10}} on a ring-disjoint held-out
+split](#the-supervised-re-ranker-and-what-perfect-labels-are-worth),
 while a re-ranker trained on simulated analyst verdicts — the only labels a
 deployment actually has — reaches 0.124. Those are **two different experiments**,
 not one experiment run twice: different model, different feature block, a
@@ -1249,18 +1335,62 @@ and the calibration loop has no unbiased sample to learn from.
 
 ## Running it
 
+### From a clean clone, one command, no data download
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ```bash
+./scripts/reproduce_clean.sh
+```
+
+Four things, in order: the test suite; the four CI gates a green suite would
+not catch; a re-render of README and `docs/SUBMISSION.md` from
+`results/metrics.json` that **fails if the committed files differ**, so no
+number in either can have been edited in by hand; and a case file rendered end
+to end through the citation verifier.
+
+**It is not instant** — the suite is several hundred tests and the determinism
+gate runs the pipeline twice in fresh processes under different hash seeds.
+Budget a few minutes. Nothing in it needs a network, a key, or a download.
+
+**None of that recomputes a headline**, and the script says so on exit. The
+headlines live in [`results/metrics.json`](results/metrics.json), which is
+committed; recomputing them needs the benchmark, which is not. Separating the
+two is deliberate — the evaluation commands below fail immediately without a
+1.6 GB download, and a reader who ran those first would reasonably conclude
+nothing here works.
+
+Individually, if you prefer:
+
+```bash
 python -m pytest -q
+python scripts/ci_gates.py all
+python scripts/render_docs.py        # rewrites README.md and docs/SUBMISSION.md
+python scripts/demo_case_files.py    # two case files and a merchant brief
 ```
 
 The test suite runs with no dataset and no API key. So does the cost model:
 
 ```bash
 python scripts/eval_cost.py
+```
+
+### With the AMLworld benchmark
+
+Everything below needs `HI-Small` compiled into `data/`; see
+[Data](#data). These are the commands that produce the numbers
+`results/metrics.json` is built from.
+
+```bash
+python scripts/eval_phase2.py          # the shipped queue
+python scripts/eval_oracle.py          # both seeding arms
+python scripts/eval_seed_cheat_diff.py # which rings the cheat rescues
+python scripts/eval_label_tax.py --arm noise
+python scripts/eval_label_tax.py --arm budget
+python scripts/collect_metrics.py      # -> results/metrics.json
+python scripts/render_docs.py          # -> README.md, docs/SUBMISSION.md
 ```
 
 ### The console

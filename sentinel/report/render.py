@@ -9,6 +9,7 @@ The placeholder grammar, deliberately small:
     {{n:supervised_p_at_10}}               the unit count
     {{signed:supervised_over_blend_delta_at_10}}   +0.0222
     {{ratio:seeding_prize_blend_ratio_at_10}}      2.18x
+    {{ci_ratio:seeding_prize_blend_ratio_at_10}}   [1.62x, 3.50x]
     {{count:n_held_out_cycles}}            an exact count, not an estimate
 
 Rendering FAILS -- it does not warn, and it does not leave the placeholder in
@@ -99,6 +100,12 @@ def render_text(template: str, metrics: dict[str, Metric],
             # you notice the minus, which is the one thing a reader must not
             # have to notice.
             return f"[{m.ci_lower:+.4f}, {m.ci_upper:+.4f}]"
+        if verb == "ci_ratio":
+            # Same reasoning as ci_signed. "[1.6250, 3.5000]" beside a value
+            # written "2.18x" reads as a probability interval, and a reader who
+            # notices the mismatch has been made to do the work the format
+            # should have done. The unit travels with the interval.
+            return f"[{m.ci_lower:.2f}x, {m.ci_upper:.2f}x]"
         if verb == "metric_ci":
             return f"{_fmt(m.value)} [{_fmt(m.ci_lower)}, {_fmt(m.ci_upper)}]"
         if verb == "signed_ci":
@@ -116,8 +123,9 @@ def render_text(template: str, metrics: dict[str, Metric],
             return f"{float(_require(m, 'prevalence', verb)):.6f}"
         raise RenderError(
             f"unknown placeholder verb {verb!r} in {{{{{verb}:{mid}}}}}. "
-            f"Known verbs: metric, signed, ratio, ci, metric_ci, signed_ci, "
-            f"ratio_ci, baseline, n, k, pct, prevalence, count, count_pct.")
+            f"Known verbs: metric, signed, ratio, ci, ci_signed, ci_ratio, "
+            f"metric_ci, signed_ci, ratio_ci, baseline, n, k, pct, "
+            f"prevalence, count, count_pct.")
 
     out = PLACEHOLDER.sub(sub, template)
 

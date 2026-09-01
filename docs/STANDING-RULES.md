@@ -9,7 +9,7 @@ and 7 are only partially mechanised, and that is recorded rather than rounded up
 
 | # | rule | enforced by |
 |---:|---|---|
-| 1 | Never state a number that has not been measured | *partial, ratcheted* — `sentinel/report/` cannot invent a value; `tests/test_prose_literals.py` holds the unmarked prose-literal count to a ledger where every increase must be dated and justified |
+| 1 | Never state a number that has not been measured | *partial, ratcheted, with one property* — `sentinel/report/` cannot invent a value; `sentinel/report/literals.py::stale_literals` **fails the build** when a template states a value a live metric id has held and no longer holds; `tests/test_prose_literals.py` holds the unmarked prose-literal count, and the residue of stale values in `docs/`, to ledgers where every increase must be dated and justified |
 | 2 | Always quote p@k beside its size baseline | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule2SizeBaseline` |
 | 3 | Print the conditioning banner on every ring-unit metric | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule3ConditioningBanner` |
 | 4 | Report prevalence beside any Elliptic2 p@k | `sentinel/report/metric.py`, `tests/test_standing_rules.py::TestRule4Prevalence` |
@@ -114,8 +114,34 @@ carrying
 
     <!-- historical: measured at commit <sha|unknown>, <YYYY-MM-DD> -->
 
-Until then, rule 1 is a practice for prose and a property only for numbers that
-leave through `sentinel/report/`.
+### Phase 4 ran, and it was not enough
+
+README did become a template. The ratchet did fall. And **six unmarked stale
+readings of the supervised p@10 survived inside the template**, because the
+render check compares the rendered file to the template and cannot see a number
+typed into the template itself — while the ratchet counts literals, and
+literals already in the count do not raise it when the measurement behind them
+moves. **A count cannot detect staleness.** Full account:
+[`negative-results/template-literal-leak.md`](negative-results/template-literal-leak.md).
+
+What exists now is a third check, and this one *is* a property within its
+scope. `sentinel/report/literals.py::stale_literals` collects every value each
+live metric id has held and no longer holds — by walking the git history of
+`results/metrics.json`, plus an explicit table for values predating that file —
+and reports any appearing unmarked in prose.
+
+| scope | enforcement |
+|---|---|
+| `*.template.md` | **assertion, zero permitted.** A template is where a human types a number that will be read as current. |
+| `docs/` narrative | ratchet against a dated ledger. `HANDOFF.md` and `CENTREPIECE-INVALIDATED.md` narrate past states by nature; marking all of them would mean editing documents this project preserves as session records. |
+
+So rule 1 now stands as: **a property for numbers leaving through
+`sentinel/report/`, a property for stale values in templates, and a ratcheted
+practice everywhere else.** The three routes that would still get a stale
+number past it are named in the negative-results entry rather than left to be
+discovered — the sharpest being that a historical marker is honoured on sight,
+with nothing verifying the sentence it exempts is actually narrating the past.
+That is the same hole rule 7 has, and it is now present in two mechanisms.
 
 ---
 

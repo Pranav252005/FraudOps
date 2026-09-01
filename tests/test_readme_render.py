@@ -103,6 +103,27 @@ class TestRenderStrictness:
         with pytest.raises(RenderError, match="prevalence"):
             render_text("{{prevalence:ap}}", {"ap": m}, {})
 
+    def test_an_interval_carries_the_unit_of_the_value_beside_it(self):
+        """`ci_signed` and `ci_ratio` exist for the same reason.
+
+        A ratio interval rendered as "[1.6250, 3.5000]" beside a value written
+        "2.18x" reads as a probability interval. A reader who spots the
+        mismatch has been made to do work the format should have done, and a
+        reader who does not has been misled -- which is the failure mode the
+        whole rendering layer exists to remove, not one it may introduce.
+        """
+        m = Metric(id="r", value=2.176, n_units=18, unit="cycle",
+                   ci_lower=1.625, ci_upper=3.5,
+                   ci_method="cycle_clustered_bootstrap")
+        assert render_text("{{ci_ratio:r}}", {"r": m}, {}) == "[1.62x, 3.50x]"
+        assert render_text("{{ratio:r}}", {"r": m}, {}) == "2.18x"
+
+        signed = Metric(id="d", value=0.0222, n_units=18, unit="cycle",
+                        ci_lower=-0.0333, ci_upper=0.0889,
+                        ci_method="cycle_clustered_bootstrap")
+        assert render_text("{{ci_signed:d}}", {"d": signed}, {}) == (
+            "[-0.0333, +0.0889]")
+
     def test_there_is_no_raw_escape_hatch(self, metrics, counts):
         """A verb that emitted a bare number would let a writer bypass rule 2
         while still passing the literal scan -- which would make the scan worse

@@ -47,6 +47,7 @@ measurement someone can argue with.
 | [`median-amount-features.md`](median-amount-features.md) | Closing a GFP coverage gap did not help and sometimes hurt. |
 | [`identity-fragments-worse-refuted.md`](identity-fragments-worse-refuted.md) | The prediction that motivated the second domain -- that synthetic identity fragments worse than AMLworld -- went the other way. The dose-response inside the domain, which was the primary prediction, held. |
 | [`elliptic2-cancelled.md`](elliptic2-cancelled.md) | The second-dataset expansion was cancelled on a schema fact; the only Elliptic2 numbers in the repo come from a 10-node fixture. |
+| [`template-literal-leak.md`](template-literal-leak.md) | The rendering system built to stop a stale headline had six of them in its own template. The render check compares output to template and cannot see a number typed into the template; the literal ratchet counts literals and cannot see staleness. |
 
 ## Entries still held only in prose
 

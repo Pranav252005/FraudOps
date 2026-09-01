@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_by": "scripts/collect_metrics.py",
-  "generated_at": "2026-09-01T14:23:46",
-  "commit": "3d1f075575bbe813a3aac8b5f8bf10b307b92c89",
+  "generated_at": "2026-09-01T16:36:32",
+  "commit": "aa205eb0d8a514b8b0ec2ffe9c2565ba3b2b7b98",
   "metrics": {
     "supervised_p_at_10": {
       "id": "supervised_p_at_10",
@@ -946,6 +946,6 @@
     "funnel_largest_loss_stage": "ranking",
     "oracle_over_blend_ratio_at_10_NO_INTERVAL": 1.12,
     "oracle_over_blend_ratio_at_20_NO_INTERVAL": 1.28,
-    "n_prose_literals": 1784
+    "n_prose_literals": 1776
   }
 }

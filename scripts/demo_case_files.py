@@ -170,8 +170,18 @@ def main() -> int:
                           if a != "_total")
         print(f"  {group:<16} n={total:<4} {parts}")
 
-    Path(args.out).write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(f"\nwritten to {Path(args.out).relative_to(ROOT)}")
+    # Resolved before use: `--out data/case_demo.json` is the form the README
+    # documents, and a relative path has no `relative_to(ROOT)` -- which used
+    # to crash AFTER every case file had already been rendered and printed, so
+    # the script did all its work and then exited non-zero.
+    out = Path(args.out)
+    out = out if out.is_absolute() else (Path.cwd() / out)
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    try:
+        shown = out.resolve().relative_to(ROOT)
+    except ValueError:
+        shown = out.resolve()
+    print(f"\nwritten to {shown}")
     return 0
 
 
