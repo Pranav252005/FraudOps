@@ -95,6 +95,15 @@ LEDGER = [
      "whole candidates rather than rates, and the one metric-shaped literal is "
      "rare_multiplicity's 0.0000 from Phase A -- quoted because the point of "
      "the paragraph is that the triage rule inherits that exact result."),
+    ("2026-09-01", "readme-pivot-section", 1784,
+     "+4: README.template.md gains a reviewer-facing section explaining why a "
+     "second domain was added. Its four literals are quotations of numbers "
+     "measured elsewhere in the repo -- the 0.510/0.057 component-split shares "
+     "from PHASE2-SEED-CHEAT-FINDINGS, the 91% laundering share behind "
+     "EVAL_END in config.py, and max_pan_fanout's AUC from "
+     "data/identity_features.json -- each quoted because it is the evidence "
+     "for the sentence around it. Placeholders are used everywhere a metric "
+     "id exists."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
