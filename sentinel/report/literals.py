@@ -66,7 +66,19 @@ def prose_files(root: Path) -> list[Path]:
     files = [template] if template.is_file() else [root / "README.md"]
     files += sorted(p for p in (root / "docs").rglob("*.md")
                     if "inventory" not in p.parts)
-    return [p for p in files if p.is_file()]
+
+    def is_generated(p: Path) -> bool:
+        """True when `p` is rendered from a sibling `*.template.md`.
+
+        Checked by file existence rather than by reading the DO-NOT-EDIT
+        banner, so a generated file that somebody stripped the banner off is
+        still recognised as generated.
+        """
+        if p.name.endswith(".template.md"):
+            return False
+        return p.with_name(p.name[:-3] + ".template.md").is_file()
+
+    return [p for p in files if p.is_file() and not is_generated(p)]
 
 
 def scan(path: Path) -> list[tuple[int, str, bool]]:

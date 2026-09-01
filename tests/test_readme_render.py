@@ -26,6 +26,8 @@ from sentinel.report.store import read
 
 TEMPLATE = ROOT / "README.template.md"
 RENDERED = ROOT / "README.md"
+SUBMISSION_TEMPLATE = ROOT / "docs" / "SUBMISSION.template.md"
+SUBMISSION = ROOT / "docs" / "SUBMISSION.md"
 METRICS = ROOT / "results" / "metrics.json"
 
 needs_metrics = pytest.mark.skipif(
@@ -145,7 +147,7 @@ class TestIdempotence:
         have = [ln for ln in have if not ln.startswith("<!-- metrics:")]
         assert got == have, (
             "README.md differs from a fresh render of README.template.md. "
-            "Edit the template and re-run scripts/render_readme.py; never "
+            "Edit the template and re-run scripts/render_docs.py; never "
             "edit README.md directly.")
 
     def test_the_rendered_readme_says_it_is_generated(self):
@@ -229,3 +231,64 @@ class TestTheMetricsFileIsTheSourceOfTruth:
         assert "label_tax_budget_slope_per_halving" in metrics
         for mid in ("label_tax", "label_tax_combined", "label_tax_slope"):
             assert mid not in metrics, f"{mid} conflates two estimands"
+
+
+@needs_metrics
+class TestTheSubmissionArtifact:
+    """Phase 5. The buildathon-facing write-up is rendered like everything
+    else, so it cannot go stale the way README did."""
+
+    def test_it_is_generated_from_a_template(self):
+        assert SUBMISSION_TEMPLATE.is_file()
+        first = SUBMISSION.read_text(encoding="utf-8").splitlines()[0]
+        assert "GENERATED" in first and "DO NOT EDIT" in first
+
+    def test_it_matches_a_fresh_render(self, tmp_path):
+        fresh = render_file(SUBMISSION_TEMPLATE, METRICS,
+                            tmp_path / "SUBMISSION.md")
+        got = [ln for ln in fresh.read_text(encoding="utf-8").splitlines()
+               if not ln.startswith("<!-- metrics:")]
+        have = [ln for ln in SUBMISSION.read_text(encoding="utf-8").splitlines()
+                if not ln.startswith("<!-- metrics:")]
+        assert got == have, (
+            "docs/SUBMISSION.md differs from a fresh render. Run "
+            "scripts/collect_metrics.py then scripts/render_docs.py.")
+
+    def test_it_links_every_negative_result(self):
+        """The index must be complete, or 'negative results are recorded'
+        becomes a claim about a subset somebody chose."""
+        text = SUBMISSION.read_text(encoding="utf-8")
+        entries = sorted(p.stem for p in (ROOT / "docs" / "negative-results")
+                         .glob("*.md") if p.name != "README.md")
+        missing = [e for e in entries if e not in text]
+        assert not missing, f"submission does not link: {missing}"
+
+    def test_it_links_the_standing_rules_tests(self):
+        """Item 5 of the plan: the test file is the evidence that the
+        methodology is enforced rather than promised."""
+        text = SUBMISSION.read_text(encoding="utf-8")
+        for path in ("docs/STANDING-RULES.md",
+                     "tests/test_standing_rules.py",
+                     "tests/test_import_boundaries.py",
+                     "tests/test_measured_path_closure.py"):
+            assert path.rsplit("/", 1)[-1] in text, path
+
+    def test_it_names_the_pre_registration_that_fired(self):
+        text = SUBMISSION.read_text(encoding="utf-8")
+        assert "ARCHITECTURE_UPLIFT.md" in text
+        assert "1.5" in text and "kill line" in text.lower()
+
+    def test_it_carries_the_ceiling_banner_on_the_seed_cheat(self):
+        """The seeding prize is the most quotable number here and the most
+        misquotable. Its diagnostic status must be adjacent to it."""
+        text = SUBMISSION.read_text(encoding="utf-8")
+        i = text.find("seeding")
+        assert i >= 0
+        assert "CEILING DIAGNOSTIC" in text
+
+    def test_it_states_what_the_work_is_not(self):
+        text = SUBMISSION.read_text(encoding="utf-8")
+        assert "What this is not" in text
+        for claim in ("Not a deployment", "Not a supervised result",
+                      "Not measured at adequate"):
+            assert claim in text, claim

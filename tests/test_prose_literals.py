@@ -65,6 +65,10 @@ LEDGER = [
      "because it is now a build artefact whose numbers cannot be wrong by "
      "hand. Also excludes the fixed phrase '95% CI', where the number names "
      "the confidence level rather than measuring anything."),
+    ("2026-09-01", "phase-5", 1708,
+     "+8: docs/SUBMISSION.template.md, the buildathon write-up. It is itself "
+     "rendered from results/metrics.json, so its 8 remaining literals are "
+     "narration of past states rather than live values."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
@@ -178,3 +182,45 @@ def test_unknown_is_an_acceptable_commit():
 def test_the_inventory_csv_is_not_scanned():
     """It is the output of counting literals; counting it would be circular."""
     assert not any("inventory" in p.parts for p in prose_files(ROOT))
+
+
+def test_the_reported_literal_count_is_not_stale():
+    """`results/metrics.json` reports the repository's own literal count, and
+    `docs/SUBMISSION.md` renders it. A self-reported count that can drift is
+    the exact defect this whole mechanism exists to catch, so it is checked.
+
+    This does couple documentation edits to `scripts/collect_metrics.py`. That
+    coupling is the point: if a doc changes and the reported count is not
+    refreshed, the submission is quoting a stale number about staleness.
+    """
+    import json
+
+    metrics = ROOT / "results" / "metrics.json"
+    if not metrics.exists():
+        pytest.skip("results/metrics.json not built")
+    stored = json.loads(metrics.read_text(encoding="utf-8"))["counts"].get(
+        "n_prose_literals")
+    if stored is None:
+        pytest.skip("n_prose_literals not recorded")
+    live, _ = count_unmarked(ROOT)
+    assert stored == live, (
+        f"results/metrics.json reports {stored} prose literals; the live count "
+        f"is {live}. Re-run `python scripts/collect_metrics.py && python "
+        f"scripts/render_docs.py`.")
+
+
+def test_generated_documents_are_not_scanned():
+    """A rendered file's numbers are correct by construction and cannot be
+    fixed by editing, since an edit is overwritten on the next render. Scanning
+    them would double-count and would flag values nobody can act on."""
+    # Compared as paths, not basenames: docs/negative-results/README.md is a
+    # different file from the root README.md and is legitimately scanned, so a
+    # basename check would fail on it for the wrong reason.
+    scanned = {p.resolve() for p in prose_files(ROOT)}
+    for generated in (ROOT / "README.md", ROOT / "docs" / "SUBMISSION.md"):
+        template = generated.with_name(
+            generated.name.replace(".md", ".template.md"))
+        if template.is_file():
+            assert generated.resolve() not in scanned, (
+                f"{generated.name} is generated from {template.name} and must "
+                f"not be scanned")

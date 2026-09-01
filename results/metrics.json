@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_by": "scripts/collect_metrics.py",
-  "generated_at": "2026-09-01T01:02:06",
-  "commit": "d7a4fdfe502e18d9a1b1e054f949a43385924387",
+  "generated_at": "2026-09-01T05:26:10",
+  "commit": "544705424cc269e71550ffa0b491c8b17b956c7f",
   "metrics": {
     "supervised_p_at_10": {
       "id": "supervised_p_at_10",
@@ -886,6 +886,9 @@
     "funnel_seeded_recall": 0.888,
     "funnel_built_recall": 0.6216,
     "funnel_ranked_recall": 0.2239,
-    "funnel_largest_loss_stage": "ranking"
+    "funnel_largest_loss_stage": "ranking",
+    "oracle_over_blend_ratio_at_10_NO_INTERVAL": 1.12,
+    "oracle_over_blend_ratio_at_20_NO_INTERVAL": 1.28,
+    "n_prose_literals": 1708
   }
 }

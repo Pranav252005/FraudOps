@@ -287,7 +287,23 @@ def main() -> int:
         "funnel_built_recall": round(total["built_recall"], 4),
         "funnel_ranked_recall": round(total["ranked_recall"], 4),
         "funnel_largest_loss_stage": funnel["largest_loss_stage"],
+        # The quantity the centrepiece was pre-registered on. It is a ratio of
+        # two point estimates and `scripts/eval_oracle.py` stores no interval
+        # for it, so it CANNOT be a Metric -- the constructor would reject it,
+        # correctly. It is carried as a count with the absence written into the
+        # name, so a template quoting it cannot do so without saying what is
+        # missing.
+        "oracle_over_blend_ratio_at_10_NO_INTERVAL": round(
+            arm["oracle_over_blend"]["10"], 2),
+        "oracle_over_blend_ratio_at_20_NO_INTERVAL": round(
+            arm["oracle_over_blend"]["20"], 2),
     })
+
+    # The repository's own unmarked-literal count, so the document that reports
+    # the ratchet is itself subject to it. Measured, not typed -- which is the
+    # whole point being made.
+    from sentinel.report.literals import count_unmarked
+    payload["counts"]["n_prose_literals"] = count_unmarked(ROOT)[0]
     written.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     print(f"wrote {len(metrics)} metrics and "
