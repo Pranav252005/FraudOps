@@ -69,6 +69,13 @@ LEDGER = [
      "+8: docs/SUBMISSION.template.md, the buildathon write-up. It is itself "
      "rendered from results/metrics.json, so its 8 remaining literals are "
      "narration of past states rather than live values."),
+    ("2026-09-01", "phase-A-identity", 1718,
+     "+10: docs/PHASEA-IDENTITY-BACKGROUND.md, the synthetic-identity "
+     "background gate written up from the sweep run the same day against "
+     "pre-registrations committed at 49f9f08. Current measurements, so the "
+     "historical marker does not apply; the per-configuration numbers stay in "
+     "data/identity_background.json rather than being copied into prose, "
+     "which is why this is ten literals and not a hundred."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
