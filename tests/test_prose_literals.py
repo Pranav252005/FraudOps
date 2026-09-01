@@ -82,6 +82,14 @@ LEDGER = [
      "are the argument, not decoration; the per-feature AUC table stays in "
      "data/identity_features.json rather than in prose. Current measurements, "
      "so the historical marker does not apply."),
+    ("2026-09-01", "phase-D-fragmentation", 1779,
+     "+57: docs/PHASED-FRAGMENTATION.md and "
+     "docs/negative-results/identity-fragments-worse-refuted.md, both from the "
+     "coverage measurement run the same day against a pre-registration "
+     "committed at 8453492. The dose-response tables ARE the result -- six "
+     "coverage points with intervals, twelve sweep points, and the two-domain "
+     "contrast -- so these literals are the argument rather than narration. "
+     "Current measurements, so the historical marker does not apply."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

@@ -45,6 +45,7 @@ measurement someone can argue with.
 | [`gfp-parity-unmeasured.md`](gfp-parity-unmeasured.md) | Every "feature parity with IBM's GFP" claim was struck. It was never measured and cannot be measured on this machine. |
 | [`inert-seed-sweep.md`](inert-seed-sweep.md) | A five-seed stability sweep was one fit reported five times. |
 | [`median-amount-features.md`](median-amount-features.md) | Closing a GFP coverage gap did not help and sometimes hurt. |
+| [`identity-fragments-worse-refuted.md`](identity-fragments-worse-refuted.md) | The prediction that motivated the second domain -- that synthetic identity fragments worse than AMLworld -- went the other way. The dose-response inside the domain, which was the primary prediction, held. |
 | [`elliptic2-cancelled.md`](elliptic2-cancelled.md) | The second-dataset expansion was cancelled on a schema fact; the only Elliptic2 numbers in the repo come from a 10-node fixture. |
 
 ## Entries still held only in prose

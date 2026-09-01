@@ -184,6 +184,7 @@ opinion.
 | [inert-seed-sweep](negative-results/inert-seed-sweep.md) | A five-seed sweep was one fit reported five times. |
 | [median-amount-features](negative-results/median-amount-features.md) | Closing a coverage gap did not help. |
 | [elliptic2-cancelled](negative-results/elliptic2-cancelled.md) | The second dataset was cancelled on a schema fact. |
+| [identity-fragments-worse-refuted](negative-results/identity-fragments-worse-refuted.md) | The prediction that motivated the second domain went the other way. The dose-response inside it held. |
 
 ---
 
