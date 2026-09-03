@@ -136,6 +136,17 @@ LEDGER = [
      "contrast IS the correction -- a superseding note that does not carry "
      "the number it supersedes on cannot be checked. Stale-narrative count "
      "held at 50 and templates stayed at zero across the change."),
+    ("2026-09-03", "what-broke", 1895,
+     "+17, from docs/WHAT-BROKE.template.md, the Failure Recovery artefact. "
+     "Every LIVE number in it is a placeholder -- the file contains no typed "
+     "p@k, no typed interval and no typed ratio, and the render fails rather "
+     "than leaving a hole. The 17 counted literals are all values that are "
+     "not metrics and cannot go stale: the magnitudes in the catastrophic "
+     "cancellation case (0.09 against 6,948,663.08), the benchmark leak rates "
+     "(7.3x, 86.6%, 11.8%, 91%), the disk sizes on the Elliptic2 download, "
+     "and counts like 156 of 321 positives. Stale-value count in the new "
+     "template is ZERO, which is the assertion rather than the ratchet, and "
+     "the stale-narrative total held at 50."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

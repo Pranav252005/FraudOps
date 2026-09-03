@@ -42,6 +42,14 @@ clustering, **cannot be constructed** — so it cannot be printed, stored, or
 rendered. Two pre-registered kill rules fired against this project's own plan
 and both are published, one of them having cancelled the plan's centrepiece.
 
+> **If you read one other page, read
+> [`docs/WHAT-BROKE.md`](docs/WHAT-BROKE.md).** Every defect this project found
+> returned a *plausible wrong answer* rather than an error — including **five
+> separate occasions on which a check this repository was relying on turned out
+> to be incapable of failing.** The headline p@10 would have been roughly double
+> its honest value if one of them had gone uncaught. It is a five-minute read
+> and it is the strongest evidence here.
+
 **What it refuses to do**, each refusal costing something measured:
 
 - **The 7.3× payment-format leak in the benchmark is left unused.** A test
@@ -1258,6 +1266,13 @@ Bug #8 is the one worth pausing on: the uncorrected headline would have been
 roughly **double** its honest value and largely an artifact. It was found,
 published, and turned into a standing rule that every p@k is quoted beside its
 size baseline.
+
+**The table above is the numbered subset.** The full account —
+including the two defects a differential fingerprint caught that no metric would
+have moved, the **five checks found to be incapable of failing**, the sweep that
+was one fit reported five times, and the three wrong answers this project gave
+to its own central question before the fourth — is
+[`docs/WHAT-BROKE.md`](docs/WHAT-BROKE.md).
 
 ### Two leaks found in the benchmark, deliberately unused
 
