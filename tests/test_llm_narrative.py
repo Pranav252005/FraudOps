@@ -16,8 +16,9 @@ from sentinel.cases.evidence import (CaseFile, MemberRole, Provenance,
 from sentinel.llm import client as llm_client
 from sentinel.narrative import metrics
 from sentinel.narrative.llm_draft import Draft, build_prompt
-from sentinel.narrative.str_narrative import (SOURCE_LLM, SOURCE_TEMPLATE,
-                                              draft_and_verify, generate)
+from sentinel.narrative.drafted import (SOURCE_LLM, SOURCE_TEMPLATE,
+                                        draft_and_verify)
+from sentinel.narrative.str_narrative import generate
 
 
 # --- fixtures ---------------------------------------------------------------

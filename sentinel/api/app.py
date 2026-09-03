@@ -32,8 +32,8 @@ from sentinel.escalation import ACTION_DESCRIPTIONS, Action, decide, execute, re
 from sentinel.narrative.citation import NarrativeVerificationError
 from sentinel.llm import config as llm_config
 from sentinel.narrative import metrics as draft_metrics
-from sentinel.narrative.str_narrative import (draft_and_verify,
-                                              generate_and_verify)
+from sentinel.narrative.drafted import draft_and_verify
+from sentinel.narrative.str_narrative import generate_and_verify
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 FRONTEND = ROOT / "frontend"

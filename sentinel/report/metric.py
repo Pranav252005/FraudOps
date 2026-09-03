@@ -38,7 +38,7 @@ from typing import Literal
 # `world` arrived with the second domain. Unlike AMLworld, the identity
 # generator HAS a randomness knob (prereg/cycles.md records that AMLworld's
 # measured path has none), so its resampling unit is the generated world.
-Unit = Literal["cycle", "ring", "world"]
+Unit = Literal["cycle", "ring", "world", "case"]
 
 # Clustering methods that may appear in `ci_method`. A bare "bootstrap" is not
 # admissible: the whole finding in scripts/eval_ring_unit.py is that cycle- and
@@ -60,6 +60,12 @@ CI_METHODS = frozenset({
     # easy, not closed.
     "world_clustered_bootstrap",
     "paired_world_clustered_bootstrap",
+    # The narrative layer's unit. One case is one trial and each case appears
+    # once, so the case IS the cluster and there is no second clustering that
+    # is even defined -- rule 5's "report the wider of two" has nothing to
+    # range over here, which is recorded in prereg/citation_recall.md rather
+    # than left for a reader to infer from the absence.
+    "case_clustered_bootstrap",
 })
 
 # Datasets for which standing rule 4 requires prevalence beside any p@k.
@@ -74,7 +80,16 @@ PREVALENCE_REQUIRED_DATASETS = frozenset({"elliptic2", "synthetic-identity-v1"})
 # ring-, cluster- and world-unit numbers in this project are all conditioned on
 # something (BUILT, or "the group had at least one seeded member") that changes
 # what the number means.
-CONDITIONING_REQUIRED_UNITS = frozenset({"ring", "world"})
+#
+# `case` is here for a reason specific to the narrative layer, and it is the
+# whole value of routing citation recall through this class. Every citation
+# number in this repository is measured on the TEMPLATE path, because the LLM
+# path has drafted nothing -- no key is configured, and the draft ledger's
+# denominator is empty. A citation-recall figure quoted without that
+# conditioning reads as "the drafted narratives cite 88% of their evidence",
+# which is a claim about a model that has never run. Making conditioning a
+# precondition means that sentence cannot be constructed, let alone rendered.
+CONDITIONING_REQUIRED_UNITS = frozenset({"ring", "world", "case"})
 
 
 class MetricContractError(ValueError):
@@ -159,10 +174,10 @@ class Metric:
             raise MetricContractError(
                 f"{self.id}: n_units must be a positive integer, got "
                 f"{self.n_units!r}")
-        if self.unit not in ("cycle", "ring", "world"):
+        if self.unit not in ("cycle", "ring", "world", "case"):
             raise MetricContractError(
-                f"{self.id}: unit must be 'cycle', 'ring' or 'world', got "
-                f"{self.unit!r}")
+                f"{self.id}: unit must be 'cycle', 'ring', 'world' or "
+                f"'case', got {self.unit!r}")
 
         # --- rule 2: p@k carries its size baseline --------------------------
         if self.is_precision_at_k and not _is_number(self.size_baseline):
