@@ -1,0 +1,166 @@
+<!-- Rendered to PITCH.md by sentinel/report/render.py. Edit this file, not that one. -->
+# Five-minute pitch
+
+**Every number in this script is rendered from `results/metrics.json`.** If a
+figure here is stale, the render check fails and the build goes red — which is
+the only reason it is safe to read numbers aloud from a script written days
+before the recording.
+
+The spine is deliberate and it is not the graph. It is: *here is one ring, fully
+investigated, every sentence traceable; here is where we lose; here is the plan
+we killed with our own rule; here is the number that says we might not pay for
+ourselves.* A demo that only shows the thing working is a demo that has told you
+nothing about whether to believe it.
+
+**Total 5:00.** Timings are cumulative.
+
+---
+
+## 0:00 — 0:35 · The unit is wrong everywhere else
+
+> Every risk team already has detectors. None of them has enough analysts. The
+> bottleneck in fraud operations is not detection, it is **investigation
+> throughput** — the analyst spends most of the hour assembling evidence and a
+> few minutes on the judgment that actually needed a human.
+>
+> So Sentinel changes the unit. Not "this transaction is suspicious" — **"these
+> nine accounts are one mule ring, here is the structure, here is the evidence,
+> here is the filing-ready draft."** One decision instead of nine hundred.
+
+**On screen:** the queue, then one case opening.
+
+---
+
+## 0:35 — 1:40 · One ring, pre-investigated
+
+**On screen:** a real case file from `python scripts/demo_case_files.py`, scrolled
+slowly. Do not narrate the graph. Narrate the citations.
+
+> This is one case, generated, not mocked. Members with their roles. The
+> transactions that make it a ring. And the STR narrative underneath —
+> who, what, when, where, why, how, in the structure FinCEN's own guidance asks
+> for.
+>
+> **Every bracketed id is a citation, and every one of them was resolved against
+> the case file before this text was allowed to exist.** A fact-shaped sentence
+> without a citation is a hard failure. Not a warning that gets filed anyway — a
+> refusal.
+
+**Then, immediately, the limit. Do not let this land as a clean win:**
+
+> And here is what that check does *not* do. It verifies the citation
+> **resolves**. It does not verify the citation **supports the claim**. Cite a
+> real transaction for the wrong amount, the wrong direction, the wrong date —
+> **it passes.** We have seven narratives that demonstrate it, with controls
+> proving the two checks we *did* implement still fire.
+>
+> We wrote that test to fail our own verifier, and we published the hole rather
+> than the clean pass.
+
+---
+
+## 1:40 — 2:35 · Where we lose
+
+**On screen:** the funnel table.
+
+> Ring-level precision at 10 is **{{metric:shipped_score_p_at_10}}**, interval
+> {{ci:shipped_score_p_at_10}}, over {{count:n_generation_cycles}} generation
+> cycles. That is quoted against a baseline that ranks purely by node count,
+> which scores **{{baseline:shipped_score_p_at_10}}** — because a metric that
+> rewards candidate size once let a node-count baseline *tie* our real scorer,
+> and we only found out because we checked.
+>
+> Now the part most demos skip. Of the rings in the window, we seed
+> **{{count_pct:funnel_seeded_recall}}**. We build
+> **{{count_pct:funnel_built_recall}}**. We rank into the top 50
+> **{{count_pct:funnel_ranked_recall}}**. The biggest single loss is at
+> **{{count:funnel_largest_loss_stage}}**, and we can say that because seed,
+> build and rank are instrumented separately.
+
+---
+
+## 2:35 — 3:40 · The plan we killed with our own rule
+
+**On screen:** `docs/CENTREPIECE-INVALIDATED.md`, then `docs/WHAT-BROKE.md`.
+
+> We spent most of this project believing the scorer was the bottleneck. We
+> pre-registered the test: replace our scorer with one trained on true labels,
+> and if it does not beat us by 1.5x, the plan is dead.
+>
+> It came back at **{{count:oracle_over_blend_ratio_at_10_NO_INTERVAL}}x**, and
+> the paired interval **includes zero**. The script printed
+> "PLAN-INVALIDATING" itself. We had not been measuring headroom — we had been
+> measuring two of our own weights that were inverted.
+>
+> What is actually worth **{{ratio:seeding_prize_blend_ratio_at_10}}**,
+> {{ci_ratio:seeding_prize_blend_ratio_at_10}}, is fixing *seeding* — and we
+> know the mechanism: the ring's own subgraph is disconnected inside our
+> 72-hour window and the honest seed lands in one fragment. **We also refuse to
+> claim that prize is collectable**, because the experiment that measures it
+> cheats by using ring identity, and no label-free rule we have found
+> distinguishes "the other half of this ring" from "an unrelated
+> neighbourhood."
+
+**The line to land:**
+
+> Seventeen defects, and **not one of them crashed.** Every single one returned
+> a plausible, correctly-typed, wrong answer. Five times, the check we were
+> relying on turned out to be incapable of failing.
+
+---
+
+## 3:40 — 4:30 · The number that says we might not pay
+
+**On screen:** `scripts/eval_cost.py` output.
+
+> The track asks for honest metrics including false-positive cost, so here is
+> ours, and it is not flattering.
+>
+> All six inputs to our cost model are **placeholders**. So we refuse to quote a
+> rupee figure. We invert the model instead and report the **break-even
+> precision** — the number a reader who rejects every one of our assumptions can
+> still check. At face value it is
+> **{{count:cost_break_even_precision}}**.
+>
+> Push all six adverse at once by two, and it becomes
+> **{{count:cost_joint_break_even_at_x2}}** — we still pay at depths
+> {{count:cost_depths_that_pay_at_x2}}. Push them by ten, and it becomes
+> **{{count:cost_joint_break_even_at_x10}}**. That is a precision **above 1.0**.
+> Unreachable by any detector, including a perfect one. **At that stress this
+> queue does not pay at any depth, and we would rather you heard that from us.**
+
+---
+
+## 4:30 — 5:00 · Close
+
+> Two things we are not claiming. The AI component's judgment is **unmeasured** —
+> the drafted path has attempted **{{count:llm_drafts_attempted}} drafts**, so
+> the model rejection rate is undefined over an empty denominator, not zero.
+> And our two domains are never pooled; a guard refuses it.
+>
+> What we are claiming is narrower and, we think, rarer. **The reporting layer
+> cannot print a number that has not been measured** — a precision without its
+> baseline, or an interval that does not name its clustering, is not a
+> convention here, it is a constructor that raises.
+>
+> We killed our own centrepiece with a rule we wrote before we saw the data. If
+> you want to know whether to trust anything in this repository, read
+> `docs/WHAT-BROKE.md`. It is five minutes and it is the strongest evidence we
+> have.
+
+---
+
+## Recording notes
+
+- **Do not read the ratio at 3:40 as a result.** It is a ceiling diagnostic from
+  an arm that cheats. The script's wording above is load-bearing.
+- **Do not say "the queue does not pay" without the stress factor.** At x2 it
+  pays at depths {{count:cost_depths_that_pay_at_x2}} and at x10 it pays
+  nowhere. The two disagree about whether the product is viable, so the factor
+  is part of the claim.
+- **Do not quote transaction-level F1 against published baselines.** It is a
+  fixed-cardinality-selection artefact and is invalid; the repository refuses it
+  in `scripts/eval_vs_published.py`.
+- Re-run `python scripts/collect_metrics.py && python scripts/render_docs.py`
+  before recording, and confirm `python scripts/ci_gates.py all` is green. If a
+  number moved, this script moved with it.

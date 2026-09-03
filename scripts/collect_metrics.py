@@ -306,6 +306,77 @@ def main() -> int:
         notes=("the same quantity as identity_seed_reach_coverage, measured on "
                "the same definition -- reported beside it, never pooled",)))
 
+    # --- citation recall, as metrics rather than prose ---------------------
+    #
+    # These are the first numbers the narrative layer has ever reported. They
+    # go through `Metric` for one specific reason: `unit="case"` is in
+    # CONDITIONING_REQUIRED_UNITS, so none of them can be constructed without
+    # the banner saying they were measured on the TEMPLATE path. The LLM path
+    # has drafted nothing, so a citation figure quoted without that banner is a
+    # claim about a model that has never run.
+    cite = _load("data/eval_citation_recall.json")
+    CITATION_CONDITIONING = (
+        "Measured on the DETERMINISTIC TEMPLATE path, which cites by "
+        "construction. The drafted path has attempted zero drafts (no key "
+        "configured), so this is a property of the template and NOT a "
+        "measurement of any model's sourcing. `member_recall` is 1.0 with a "
+        "zero-width interval because the template emits every member account, "
+        "and `precision` is 1.0 because the verifier hard-fails anything else "
+        "-- both are tautological and neither is evidence of quality.")
+    if not cite["is_full_population"]:
+        raise SystemExit(
+            "data/eval_citation_recall.json is a partial run "
+            f"({cite['n_cases_scored']} of {cite['n_cases_in_store']} cases). "
+            "Re-run scripts/eval_citation_recall.py without --limit. A smoke "
+            "test must not reach results/metrics.json.")
+    for key in ("evidence_recall", "txn_recall", "member_recall", "precision"):
+        c = cite["metrics"][key]
+        metrics.append(Metric(
+            id=f"citation_{key}", value=c["point"],
+            n_units=c["n_units"], unit="case",
+            ci_lower=c["lo"], ci_upper=c["hi"],
+            ci_method="case_clustered_bootstrap",
+            conditioning=CITATION_CONDITIONING,
+            source="data/eval_citation_recall.json"))
+
+    # --- the guardrail's catch rate, by fault class ------------------------
+    #
+    # Phase 5 item 3 asked for the LLM draft REJECTION rate. That number does
+    # not exist and cannot be manufactured: no key is configured, the ledger
+    # has zero rows, and a rate over an empty denominator reported as 0.0 reads
+    # as "the model never erred". The item is answered with a different
+    # measurement and the substitution is recorded rather than quiet -- this
+    # measures the VERIFIER against injected faults of known class, which is
+    # deterministic, needs no key, and is reproducible by a reviewer.
+    #
+    # The interesting number is the one that is BAD. attribution ~ 0 is the
+    # verifier's demonstrated blind spot, predicted in prereg/citation_recall.md
+    # before it was measured.
+    verifier = _load("data/eval_verifier_catch_rate.json")
+    if not verifier["is_full_population"]:
+        raise SystemExit(
+            "data/eval_verifier_catch_rate.json is a partial run "
+            f"({verifier['n_cases']} of {verifier['n_cases_in_store']} cases). "
+            "Re-run scripts/eval_verifier_catch_rate.py without --limit.")
+    VERIFIER_CONDITIONING = (
+        "Catch rate of the CITATION VERIFIER against faults injected into "
+        "template narratives at a known rate. It is NOT a model rejection "
+        "rate: the drafted path has attempted zero drafts, no key is "
+        "configured, and data/draft_ledger.jsonl does not exist. "
+        "`fabricated_id` and `stripped_citation` are the two checks the "
+        "verifier implements, so ~1.0 there is the floor, not an achievement; "
+        "`attribution` is the blind spot and is the number that matters.")
+    for cls in ("fabricated_id", "stripped_citation", "attribution"):
+        c = verifier["catch_rate"][cls]
+        metrics.append(Metric(
+            id=f"verifier_catch_rate_{cls}", value=c["point"],
+            n_units=c["n_units"], unit="case",
+            ci_lower=c["lo"], ci_upper=c["hi"],
+            ci_method="case_clustered_bootstrap",
+            conditioning=VERIFIER_CONDITIONING,
+            source="data/eval_verifier_catch_rate.json"))
+
+    # --- citation precision and recall on the STR narrative ----------------
     written = write(OUT, metrics, generated_by="scripts/collect_metrics.py")
 
     # Counts that README quotes as facts but which are not intervals, so they
@@ -367,6 +438,49 @@ def main() -> int:
             arm["oracle_over_blend"]["10"], 2),
         "oracle_over_blend_ratio_at_20_NO_INTERVAL": round(
             arm["oracle_over_blend"]["20"], 2),
+    })
+
+    # --- the cost model's negative result ---------------------------------
+    #
+    # Carried as counts rather than Metrics, and deliberately: a break-even
+    # precision is a deterministic inversion of the cost model, not a sampled
+    # estimate, so it has no interval and giving it a fake one to satisfy the
+    # schema is exactly the move this file exists to prevent.
+    #
+    # EVERY KEY NAMES ITS STRESS FACTOR. The joint break-even was previously a
+    # typed literal in README (1.8382) while this script's own artefact
+    # reported 0.0864, because the two are different stresses -- x10 and x2 --
+    # and the factor was not travelling with the number. A key called
+    # `joint_break_even` with no factor in its name is a number a template can
+    # quote without saying what it conditions on, so no such key is emitted.
+    cost = _load("data/eval_cost.json")
+    sweep = cost["joint_adverse_sweep"]
+    payload["counts"].update({
+        "cost_break_even_precision": cost["break_even_precision"],
+        "cost_n_unsourced_inputs": cost["n_unsourced_inputs"],
+        "cost_joint_break_even_at_x2": sweep["2.0"]["break_even_precision"],
+        "cost_joint_break_even_at_x10": sweep["10.0"]["break_even_precision"],
+        "cost_depths_that_pay_at_x2": sweep["2.0"]["depths_that_pay"],
+        "cost_depths_that_pay_at_x10": sweep["10.0"]["depths_that_pay"],
+        "cost_joint_x10_break_even_exceeds_one": sweep["10.0"][
+            "exceeds_one_so_unreachable"],
+        "cost_optimal_k": cost["cost_optimal_k"],
+    })
+
+    payload["counts"].update({
+        "llm_drafts_attempted": verifier["llm_drafts_attempted"],
+        "draft_ledger_exists": verifier["draft_ledger_exists"],
+        "verifier_injector_discriminates": verifier["injector_discriminates"],
+        "verifier_n_cases": verifier["n_cases"],
+    })
+
+    citation = _load("data/eval_citation_recall.json")
+    payload["counts"].update({
+        "citation_n_cases_scored": citation["n_cases_scored"],
+        "citation_is_full_population": citation["is_full_population"],
+        "citation_kill_criterion_fired": citation["kill_criterion_fired"],
+        "citation_member_recall_is_degenerate": citation[
+            "member_recall_is_degenerate"],
     })
 
     # The repository's own unmarked-literal count, so the document that reports

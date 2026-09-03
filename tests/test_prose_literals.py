@@ -147,6 +147,45 @@ LEDGER = [
      "and counts like 156 of 321 positives. Stale-value count in the new "
      "template is ZERO, which is the assertion rather than the ratchet, and "
      "the stale-narrative total held at 50."),
+    ("2026-09-03", "phase-5-narrative", 1896,
+     "+1 net, from three offsetting changes. ADDED: '1.5x' in "
+     "docs/PITCH.template.md, the PRE-REGISTERED kill threshold the "
+     "supervised-oracle arm was tested against -- a decision rule fixed "
+     "before the measurement, not a measurement, so it cannot go stale the "
+     "way a p@k can. REMOVED: the typed '1.8382' in the live sentence of "
+     "docs/WHAT-BROKE.template.md, which is now a placeholder rendered from "
+     "results/metrics.json. RE-ADDED: the same figure inside the blockquote "
+     "recording that the sentence used to omit its stress factor. That one is "
+     "deliberately NOT given a historical marker -- the marker asserts a "
+     "number narrates a PAST state, and 1.8382 is the CURRENT x10 break-even; "
+     "what was wrong was the missing factor, not the value, and marking a "
+     "live number historical to quiet the scanner would be the lie the "
+     "scanner cannot detect. Every actual metric in PITCH is a placeholder, "
+     "so the pitch cannot be read aloud with a stale number in it."),
+    ("2026-09-03", "phase-5-citation-negative", 1909,
+     "+13, from docs/negative-results/citation-recall-measures-the-template.md. "
+     "All thirteen are measurements taken the same day over all 1,360 cases "
+     "against a pre-registration committed at 4cdbb22: the four recall "
+     "figures with their intervals, the four-band size stratification that is "
+     "the actual finding, the -0.5218 slope, and the 0.8797 the 30-case smoke "
+     "test reported before the population run replaced it with 0.7494. Not "
+     "marked historical, for the reason the 2026-09-01 entries give: the "
+     "marker asserts a number narrates a PAST state, and these are current. "
+     "The one figure that IS historical -- the superseded smoke-test value -- "
+     "is quoted inside a sentence that says it was superseded and by how "
+     "much, which is the form a superseding note has to take to be checkable."),
+    ("2026-09-03", "phase-5-verifier-catch-rate", 1917,
+     "+8, from the fault-injector entry in docs/WHAT-BROKE.template.md. The "
+     "eight are the two SUPERSEDED catch rates with their intervals (0.9809 "
+     "[0.9735, 0.9875] for stripped_citation, 0.0282 [0.0199, 0.0377] for "
+     "attribution) and the corrected 0.0000. They are quoted because a "
+     "correction that does not state the number it supersedes cannot be "
+     "checked -- the whole point of the entry is that BOTH intervals excluded "
+     "their pre-registered value, which is what exposed the injector. Not "
+     "given historical markers: the marker must sit on the immediately "
+     "preceding non-blank line and these live inside a table row, where that "
+     "anchor would attach to a different row and drift. The live catch rates "
+     "are placeholders rendered from results/metrics.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

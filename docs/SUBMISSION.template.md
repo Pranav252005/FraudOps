@@ -239,6 +239,7 @@ opinion.
 | [elliptic2-cancelled](negative-results/elliptic2-cancelled.md) | The second dataset was cancelled on a schema fact. |
 | [template-literal-leak](negative-results/template-literal-leak.md) | The rendering system in §6 had, in its own template, the defect it was built to prevent. |
 | [identity-fragments-worse-refuted](negative-results/identity-fragments-worse-refuted.md) | The prediction that motivated the second domain went the other way. The dose-response inside it held. |
+| [citation-recall-measures-the-template](negative-results/citation-recall-measures-the-template.md) | The narrative layer's first number is mostly an artefact of case size, and the kill rule written to catch that did not fire. |
 
 ---
 
@@ -346,6 +347,20 @@ fix to something else.
 - **Not a calibrated identity risk score.** The case file has no confidence
   field to fill in, and the merchant brief refuses to quote a likelihood,
   because none has been calibrated for that population.
+- **Not a measurement of the AI component's judgment.** The drafted path has
+  attempted **{{count:llm_drafts_attempted}} drafts** — no model key is
+  configured — so the LLM rejection rate is **undefined over an empty
+  denominator, not 0.0**. Every narrative figure here, citation recall
+  included, describes the deterministic template.
+- **Not a fact-check.** The citation verifier enforces that every fact-shaped
+  sentence carries an id the case file holds; it does **not** check that the id
+  supports the claim. A sentence with the wrong amount, direction or date,
+  citing a real transaction, passes —
+  [`tests/test_citation_adversarial.py`](../tests/test_citation_adversarial.py)
+  demonstrates it, with positive controls proving the two implemented checks
+  still fire. "Every sentence is verified" here means "every sentence is
+  **sourced**", which is weaker, and the difference is the whole gap between a
+  citation and a fact-check.
 
 `n` was **not** raised by generating more cycles, and the decision is
 pre-registered in [`prereg/cycles.md`](../prereg/cycles.md): the pipeline is

@@ -50,6 +50,41 @@ and both are published, one of them having cancelled the plan's centrepiece.
 > its honest value if one of them had gone uncaught. It is a five-minute read
 > and it is the strongest evidence here.
 
+**And the economics may not work.** The track asks for honest metrics
+*including false-positive cost*, so this is on the first screen rather than in
+an appendix. All six inputs to the cost model are **placeholders**, so the
+reported quantity is the **break-even precision** the model inverts to, never a
+rupee figure a reader cannot check. It is
+**{{count:cost_break_even_precision}}** at face value. Push all six adverse at
+once by x2 and it rises to **{{count:cost_joint_break_even_at_x2}}**, where the
+queue still pays at depths {{count:cost_depths_that_pay_at_x2}}. Push them by
+x10 and it reaches **{{count:cost_joint_break_even_at_x10}}** — a precision
+above 1.0, **unreachable by any detector, perfect ones included**, so at that
+stress the queue does not pay at any depth.
+
+> The factor is part of the number. An earlier draft of this page quoted the
+> x10 figure flatly as "the queue does not pay", which is false at x2 — the two
+> stresses differ by a factor of twenty in the break-even and disagree about
+> whether the product is viable. Both are now rendered from
+> [`data/eval_cost.json`](scripts/eval_cost.py) and neither can be quoted
+> without its stress factor, because no key in `results/metrics.json` omits it.
+
+**The AI component's judgment is unmeasured, and that is stated rather than
+finessed.** The STR narrative is generated under a citation contract: every
+fact-shaped sentence must carry an inline id the case file actually holds, and a
+failure is a hard stop. Two things follow that a reader should not have to dig
+for. First, the verifier checks that a citation *resolves*, **not that it
+supports the claim** — a sentence asserting the wrong amount, direction or date
+while citing a real transaction **passes**, which
+[`tests/test_citation_adversarial.py`](tests/test_citation_adversarial.py)
+demonstrates on seven narratives with positive controls proving the two
+implemented checks still fire. Second, the drafted path has attempted
+**{{count:llm_drafts_attempted}} drafts** — no model key is configured here — so
+the LLM rejection rate, the one number that would measure the model's judgment
+directly, is **undefined over an empty denominator, not 0.0**. Every narrative
+figure on this page, citation recall included, is a property of the
+deterministic template.
+
 **What it refuses to do**, each refusal costing something measured:
 
 - **The 7.3× payment-format leak in the benchmark is left unused.** A test
@@ -1232,11 +1267,31 @@ the real dedup and overlap-suppression pipeline. Flagged, not fixed.
 per cycle and is not currently recorded on the case. Recording it at selection
 time would make this exact.
 
+**6. The citation verifier does not check attribution, and the drafted path has
+never run.** The verifier enforces that every fact-shaped sentence carries an id
+the case file holds. It does **not** check that the id supports the claim: a
+sentence with the wrong amount, direction or date, citing a real transaction,
+passes. [`tests/test_citation_adversarial.py`](tests/test_citation_adversarial.py)
+demonstrates this on seven narratives and carries positive controls proving the
+two implemented checks still fire, so the hole is exactly attribution and not
+something wider. Closing it needs claim-tuple verification — parse
+(subject, amount, direction, timestamp) from each sentence and check the tuple
+against the cited record — which is real work and is not done. Separately, the
+drafted path has attempted **{{count:llm_drafts_attempted}} drafts** because no
+model key is configured, so every narrative number here describes the
+deterministic template and the model's own error rate is undefined rather than
+good. Both were predicted in
+[`prereg/citation_recall.md`](prereg/citation_recall.md) before either was
+measured.
+
 **What happens to these next** is written down rather than left to be guessed:
 [`docs/NEXT_PHASE_PLAN.md`](docs/NEXT_PHASE_PLAN.md) sequences the work with a
 pre-registered expected effect and a kill criterion per phase, and says which
 items are **not** worth doing and why — including one, the Elliptic2 real-data
 run, that is cancelled outright rather than deferred.
+[`docs/PITCH.md`](docs/PITCH.md) is the five-minute pitch script, rendered from
+the same metrics file as this page so it cannot be read aloud with a stale
+number in it.
 
 ---
 

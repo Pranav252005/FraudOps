@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_by": "scripts/collect_metrics.py",
-  "generated_at": "2026-09-03T12:23:02",
-  "commit": "0cc6331f4a8b1f14447922fc32d5d3f2f322a85d",
+  "generated_at": "2026-09-03T21:27:01",
+  "commit": "26e7efc93d4206ec33086e80af7f7686980c01e1",
   "metrics": {
     "supervised_p_at_10": {
       "id": "supervised_p_at_10",
@@ -912,6 +912,90 @@
       "notes": [
         "the same quantity as identity_seed_reach_coverage, measured on the same definition -- reported beside it, never pooled"
       ]
+    },
+    "citation_evidence_recall": {
+      "id": "citation_evidence_recall",
+      "value": 0.7494,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.7411,
+      "ci_upper": 0.7575,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Measured on the DETERMINISTIC TEMPLATE path, which cites by construction. The drafted path has attempted zero drafts (no key configured), so this is a property of the template and NOT a measurement of any model's sourcing. `member_recall` is 1.0 with a zero-width interval because the template emits every member account, and `precision` is 1.0 because the verifier hard-fails anything else -- both are tautological and neither is evidence of quality.",
+      "source": "data/eval_citation_recall.json"
+    },
+    "citation_txn_recall": {
+      "id": "citation_txn_recall",
+      "value": 0.6886,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.679,
+      "ci_upper": 0.6983,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Measured on the DETERMINISTIC TEMPLATE path, which cites by construction. The drafted path has attempted zero drafts (no key configured), so this is a property of the template and NOT a measurement of any model's sourcing. `member_recall` is 1.0 with a zero-width interval because the template emits every member account, and `precision` is 1.0 because the verifier hard-fails anything else -- both are tautological and neither is evidence of quality.",
+      "source": "data/eval_citation_recall.json"
+    },
+    "citation_member_recall": {
+      "id": "citation_member_recall",
+      "value": 1.0,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 1.0,
+      "ci_upper": 1.0,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Measured on the DETERMINISTIC TEMPLATE path, which cites by construction. The drafted path has attempted zero drafts (no key configured), so this is a property of the template and NOT a measurement of any model's sourcing. `member_recall` is 1.0 with a zero-width interval because the template emits every member account, and `precision` is 1.0 because the verifier hard-fails anything else -- both are tautological and neither is evidence of quality.",
+      "source": "data/eval_citation_recall.json"
+    },
+    "citation_precision": {
+      "id": "citation_precision",
+      "value": 1.0,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 1.0,
+      "ci_upper": 1.0,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Measured on the DETERMINISTIC TEMPLATE path, which cites by construction. The drafted path has attempted zero drafts (no key configured), so this is a property of the template and NOT a measurement of any model's sourcing. `member_recall` is 1.0 with a zero-width interval because the template emits every member account, and `precision` is 1.0 because the verifier hard-fails anything else -- both are tautological and neither is evidence of quality.",
+      "source": "data/eval_citation_recall.json"
+    },
+    "verifier_catch_rate_fabricated_id": {
+      "id": "verifier_catch_rate_fabricated_id",
+      "value": 1.0,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 1.0,
+      "ci_upper": 1.0,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Catch rate of the CITATION VERIFIER against faults injected into template narratives at a known rate. It is NOT a model rejection rate: the drafted path has attempted zero drafts, no key is configured, and data/draft_ledger.jsonl does not exist. `fabricated_id` and `stripped_citation` are the two checks the verifier implements, so ~1.0 there is the floor, not an achievement; `attribution` is the blind spot and is the number that matters.",
+      "source": "data/eval_verifier_catch_rate.json"
+    },
+    "verifier_catch_rate_stripped_citation": {
+      "id": "verifier_catch_rate_stripped_citation",
+      "value": 1.0,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 1.0,
+      "ci_upper": 1.0,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Catch rate of the CITATION VERIFIER against faults injected into template narratives at a known rate. It is NOT a model rejection rate: the drafted path has attempted zero drafts, no key is configured, and data/draft_ledger.jsonl does not exist. `fabricated_id` and `stripped_citation` are the two checks the verifier implements, so ~1.0 there is the floor, not an achievement; `attribution` is the blind spot and is the number that matters.",
+      "source": "data/eval_verifier_catch_rate.json"
+    },
+    "verifier_catch_rate_attribution": {
+      "id": "verifier_catch_rate_attribution",
+      "value": 0.0,
+      "unit": "case",
+      "n_units": 1360,
+      "dataset": "amlworld-hi-small",
+      "ci_lower": 0.0,
+      "ci_upper": 0.0,
+      "ci_method": "case_clustered_bootstrap",
+      "conditioning": "Catch rate of the CITATION VERIFIER against faults injected into template narratives at a known rate. It is NOT a model rejection rate: the drafted path has attempted zero drafts, no key is configured, and data/draft_ledger.jsonl does not exist. `fabricated_id` and `stripped_citation` are the two checks the verifier implements, so ~1.0 there is the floor, not an achievement; `attribution` is the blind spot and is the number that matters.",
+      "source": "data/eval_verifier_catch_rate.json"
     }
   },
   "counts": {
@@ -946,6 +1030,25 @@
     "funnel_largest_loss_stage": "ranking",
     "oracle_over_blend_ratio_at_10_NO_INTERVAL": 1.12,
     "oracle_over_blend_ratio_at_20_NO_INTERVAL": 1.28,
-    "n_prose_literals": 1895
+    "cost_break_even_precision": 0.0056,
+    "cost_n_unsourced_inputs": 6,
+    "cost_joint_break_even_at_x2": 0.0864,
+    "cost_joint_break_even_at_x10": 1.8382,
+    "cost_depths_that_pay_at_x2": [
+      10,
+      20
+    ],
+    "cost_depths_that_pay_at_x10": [],
+    "cost_joint_x10_break_even_exceeds_one": true,
+    "cost_optimal_k": 50,
+    "llm_drafts_attempted": 0,
+    "draft_ledger_exists": false,
+    "verifier_injector_discriminates": true,
+    "verifier_n_cases": 1360,
+    "citation_n_cases_scored": 1360,
+    "citation_is_full_population": true,
+    "citation_kill_criterion_fired": false,
+    "citation_member_recall_is_degenerate": true,
+    "n_prose_literals": 1917
   }
 }

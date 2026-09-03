@@ -93,18 +93,64 @@ def inject(narrative: str, kind: str, rng: random.Random) -> str | None:
         return narrative.replace(s, CITATION.sub("[TXN-99999999]", s, count=1), 1)
 
     if kind == STRIPPED_CITATION:
-        # Remove every citation from a fact-bearing sentence. The sentence
-        # still asserts an amount or a count, so FACT_SIGNAL must fire.
-        return narrative.replace(s, CITATION.sub("", s).replace("  ", " "), 1)
+        # Remove every citation from the fact-bearing LINE, not just from the
+        # sentence fragment.
+        #
+        # WHY THE LINE. Operating on the fragment measured the injector rather
+        # than the verifier, and it did so for 26 of 1,360 cases -- a catch
+        # rate of 0.9809 against a pre-registration of 1.0, which read as "the
+        # verifier misses 2% of uncited claims" and was not that at all. The
+        # filing-clock note cites the same statute TWICE in one line;
+        # `split_sentences` cuts it at the comma-free clause boundary, so
+        # stripping the chosen fragment left the second citation standing, the
+        # line was still correctly sourced, and the verifier was RIGHT not to
+        # flag it. A fault that was never injected is not a fault the guardrail
+        # missed. Found by reproducing a failing case rather than by trusting
+        # the aggregate.
+        line = next((ln for ln in narrative.splitlines() if s in ln), None)
+        if line is None:
+            return None
+        stripped = CITATION.sub("", line).replace("  ", " ").rstrip()
+        # Post-condition: the fault must actually be present. If the line still
+        # carries a citation, nothing was injected and this trial is
+        # INAPPLICABLE -- it must not be scored as a miss.
+        if CITATION.search(stripped):
+            return None
+        return narrative.replace(line, stripped, 1)
 
     if kind == ATTRIBUTION:
-        # Keep the citation. Change the claim. Every digit run in the sentence
-        # is multiplied by 1000, so an amount, a count and a date all become
-        # false while the cited id stays real and stays attached.
+        # Keep the citation. Change the claim. Every digit run in the PROSE is
+        # multiplied by 1000, so an amount, a count and a date all become false
+        # while the cited id stays real and stays attached.
+        #
+        # DIGITS INSIDE A CITATION ARE OFF LIMITS, and the guard has to be the
+        # citation's span rather than a lookbehind. The lookbehind `(?<![\[\w.])`
+        # only protected a digit run sitting immediately after `[`. In
+        # `[RBI-PA-DIRECTIONS-2025-PARA-13i]` the run `2025` is preceded by a
+        # hyphen, so it was rewritten to `2025000` and the citation became an
+        # id no case file holds. The verifier then caught it -- as a FABRICATED
+        # ID, which is a different fault class and one it does implement.
+        #
+        # That is how the attribution arm came to read 0.0282 [0.0199, 0.0377]
+        # against a pre-registration of exactly 0.0, with an interval excluding
+        # zero. The guardrail had not caught a single attribution fault; the
+        # injector had been quietly emitting a fault of the wrong class in
+        # about 3% of cases. Third defect of this shape in one measurement:
+        # each time the injector failed to inject what it claimed, and each
+        # time the aggregate looked plausible.
+        spans = [m.span() for m in CITATION.finditer(s)]
+
         def blow_up(m):
+            if any(a <= m.start() < b for a, b in spans):
+                return m.group(0)         # inside a citation: leave it alone
             return str(int(m.group(0)) * 1000)
+
         corrupted = re.sub(r"(?<![\[\w.])\d+(?![\w\]])", blow_up, s)
         if corrupted == s:
+            return None
+        # Post-condition, same principle as the stripped-citation arm: the
+        # citations must be untouched, or this is not an attribution fault.
+        if CITATION.findall(corrupted) != CITATION.findall(s):
             return None
         return narrative.replace(s, corrupted, 1)
 
