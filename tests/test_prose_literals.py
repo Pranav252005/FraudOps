@@ -114,6 +114,17 @@ LEDGER = [
      "case's own feature value and is the point of the WHY line -- an analyst "
      "who cannot see what caused the classification can only disagree with "
      "the score. Baseline lowered from 1784 so the ratchet keeps biting."),
+    ("2026-09-03", "next-phase-plan", 1868,
+     "+92, all in docs/NEXT_PHASE_PLAN.md, a planning document that must be "
+     "handed verbatim to a fresh session and therefore has to restate the "
+     "measured state rather than link to it -- a plan whose reader has to "
+     "open four other files to learn what it is planning from is a plan that "
+     "gets acted on from memory. Every literal in it is quoted from "
+     "results/metrics.json, data/funnel.json or a named negative-results "
+     "entry, and the document says in its own first paragraph that "
+     "results/metrics.json is the authority for any number appearing in "
+     "prose. The pre-registered ranges in its phase table are predictions, "
+     "not measurements, and are labelled as such where they appear."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
@@ -315,6 +326,16 @@ STALE_IN_NARRATIVE_LEDGER = [
      "TEMPLATES are held at zero by the assertion below; this number exists "
      "so the narrative half cannot grow quietly while the enforced half "
      "looks clean."),
+    ("2026-09-03", "next-phase-plan", 50,
+     "+1, and it is a collision rather than a stale reading. "
+     "docs/NEXT_PHASE_PLAN.md quotes lambdamart_p_at_10 = 0.2778, which is "
+     "LIVE for that id and simultaneously a superseded value of "
+     "supervised_p_at_10; the checker matches on the digits, not the id, so "
+     "it fires. Marking it historical would be false -- the sentence narrates "
+     "the present -- so it is ledgered instead. The document's other "
+     "superseded figures (supervised p@10 0.2500 and the 1.32x ratio) were "
+     "moved out of a table and carry the historical marker. This is a named "
+     "limit of the mechanism, not a defect in the document."),
 ]
 
 STALE_NARRATIVE_BASELINE = STALE_IN_NARRATIVE_LEDGER[-1][2]
