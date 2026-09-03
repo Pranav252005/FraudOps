@@ -10,6 +10,25 @@ invented fact in a suspicious-activity filing is a bigger liability than a
 missed filing, and this check is what stands between a plausible-sounding
 hallucinated fact and a filed report if narrative drafting is ever routed
 through an LLM.
+
+SCOPE, AND THE LIMIT IS EXACT. This verifier answers two questions: is there a
+citation on every fact-shaped sentence, and does each cited id exist in the
+case file. It **does not check that the cited id supports the claim.** A
+sentence asserting the wrong amount, the wrong direction, the wrong date or the
+wrong role, carrying a citation to a real transaction, passes. So does a claim
+about the law propped up by a transaction id.
+
+That is a demonstrated hole, not a suspected one:
+`tests/test_citation_adversarial.py` asserts seven such narratives PASS, with
+positive controls proving the two implemented checks still fire on the same
+fixture -- so the hole is exactly attribution and not something wider. It was
+predicted before it was measured, in `prereg/citation_recall.md`.
+
+Closing it needs claim-tuple verification: parse (subject, amount, direction,
+timestamp) out of each sentence and check the tuple against the cited record.
+That is a real piece of work and is NOT done. Until it is, "every sentence is
+verified" means "every sentence is sourced", which is weaker, and the
+difference is the difference between a citation and a fact-check.
 """
 from __future__ import annotations
 
