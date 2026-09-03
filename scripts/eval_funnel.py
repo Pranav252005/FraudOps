@@ -151,7 +151,7 @@ def annotate(rows: list[dict]) -> list[dict]:
 def main() -> None:
     rng = random.Random(7)
     stream = Stream(ROOT / "data" / "stream")
-    registry = AccountRegistry.load(ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+    registry = AccountRegistry.load(DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)
     tracker = FunnelTracker(rank_k=RANK_K_FOR_FUNNEL)

@@ -7,7 +7,21 @@ a leak.
 """
 from __future__ import annotations
 
+from sentinel.data.datasets import active as _active_dataset
+
 MINUTES_PER_DAY = 1440
+
+# --- Which split is in play -------------------------------------------------
+#
+# Several constants below are MEASUREMENTS OF A PARTICULAR SPLIT, not settings,
+# and their comments have always said so. They now come from the split's own
+# registry entry rather than being typed here, so pointing the pipeline at
+# LI-Small or HI-Medium cannot silently inherit HI-Small's leak boundary. A
+# split whose constants have not been derived RAISES on import -- see
+# sentinel/data/datasets.py for why a loud stop is the only safe behaviour.
+#
+# Defaults to HI-Small, so every existing command behaves exactly as before.
+DATASET = _active_dataset()
 
 # --- Evaluation boundary ----------------------------------------------------
 
@@ -17,13 +31,19 @@ MINUTES_PER_DAY = 1440
 # generator rather than of fraud.
 #
 # So the evaluable stream ends here. 363 of 370 rings begin inside it.
-EVAL_END_DAY = 10
+#
+# Now per-split and refusing: see DATASET above. The value for HI-Small is
+# unchanged at 10; the justification is carried in the registry entry beside
+# the number it explains.
+EVAL_END_DAY = DATASET.require_eval_end_day()
 EVAL_END = EVAL_END_DAY * MINUTES_PER_DAY
 
 # 266 of the 363 evaluable rings have more than two accounts visible inside the
 # window. A two-account ring has no community structure to detect, so this is
 # the hard ceiling on structural ring recall before detector quality enters.
-STRUCTURAL_RECALL_CEILING = 0.733
+# Per-split and refusing, for the same reason as EVAL_END_DAY: this is a ring-
+# size count on one generator run, not a tunable.
+STRUCTURAL_RECALL_CEILING = DATASET.require_structural_recall_ceiling()
 
 # --- Replay -----------------------------------------------------------------
 

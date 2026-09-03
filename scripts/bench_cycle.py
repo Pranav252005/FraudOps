@@ -66,7 +66,7 @@ def fingerprint(cands) -> list:
 def run(n_cycles: int, warm_ticks: int) -> dict:
     stream = Stream(ROOT / "data" / "stream")
     registry = AccountRegistry.load(
-        ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+        DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)
 

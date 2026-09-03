@@ -84,6 +84,11 @@ from sentinel.data.accounts import AccountRegistry
 from sentinel.eval.bootstrap import bootstrap_ci, paired_bootstrap_delta, ratio_of_sums
 from sentinel.learn.reranker import feature_names, vectorise
 from sentinel.stream.replay import Stream
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET. A split whose constants are underived refuses.
+DATASET = _active_dataset()
 
 from scripts.eval_oracle import collect_pool, ring_time_split
 
@@ -182,7 +187,7 @@ def build_arrays(records, names):
 def collect(cache: Path):
     stream = Stream(ROOT / "data" / "stream")
     registry = AccountRegistry.load(
-        ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+        DATASET.accounts(ROOT))
     print("=== collecting candidate pool: AS-IS (real seeding) ===")
     records, first_t = collect_pool(stream, registry, seed_perfect=False)
     train, test, split_t = ring_time_split(records, first_t)

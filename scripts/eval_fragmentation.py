@@ -230,7 +230,7 @@ def amlworld_coverage(every: int = 6) -> dict:
 
     stream = Stream(ROOT / "data" / "stream")
     registry = AccountRegistry.load(
-        ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+        DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=config.WINDOW_MINUTES)
     generator = CandidateGenerator(graph, registry=registry, node_key=stream.key)
 

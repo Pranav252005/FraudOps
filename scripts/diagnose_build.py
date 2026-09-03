@@ -104,7 +104,7 @@ def sub_reason(best: dict) -> str:
 
 def main() -> None:
     stream = Stream(ROOT / "data" / "stream")
-    registry = AccountRegistry.load(ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+    registry = AccountRegistry.load(DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)
 

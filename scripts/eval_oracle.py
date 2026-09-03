@@ -624,7 +624,7 @@ def train_and_report(records, ring_first_t, label: str,
 
 def main() -> None:
     stream = Stream(ROOT / "data" / "stream")
-    registry = AccountRegistry.load(ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+    registry = AccountRegistry.load(DATASET.accounts(ROOT))
 
     print("=== collecting candidate pool: AS-IS (real seeding, no cheat) ===")
     as_is_records, as_is_first_t = collect_pool(stream, registry, seed_perfect=False)

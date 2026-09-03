@@ -12,7 +12,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sentinel.data.patterns import describe, load_rings_with_report
 
-PATH = Path(__file__).resolve().parent.parent / "data" / "amlworld" / "HI-Small_Patterns.txt"
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET so this can sanity-check a newly downloaded split.
+DATASET = _active_dataset()
+PATH = DATASET.patterns(ROOT)
 
 rings, report = load_rings_with_report(PATH)
 if not report.is_clean:

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_by": "scripts/collect_metrics.py",
-  "generated_at": "2026-09-03T21:27:01",
-  "commit": "26e7efc93d4206ec33086e80af7f7686980c01e1",
+  "generated_at": "2026-09-04T00:15:18",
+  "commit": "8ccc3ca365457aebaafdd47d6d5ef7a66601a15f",
   "metrics": {
     "supervised_p_at_10": {
       "id": "supervised_p_at_10",

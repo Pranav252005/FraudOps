@@ -86,6 +86,11 @@ from sentinel.detect.candidates import CandidateGenerator
 from sentinel.graph.window import WindowedGraph
 from sentinel.learn.reranker import feature_names, vectorise
 from sentinel.stream.replay import Stream
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET. A split whose constants are underived refuses.
+DATASET = _active_dataset()
 
 from scripts.eval_oracle import EVERY, active_rings, label_candidate
 
@@ -151,7 +156,7 @@ def export(out_dir: Path = EXPORT_DIR) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     stream = Stream(ROOT / "data" / "stream")
     registry = AccountRegistry.load(
-        ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+        DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)
 

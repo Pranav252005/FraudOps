@@ -34,6 +34,11 @@ from sentinel.detect.prune import STRATEGIES, prune
 from sentinel.eval.funnel import HIT_SHARE, MIN_JACCARD
 from sentinel.graph.window import WindowedGraph
 from sentinel.stream.replay import Stream
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET. A split whose constants are underived refuses.
+DATASET = _active_dataset()
 
 ROOT = Path(__file__).resolve().parent.parent
 EVERY = 6
@@ -50,7 +55,7 @@ def active_rings(stream, t_lo, t_hi):
 
 def main() -> None:
     stream = Stream(ROOT / "data" / "stream")
-    registry = AccountRegistry.load(ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+    registry = AccountRegistry.load(DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)
 

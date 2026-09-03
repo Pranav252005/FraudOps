@@ -47,7 +47,7 @@ EPOCH = np.datetime64("2022-09-01T00:00", "m")
 
 def build_label_index() -> tuple[dict, list[str], list[str]]:
     """Map each ground-truth ring edge to its ring id and typology."""
-    rings = load_rings(RAW / "HI-Small_Patterns.txt", strict=True)
+    rings = load_rings(DATASET.patterns(ROOT), strict=True)
     index: dict[tuple, int] = {}
     ring_ids, typologies = [], []
     for i, r in enumerate(rings):
@@ -74,7 +74,7 @@ def main() -> None:
     parts: list[dict] = []
     n_rows = n_self = n_matched = 0
 
-    for chunk in pd.read_csv(RAW / "HI-Small_Trans.csv", chunksize=CHUNK,
+    for chunk in pd.read_csv(DATASET.trans(ROOT), chunksize=CHUNK,
                              header=0, names=COLS, skiprows=1, dtype=str):
         n_rows += len(chunk)
 

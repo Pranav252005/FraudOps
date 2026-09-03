@@ -1,0 +1,169 @@
+"""Which AMLworld split is in play, and which of its constants were measured.
+
+THE PROBLEM THIS SOLVES IS NOT FILE PATHS. Swapping `HI-Small` for `LI-Small`
+in a few `open()` calls takes ten minutes and produces a plausible wrong answer,
+because several constants in `sentinel/config.py` are not settings -- they are
+MEASUREMENTS OF HI-Small, and their own comments say so:
+
+    EVAL_END_DAY = 10                 "363 of 370 rings begin inside it"
+    STRUCTURAL_RECALL_CEILING = 0.733 "266 of the 363 evaluable rings"
+    EXCLUDED_FEATURES = {"channel"}   "86.6% of laundering rows are ACH
+                                       against an 11.8% base rate"
+
+`EVAL_END_DAY` is the leak boundary. It exists because HI-Small's last eight
+days carry 715 edges of which 652 are laundering, so evaluating across them
+would make "timestamp after day 10" a near-perfect classifier. That is a fact
+about HI-Small's generator run. Carrying the number 10 onto a different split
+either leaks (if the new split's tail turns bad earlier) or silently discards
+good data (if it turns bad later). Nothing would crash. Every downstream
+interval would simply be wrong, and this repository's whole bug catalogue is
+made of exactly that shape.
+
+SO A SPLIT WITHOUT ITS OWN DERIVED CONSTANTS IS REFUSED RATHER THAN DEFAULTED.
+`LI-Small` and `HI-Medium` are registered here because the files are on disk and
+their ring counts are read from them, but their `eval_end_day` and
+`structural_recall_ceiling` are `None`. Asking for one raises, with the command
+that would derive it. A loud stop beats a quiet reuse of another dataset's
+boundary.
+
+Run `python scripts/derive_dataset_constants.py <split>` to produce them.
+"""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+
+class DatasetNotDerived(RuntimeError):
+    """A constant was requested for a split it has never been measured on."""
+
+
+@dataclass(frozen=True)
+class Dataset:
+    """One AMLworld split, and how much of it has been characterised.
+
+    `eval_end_day` and `structural_recall_ceiling` are deliberately optional.
+    A dataset whose leak boundary nobody has derived is a dataset this codebase
+    must refuse to evaluate on, not one it should guess for.
+    """
+
+    name: str
+    corpus_key: str
+    #: Labelled ring blocks in the Patterns file. Counted from the file, not
+    #: typed -- see `count_rings`.
+    eval_end_day: int | None = None
+    structural_recall_ceiling: float | None = None
+    #: Where the two constants above came from. Empty when they are None.
+    provenance: str = ""
+
+    # --- file layout --------------------------------------------------------
+    # Every split follows the same three-file naming pattern, verified against
+    # the files actually on disk for HI-Small, LI-Small and HI-Medium.
+
+    def trans(self, root: Path) -> Path:
+        return root / "data" / "amlworld" / f"{self.name}_Trans.csv"
+
+    def accounts(self, root: Path) -> Path:
+        return root / "data" / "amlworld" / f"{self.name}_accounts.csv"
+
+    def patterns(self, root: Path) -> Path:
+        return root / "data" / "amlworld" / f"{self.name}_Patterns.txt"
+
+    def present(self, root: Path) -> bool:
+        return all(p.is_file() for p in
+                   (self.trans(root), self.accounts(root), self.patterns(root)))
+
+    # --- the refusing accessors --------------------------------------------
+
+    def require_eval_end_day(self) -> int:
+        if self.eval_end_day is None:
+            raise DatasetNotDerived(self._underived("eval_end_day"))
+        return self.eval_end_day
+
+    def require_structural_recall_ceiling(self) -> float:
+        if self.structural_recall_ceiling is None:
+            raise DatasetNotDerived(
+                self._underived("structural_recall_ceiling"))
+        return self.structural_recall_ceiling
+
+    def _underived(self, const: str) -> str:
+        return (
+            f"{const} has never been measured on {self.name}. It is a "
+            f"MEASUREMENT of a particular generator run, not a setting: "
+            f"EVAL_END_DAY is the leak boundary and the structural ceiling is "
+            f"a ring-size count. Reusing HI-Small's value here would not "
+            f"crash -- it would silently leak or silently discard data, and "
+            f"every interval downstream would be wrong.\n"
+            f"    Derive it:  python scripts/derive_dataset_constants.py "
+            f"{self.name}\n"
+            f"then record the result in sentinel/data/datasets.py with its "
+            f"provenance.")
+
+
+# HI-Small is the only split whose constants are derived, and they were derived
+# in Phase 0 of this project. The provenance string is the justification that
+# already lives in sentinel/config.py, kept beside the numbers it explains.
+HI_SMALL = Dataset(
+    name="HI-Small",
+    corpus_key="amlworld-hi-small",
+    eval_end_day=10,
+    structural_recall_ceiling=0.733,
+    provenance=(
+        "Phase 0, docs/PHASE0-FINDINGS.md. Days 0-9 carry 99.98% of edges; "
+        "days 10-17 carry 715 edges of which 652 are laundering, so evaluating "
+        "past day 10 would make the timestamp a near-perfect classifier. 363 "
+        "of 370 rings begin inside the boundary, and 266 of those 363 have "
+        "more than two accounts visible in-window, which is the ceiling."),
+)
+
+# Registered, present on disk, and NOT characterised. The ring counts differ by
+# more than an order of magnitude across these three, which is the whole reason
+# the second one is worth having and the reason none of them may borrow the
+# first one's boundary.
+LI_SMALL = Dataset(name="LI-Small", corpus_key="amlworld-li-small")
+HI_MEDIUM = Dataset(name="HI-Medium", corpus_key="amlworld-hi-medium")
+
+REGISTRY = {d.name: d for d in (HI_SMALL, LI_SMALL, HI_MEDIUM)}
+
+DEFAULT = HI_SMALL.name
+
+#: Environment variable selecting the split. Deliberately an env var rather
+#: than a CLI flag on each script: the choice has to reach `sentinel/config.py`
+#: at import time, and a flag threaded through a dozen entry points is a flag
+#: one of them will forget.
+ENV_VAR = "SENTINEL_DATASET"
+
+
+def active(env: dict | None = None) -> Dataset:
+    """The split this process is running against."""
+    env = os.environ if env is None else env
+    name = env.get(ENV_VAR, DEFAULT)
+    if name not in REGISTRY:
+        raise KeyError(
+            f"{ENV_VAR}={name!r} is not a known AMLworld split. "
+            f"Known: {sorted(REGISTRY)}. Download one with "
+            f"scripts/download_amlworld.bat, then register it in "
+            f"sentinel/data/datasets.py.")
+    return REGISTRY[name]
+
+
+def count_rings(dataset: Dataset, root: Path) -> int:
+    """Labelled ring blocks in the split's Patterns file.
+
+    Counted from the file rather than stored as a literal, so it cannot drift
+    from the data the way a typed constant can (standing rule 1). Cheap: the
+    Patterns files are kilobytes to a few megabytes, never the multi-gigabyte
+    transaction CSV.
+    """
+    path = dataset.patterns(root)
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"{path} is missing. Fetch it with "
+            f"scripts/download_amlworld.bat {dataset.name}")
+    n = 0
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if line.startswith("BEGIN"):
+                n += 1
+    return n

@@ -12,10 +12,15 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sentinel.data.patterns import load_rings
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET. A split whose constants are underived refuses.
+DATASET = _active_dataset()
 
 ROOT = Path(__file__).resolve().parent.parent
-TRANS = ROOT / "data" / "amlworld" / "HI-Small_Trans.csv"
-PATTERNS = ROOT / "data" / "amlworld" / "HI-Small_Patterns.txt"
+TRANS = DATASET.trans(ROOT)
+PATTERNS = DATASET.patterns(ROOT)
 
 COLS = ["Timestamp","From Bank","Account","To Bank","Account.1","Amount Received",
         "Receiving Currency","Amount Paid","Payment Currency","Payment Format","Is Laundering"]

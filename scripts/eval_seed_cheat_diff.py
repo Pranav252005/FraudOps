@@ -45,6 +45,11 @@ from sentinel.detect.candidates import CandidateGenerator
 from sentinel.eval.funnel import is_hit
 from sentinel.graph.window import WindowedGraph
 from sentinel.stream.replay import Stream
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET. A split whose constants are underived refuses.
+DATASET = _active_dataset()
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "eval_seed_cheat_diff.json"
@@ -309,7 +314,7 @@ def main() -> int:
 
     stream = Stream(ROOT / "data" / "stream")
     registry = AccountRegistry.load(
-        ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+        DATASET.accounts(ROOT))
 
     print("=== replaying both seed rules over the same ticks ===")
     result = replay(stream, registry, max_cycles=args.max_cycles)

@@ -35,6 +35,11 @@ from sentinel.detect.candidates import CandidateGenerator
 from sentinel.eval.bootstrap import paired_bootstrap_delta, ratio_of_sums, union_recall
 from sentinel.graph.window import WindowedGraph
 from sentinel.stream.replay import Stream
+from sentinel.data.datasets import active as _active_dataset
+
+#: The AMLworld split in play. Defaults to HI-Small; override with
+#: SENTINEL_DATASET. A split whose constants are underived refuses.
+DATASET = _active_dataset()
 
 ROOT = Path(__file__).resolve().parent.parent
 HIT_SHARE = 0.5
@@ -68,7 +73,7 @@ def hits(nodes, rings, strict=True):
 def main() -> None:
     import random
     stream = Stream(ROOT / "data" / "stream")
-    registry = AccountRegistry.load(ROOT / "data" / "amlworld" / "HI-Small_accounts.csv")
+    registry = AccountRegistry.load(DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gens = {s: CandidateGenerator(graph, registry=registry, node_key=stream.key,
                                    prune_strategy=s) for s in STRATS}
