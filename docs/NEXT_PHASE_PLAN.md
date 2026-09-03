@@ -639,13 +639,38 @@ rather than weeks, run Phase 0 and Phase 5 only and skip everything else** —
 Phases 1 to 3 are detector work whose expected effect on the judging criteria is
 small, and Phase 5 is the work that is directly scored.
 
-The four judged parameters are reported as **Problem Taste, Build Quality, AI
-Judgment, and Failure Recovery** (same source; the "abuse-ring sentinel"
-challenge and its "honest metrics including false-positive cost" bar were
-surfaced from the same page — *treat the exact wording as unverified against
-Razorpay's own materials and re-check it*). Note what that list implies:
-**detector p@10 is not one of the four.** Failure Recovery is, and it is the
-axis where this repository is strongest and least packaged.
+> **VERIFIED 2026-09-03, and the branch fired. Phases 1, 2, 3, 6 and 7 are
+> OFF.** The assumption above was wrong in the direction that matters: the
+> public repo and the five-minute pitch video are due **at application time**,
+> not after shortlisting. Razorpay's own page lists the submission as "public
+> repo, 5-minute pitch video, architecture" but prints no date; two independent
+> secondary sources give the date and say what the application must contain —
+> [DEV Community](https://dev.to/devengers/dev-opportunity-radar-14-mlh-global-hack-week-40k-agents-for-humans-hackathon-razorpay-ai-2b9g)
+> ("Resume, project details, public GitHub repository, five-minute pitch video,
+> and application questions", deadline 5 September 2026) and
+> [@ajay_2512x on X](https://x.com/ajay_2512x/status/2090393869473165453)
+> ("Applications close: 5 September"). That leaves roughly two days, so this
+> document's own instruction applies as written: **Phase 0 and Phase 5 only.**
+> Phase 4 was already gated on a user action needing admin and a reboot.
+
+**Corrected, from the primary source.** Two claims in the paragraph that used to
+stand here were mis-sourced, and the correction runs in both directions.
+
+**Upgraded to verified.** The AI Risk Manager bar is on
+[razorpay.com/buildathon](https://razorpay.com/buildathon/) verbatim: *"Honest
+metrics including false-positive cost. Strictly defense-only: anything
+offense-capable is disqualified."* The same page asks for detectors, verifiers
+or auto-responders with *"measured precision and recall on a held-out test
+set."* This document previously called that wording unverified. It is not.
+
+**Downgraded to secondary.** The crisp four-word list — Problem Taste, Build
+Quality, AI Judgment, Failure Recovery — is **not** on Razorpay's page and must
+not be quoted as official. What is sourced is DEV Community's paraphrase:
+Razorpay evaluates *"how you think, what you build, how well it works, and even
+how you deal with things when they break."* The substance is the same and the
+implication survives: **detector p@10 is not among the things named.** "How you
+deal with things when they break" is, and it is the axis where this repository
+is strongest and least packaged.
 
 Every phase below inherits the standing rules. In particular each result must be
 reported with its size baseline (rule 2) and its clustering method (rule 5), and

@@ -1082,6 +1082,29 @@ uncertain. Naming it precisely is itself the deliverable** — this question has
 now been answered wrongly three times (§5, §5b, and §5c's correction of §5b),
 each time by blaming a stage that was not at fault.
 
+> **SUPERSEDED 2026-09-01 — and the fourth answer is the first one that came
+> from an experiment designed to discriminate.** The task above is framed as a
+> BIPARTITE/STACK build problem. That framing is too narrow.
+> `scripts/eval_seed_cheat_diff.py` partitioned all 259 in-window rings on
+> (seeded_honest, seeded_cheat, built_honest, built_cheat) over the same 34
+> cycles, with a pre-registered null and a reconciliation check that reproduces
+> §5b's seeding figure to the ring.
+>
+> **The mechanism is window fragmentation, not typology: the ring's own induced
+> subgraph is disconnected inside the 72-hour window, and the honest seed lands
+> in one fragment of it.** 0.510 of the rings the seed cheat rescues are split
+> across two or more components, against 0.057 of the rings recovered honestly.
+> The builder-budget hypothesis is refuted and fails backwards — every knob
+> relaxed raises containment and collapses coverage, on rescued and recovered
+> rings alike, which is this section's own "expansion recovers the ring and
+> then buries it" measured on the rings it matters for.
+>
+> So the remaining task is not "fix build for two typologies". It is
+> **candidate assembly across disconnected fragments of one ring**, and nothing
+> in the pipeline currently joins two candidates —`suppress()` only removes
+> them. See [`PHASE2-SEED-CHEAT-FINDINGS.md`](PHASE2-SEED-CHEAT-FINDINGS.md)
+> and [`NEXT_PHASE_PLAN.md`](NEXT_PHASE_PLAN.md) §2.1.
+
 ### 5g. Three follow-up measurements, all negative — recorded rather than dropped
 
 Three gaps this project already knew about got measured this session. All

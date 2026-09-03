@@ -125,6 +125,17 @@ LEDGER = [
      "results/metrics.json is the authority for any number appearing in "
      "prose. The pre-registered ranges in its phase table are predictions, "
      "not measurements, and are labelled as such where they appear."),
+    ("2026-09-03", "phase-0-reconcile", 1878,
+     "+10, from the four in-place annotations that close the stale claims "
+     "NEXT_PHASE_PLAN section 0 tabled: HANDOFF-NEXT item 2 and "
+     "CENTREPIECE-INVALIDATED both called the seed-cheat diff 'cheap to "
+     "settle, a read of data that exists' and both were wrong twice over, "
+     "HANDOFF 5f framed the remaining task as a BIPARTITE/STACK build "
+     "problem, and README open problem 3 said the same. Each annotation "
+     "quotes the 0.510-against-0.057 component-split shares because that "
+     "contrast IS the correction -- a superseding note that does not carry "
+     "the number it supersedes on cannot be checked. Stale-narrative count "
+     "held at 50 and templates stayed at zero across the change."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

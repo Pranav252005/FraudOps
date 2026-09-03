@@ -52,6 +52,16 @@ if they move, the candidate set moved.
    Likely "seeded at all" ≠ "seeded with a member set the builder can grow into
    the ring", which would put the loss at *build*. **Cheap to settle** — run 2
    already generates both pools; diff which rings the cheat rescues.
+
+   > **CLOSED 2026-09-01. The hypothesis was right and "cheap to settle" was
+   > wrong.** Run 2's pools are not persisted, so this cost a 1,192-second
+   > replay rather than a read. The mechanism: **the ring's induced subgraph is
+   > disconnected inside the 72-hour window and the honest seed lands in one
+   > fragment** — 0.510 of rescued rings split across two or more components
+   > against 0.057 of recovered ones, and relaxing every builder knob makes
+   > coverage worse rather than better. See
+   > [`PHASE2-SEED-CHEAT-FINDINGS.md`](PHASE2-SEED-CHEAT-FINDINGS.md).
+   > **Do not re-run `scripts/eval_seed_cheat_diff.py`.**
 3. **The label tax is still a hypothesis, not a number.** The clean experiment
    (same model, same pool, same split, fitted once on truth and once on
    simulated verdicts) has still not been run. `collect_pool` already returns

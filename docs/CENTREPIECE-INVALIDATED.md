@@ -149,6 +149,28 @@ the wrong knob. But that is a hypothesis. It is also cheap to settle: run 2
 already generates both pools, so diffing which rings the cheat rescues is a read
 of data that exists.
 
+> **RESOLVED 2026-09-01, and both clauses of "cheap to settle / a read of data
+> that exists" were wrong.** Run 2's pools are never persisted — `collect_pool`
+> returns them in memory and only per-cycle aggregates reach
+> `data/eval_oracle.json`, so three of the four fields the partition needs were
+> computed and discarded. It took a **1,192-second replay**
+> (`scripts/eval_seed_cheat_diff.py`), not a read.
+>
+> **The hypothesis stated above is confirmed and the mechanism is named: the
+> ring's own induced subgraph is disconnected inside the 72-hour window, and
+> the honest seed lands in one fragment of it.** Over 259 in-window rings,
+> 0.510 of the rings the cheat rescues are split across two or more components
+> against 0.057 of the rings recovered honestly. The builder-budget hypothesis
+> is refuted and fails backwards: relaxing every knob raises containment and
+> collapses coverage, symmetrically on both sets.
+>
+> The prize also has an interval now — blend 2.18x [1.62x, 3.50x] at k=10
+> against a scorer ratio of 1.12x — so "seeding is worth more than the scorer"
+> is no longer two point estimates compared by eye.
+>
+> Full account: [`PHASE2-SEED-CHEAT-FINDINGS.md`](PHASE2-SEED-CHEAT-FINDINGS.md).
+> What it indicates is in [`NEXT_PHASE_PLAN.md`](NEXT_PHASE_PLAN.md) §2.1.
+
 So this does **not** resolve to "go widen seeding". It resolves to:
 
 1. the ranker rewrite is **off**, by item 0.1's own rule;
