@@ -3,14 +3,33 @@
     seed-reachable -> seeded -> built (candidate generated) -> ranked (top-k)
 
 Every accuracy number this project reports upstream of this module is
-uninterpretable without knowing which stage lost the ring. The known headline,
-measured against AMLworld HI-Small: only ~26% of active rings become
-candidates at all, and BIPARTITE / FAN-OUT / RANDOM / STACK generate 0% --
-because the seed rule requires a pass-through account (money in *and* out),
-and those typologies contain no pass-through account by construction. This
-module makes that loss visible and quantified, broken down by typology, and
-is dataset-agnostic: it only needs ring membership, a typology label, and the
+uninterpretable without knowing which stage lost the ring. This module makes
+that loss visible and quantified, broken down by typology, and is
+dataset-agnostic: it only needs ring membership, a typology label, and the
 generator's own candidates -- not anything specific to AMLworld.
+
+**CORRECTION, 2026-09-04.** This docstring used to state that "only ~26% of
+active rings become candidates at all, and BIPARTITE / FAN-OUT / RANDOM /
+STACK generate 0%, because the seed rule requires a pass-through account and
+those typologies contain no pass-through account by construction."
+
+**That is wrong and had already been corrected in docs/HANDOFF.md 5b on
+2026-08-26; this docstring was simply never updated.** The seed rule checks
+whether an account is pass-through against its whole position in the window
+graph, not against its role inside one ring -- and AMLworld's background
+traffic gives almost every active account both inbound and outbound edges. So
+the four typologies named above are seeded at 83-100%, not 0%.
+
+The measured funnel (data/funnel.json, 34 cycles, 259 rings) says seeding is
+the SMALLEST of the three losses:
+
+    seeding  11.2 points     build  26.6 points     ranking  39.8 points
+
+Leaving the stale claim here cost something real: docs/graph-review/2026-09-04.md
+2a read this docstring rather than the data and ranked a second seed predicate
+as "the single largest structural recall loss in the funnel", which it is not.
+See prereg/seed_predicate.md, which corrects the premise before the experiment
+that rested on it was run.
 
 A ring only needs to clear a stage once across the whole eval run; stages are
 tracked as a boolean OR over every cycle in which the ring is active.

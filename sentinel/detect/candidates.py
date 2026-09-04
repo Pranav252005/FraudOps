@@ -23,10 +23,35 @@ from sentinel.config import (EXPAND_HOPS, EXPAND_MAX_DEGREE, EXPAND_MAX_NODES,
 from sentinel.detect import features as F
 from sentinel.detect.merge import DEFAULT_THRESHOLD, suppress
 from sentinel.detect.motifs import Motifs, detect
+from sentinel.detect.layers import node_smurf_score
 from sentinel.detect.prune import prune as prune_candidate
 
 MIN_NODES = 3          # two accounts have no structure to detect
 MIN_EDGES = 2
+
+# -- seed strategies (experiments S1 / S2) -----------------------------------
+#
+# The shipped rule fires only on pass-through accounts, which BIPARTITE,
+# FAN-OUT, RANDOM and STACK do not contain by construction -- so those four
+# typologies are unreachable at any scoring quality
+# (docs/graph-review/2026-09-04.md 2a). These add a bounded number of
+# non-pass-through seeds on top of it.
+#
+# Every arm spends the SAME budget, which is the whole point. A rule that
+# reaches more rings by firing more often has not found a better predicate, it
+# has bought recall with candidates, and the funnel stops meaning anything.
+# Holding the budget equal across arms is what makes any difference between
+# them attributable to the criterion.
+SEED_PASSTHROUGH = "passthrough"          # shipped
+SEED_GARGAML = "passthrough+gargaml"      # S1
+SEED_DEGREE_BURST = "passthrough+degree"  # S2, the control arm
+SEED_RANDOM = "passthrough+random"        # the null: same budget, no criterion
+SEED_STRATEGIES = (SEED_PASSTHROUGH, SEED_GARGAML, SEED_DEGREE_BURST,
+                   SEED_RANDOM)
+
+# Extra seeds as a fraction of the pass-through count. Pre-registered in
+# prereg/seed_predicate.md before any arm was run.
+SEED_BUDGET = 0.10
 
 
 @dataclass
@@ -62,7 +87,9 @@ class CandidateGenerator:
                  max_nodes: int = EXPAND_MAX_NODES,
                  max_degree: int = EXPAND_MAX_DEGREE,
                  min_nodes: int = MIN_NODES,
-                 prune_strategy: str = PRUNE_STRATEGY):
+                 prune_strategy: str = PRUNE_STRATEGY,
+                 seed_strategy: str = SEED_PASSTHROUGH,
+                 seed_budget: float = SEED_BUDGET):
         self.graph = graph
         self.registry = registry
         self.node_key = node_key
@@ -71,10 +98,18 @@ class CandidateGenerator:
         self.max_degree = max_degree
         self.min_nodes = min_nodes
         self.prune_strategy = prune_strategy
+        if seed_strategy not in SEED_STRATEGIES:
+            raise ValueError(f"unknown seed strategy {seed_strategy!r}; "
+                             f"expected one of {SEED_STRATEGIES}")
+        self.seed_strategy = seed_strategy
+        self.seed_budget = seed_budget
         self.stats = {
             "seeds": 0, "expanded": 0, "deduped": 0,
             "too_small": 0, "emitted": 0, "suppressed": 0,
             "pruned_nodes": 0,
+            # Split out so a funnel gain can be attributed to the arm that
+            # bought it rather than to "more seeds".
+            "seeds_passthrough": 0, "seeds_extra": 0, "seed_budget": 0,
         }
 
     def _expansion_signature(self) -> tuple:
@@ -98,8 +133,53 @@ class CandidateGenerator:
             touched.update(int(x) for x in batch.src)
             touched.update(int(x) for x in batch.dst)
         g = self.graph
-        return {n for n in touched
+        base = {n for n in touched
                 if g.out_adj.get(n) and g.in_adj.get(n)}
+        self.stats["seeds_passthrough"] += len(base)
+        if self.seed_strategy == SEED_PASSTHROUGH:
+            return base
+        return base | self._extra_seeds(touched - base, len(base))
+
+    def _extra_seeds(self, pool: set[int], n_base: int) -> set[int]:
+        """The bounded second predicate: at most `seed_budget * n_base` more.
+
+        `pool` is the accounts touched this tick that the pass-through rule
+        refused -- receive-only sinks, send-only sources, the sides of a
+        BIPARTITE and the ends of a FAN. Every arm ranks this same pool by a
+        different criterion and takes the same number off the top, so the arms
+        differ in what they believe, not in how much they spend.
+
+        Ordering is fully deterministic in every arm, including the random one:
+        ties break on node id, and the random arm keys a per-node RNG on the
+        node id rather than drawing from a shared stream. A seed set that
+        depended on iteration order would make the determinism gate fail for
+        the experiment's own reasons.
+        """
+        budget = int(self.seed_budget * n_base)
+        self.stats["seed_budget"] += budget
+        if budget <= 0 or not pool:
+            return set()
+        g = self.graph
+
+        if self.seed_strategy == SEED_RANDOM:
+            import random as _random
+            ranked = sorted(pool, key=lambda n: (_random.Random(n).random(), n))
+        elif self.seed_strategy == SEED_DEGREE_BURST:
+            # The control arm: width alone, with the same hub guard S1 uses so
+            # the two arms see the same eligible pool.
+            def width(n):
+                w = len(g.neighbours(n))
+                return w if w <= self.max_degree else 0
+            ranked = sorted(pool, key=lambda n: (-width(n), n))
+        else:  # SEED_GARGAML
+            scored = [(node_smurf_score(g, n, max_width=self.max_degree), n)
+                      for n in pool]
+            ranked = [n for (score, w), n in
+                      sorted(scored, key=lambda sn: (-sn[0][0], -sn[0][1], sn[1]))]
+
+        extra = set(ranked[:budget])
+        self.stats["seeds_extra"] += len(extra)
+        return extra
 
     # -- generation -----------------------------------------------------------
 

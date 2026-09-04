@@ -35,7 +35,10 @@
     "too_small": 33,
     "emitted": 565,
     "suppressed": 8,
-    "pruned_nodes": 5670
+    "pruned_nodes": 5670,
+    "seeds_passthrough": 598,
+    "seeds_extra": 0,
+    "seed_budget": 0
   },
   "n_candidates": [
     193,
