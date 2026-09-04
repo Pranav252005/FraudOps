@@ -134,3 +134,51 @@ is defined.
 
 **Queue changes:** M1 struck. Thresholds unchanged — `MIN_JACCARD` stays 0.3,
 and the 0.2 column is published rather than taken.
+
+## 2026-09-04 — S1/S2: the second seed predicate, and the premise it rested on
+
+**Predicted:** the prereg first *corrected the premise* — the queue had ranked
+this on a stale `funnel.py` docstring claiming four typologies "generate 0%",
+which `HANDOFF.md` §5b had already refuted on 2026-08-26. Seeding is the
+smallest of the three funnel losses. Then: addressable rings 5-20; S1 seeded
+gain +0 to +8; built +0 to +4; ranked +0 to +2; p@10 CI including zero; **S1
+indistinguishable from S2**; score staying CI-clear over size in every arm.
+
+**Observed:** ceiling first, per kill criterion 1 — of 29 unseeded rings, **22
+were never touched in any active cycle** and are unreachable by any
+touched-based rule, leaving S1 an addressable set of **7 rings**. All four arms
+spent an identical 35,543 extra seeds.
+
+**S1 and S2 were bit-identical at every k** (delta +0.0000, CI [+0.000,+0.000]).
+Measured mechanism: the cleanliness factor is exactly 1.0 for **98.6%** of the
+real non-pass-through pool, so `cleanliness x width` collapses to width, and the
+tiebreak makes the top-B selection exactly degree ordering. Only 83 accounts
+saturate against a budget of 1,585.
+
+Built rose 161 to 175 (+14, against the random null's +4, so ~+10 is
+attributable to the criterion) — but **ranked@50 was 58 in all four arms**.
+BIPARTITE and STACK, the two build-destroyed typologies, gained nothing; the
+gain is FAN-IN and FAN-OUT, which is what degree burst should find.
+
+**Verdict:** S1 **refuted** as a distinct predicate. S2 confirmed but not worth
+shipping.
+
+**Cost:** 1,568 s, four arms, one replay.
+
+**Rule that came out of it:** **a middle-of-funnel gain that does not reach the
+output is not a product improvement.** Built +14 with ranked +0 is a true
+statement whose misleading half is the one worth quoting. Any future generation
+change must report `ranked` beside `built` or it is reporting the flattering
+half.
+
+Second rule, from the miss: I under-predicted built (+14 against a predicted
++0 to +4) because I reasoned only about newly-seeded rings and forgot that extra
+seeds also produce extra candidates around rings that were **already** seeded.
+Most of the built gain was not from newly-reachable rings at all.
+
+**Promoted to:** not promoted as an invariant. Recorded in
+`docs/SEED-PREDICATE-FINDINGS.md`, and the stale-docstring correction is now
+inline in `sentinel/eval/funnel.py` so the next reader cannot repeat it.
+
+**Queue changes:** S1 and S2 struck. Neither shipped. The evidence points back
+at B1, where `PHASE2-SEED-CHEAT-FINDINGS.md` §H2 already said it pointed.

@@ -20,8 +20,8 @@ what the pre-registration is for.
 
 | # | experiment | why now | cost |
 |---:|---|---|---|
-| S1 | **Second seed predicate: GARG-AML-style second-order block-density score** | The pass-through rule cannot reach BIPARTITE / FAN-OUT / RANDOM / STACK by construction. This is the single largest structural recall loss in the funnel, and `detect/layers.py` already computes most of the ingredients. Kill rule must include a precision floor — a seed rule that fires on everything is not an improvement. | ~1 day + replay |
-| S2 | **Degree-burst seed predicate (fan-in or fan-out ≥ k within one tick)** | Cheaper than S1 and attacks FAN-OUT specifically. Run as the control arm for S1 so the prize is attributable. | ~4h + replay |
+| ~~S1~~ | ~~Second seed predicate: GARG-AML-style second-order block-density score~~ | **DONE 2026-09-04 — REFUTED as a distinct idea.** Bit-identical to S2: the cleanliness term is 1.0 for 98.6% of the real pool, so the score collapses to degree. Ceiling was 7 rings, not "the largest loss in the funnel" — that premise came from a stale docstring. See [`SEED-PREDICATE-FINDINGS.md`](SEED-PREDICATE-FINDINGS.md). | done |
+| ~~S2~~ | ~~Degree-burst seed predicate (fan-in or fan-out ≥ k within one tick)~~ | **DONE 2026-09-04 — not shipped.** +14 built over shipped (+10 over the random null, so attributable), **+0 ranked**, for 10% more seeds. Helps FAN-IN/FAN-OUT; does nothing for BIPARTITE/STACK, the two build-destroyed typologies. | done |
 
 ## Stage: built (~38% of seeded rings lost to dilution)
 

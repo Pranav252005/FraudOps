@@ -34,7 +34,7 @@ import json
 import random
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -242,8 +242,14 @@ def main() -> None:
             "unseeded": len(unseeded),
             "unseeded_untouched": len(untouched),
             "unseeded_addressable": len(addressable),
-            "addressable_by_typology": {k: v for k, v in sorted(
-                ((ring_typ[r], 1) for r in addressable))} if addressable else {},
+            # Counted, not zipped. An earlier version built this from
+            # `{k: v for k, v in sorted((typ, 1) ...)}`, which silently
+            # collapses duplicates to 1 each -- the JSON summed to 4 against a
+            # true 7 while the console printed the right table. A field that
+            # looks well-formed and understates is this project's
+            # characteristic defect, so it is a Counter now.
+            "addressable_by_typology": dict(sorted(
+                Counter(ring_typ[r] for r in addressable).items())),
         },
         "arms": arms_out, "paired": paired,
         "cycle_rows": rows,

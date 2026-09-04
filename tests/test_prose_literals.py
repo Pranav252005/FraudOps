@@ -214,6 +214,15 @@ LEDGER = [
      "every earlier findings document (phase-2a +94, phase-3 +105). The "
      "authoritative copy is data/eval_threshold_band.json and the document "
      "names it."),
+    ("2026-09-04", "S1-S2-seed-predicate", 2083,
+     "+58: docs/SEED-PREDICATE-FINDINGS.md and the S1/S2 ledger entry. Same "
+     "judgement as the M1 entry above: the bulk is the arms table (four arms "
+     "x seeds, extra, seeded, built, ranked, three p@k), the per-typology "
+     "built table, and the mechanism figures that make the refutation "
+     "checkable -- 98.6% cleanliness saturation, 83 saturated accounts "
+     "against a 1,585 budget. A refutation whose numbers live only in an "
+     "untracked JSON cannot be audited, and the authoritative copy is named "
+     "in the document."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
