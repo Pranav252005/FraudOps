@@ -38,7 +38,8 @@
     "pruned_nodes": 5670,
     "seeds_passthrough": 598,
     "seeds_extra": 0,
-    "seed_budget": 0
+    "seed_budget": 0,
+    "observed_ticks": 0
   },
   "n_candidates": [
     193,

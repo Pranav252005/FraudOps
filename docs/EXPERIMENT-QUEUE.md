@@ -55,5 +55,5 @@ what the pre-registration is for.
 | # | experiment | why now | cost |
 |---:|---|---|---|
 | ~~P0~~ | ~~Widen the seed source beyond one tick~~ | **DONE 2026-09-05.** seeds() drew from 1h of a 72h window. lb6: seeded 230→258 of 259, built 161→218, **every typology gained** incl. BIPARTITE +11 and STACK +5, p@10 0.2912→0.5500 CI-clear. But **ranked@50 only 58→61** and build→rank retention FELL 0.360→0.280, at 4.85x cost. Not shipped — decision pending. See [`SEED-LOOKBACK-FINDINGS.md`](SEED-LOOKBACK-FINDINGS.md). | done |
-| P0b | **Guard: `observe()` must be called when lookback > 1** | The parameter is inert without it and fails silently — a foot-gun that should not ship. | ~1h |
+| ~~P0b~~ | ~~Guard: `observe()` must be called when lookback > 1~~ | **DONE 2026-09-05.** Three guards, each with a negative control: omission (`seeds()` refuses an empty lookback), non-contiguity (`observe()` refuses a skipped tick, which is what would make lookback 6 silently mean 36h), and out-of-step observe/generate. Shipped lookback 1 is untouched — no observe, no timestamps, no contiguity required. `stats["observed_ticks"]` added so a harness can assert its own wiring. | done |
 | P0c | **lb24 over the full 34 cycles** | Measured at 17.62x cost for +1 ring in a single cycle and dropped as a declared deviation. No claim made about it over a full run. | ~3h |

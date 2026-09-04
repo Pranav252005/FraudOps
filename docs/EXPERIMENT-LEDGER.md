@@ -340,3 +340,48 @@ added. **P0 moves the bottleneck: build loss falls from 26.64 to roughly 12
 points, so essentially all remaining loss is ranking — where the oracle says a
 supervised model on current features buys 1.12×. The feature problem is now the
 whole problem.**
+
+## 2026-09-05 — P0b: guards for the seed lookback
+
+**Predicted:** no metric movement. This is a guard, not an experiment — the
+same shape as L1 — so no pre-registration, and the expectation is that every
+number stays where it is and only *misuse* starts failing.
+
+**Observed:** exactly that. Determinism and regression gates pass with every
+fixture metric unchanged; the P0 harness reproduces its seed counts exactly
+(15,854 / 68,235). The only diff is one additive stats key.
+
+Three guards shipped, each with a negative control proving it can fire *and*
+that it does not fire on correct usage:
+
+1. **Omission** — `seeds()` raises if `seed_lookback_ticks > 1` and `observe()`
+   was never called. This is the foot-gun the queue named: without it the
+   deque stays empty, seeding silently falls back to the single batch, and a
+   run configured for six hours produces shipped behaviour with every metric
+   looking plausible.
+2. **Non-contiguity** — `observe()` raises on a skipped tick. This catches the
+   subtler failure: observing only on cycle ticks would make a lookback of 6
+   mean 36 hours while still "working".
+3. **Out of step** — `seeds()` raises if the batch being seeded is not the one
+   most recently observed, so the tick being seeded is always inside its own
+   lookback.
+
+A batch without `t_start`/`t_end` is refused when a lookback is asked for, on
+the principle that a lookback which cannot verify its own tick spacing is a
+lookback of unknown length. The test fixture gained timestamps rather than the
+guard gaining an exemption.
+
+**Verdict:** confirmed. The parameter is now safe to ship.
+
+**Cost:** under an hour, no replay.
+
+**Rule that came out of it:** **a parameter whose misuse produces no error and
+no visible symptom needs a guard, not a docstring.** `seed_lookback_ticks` was
+documented as "must be called on EVERY tick" in P0 and that documentation was
+worth nothing — the failure mode it warns about is invisible in every metric.
+
+**Promoted to:** not an invariant; it is a local guard. `SEED_LOOKBACK_TICKS`
+still stays 1 — P0b makes shipping lb6 *safe*, it does not decide it.
+
+**Queue changes:** P0b struck. P0c (lb24 over the full 34 cycles) remains open
+and unclaimed.

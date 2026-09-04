@@ -43,12 +43,26 @@ class FakeGraph:
 
 
 class FakeBatch:
-    def __init__(self, edges):
+    """Carries t_start/t_end because the lookback guards require them.
+
+    A batch that cannot say when it happened cannot be checked for tick
+    contiguity, and a lookback that cannot verify its own tick spacing is a
+    lookback of unknown length — so `observe()` refuses one.
+    """
+
+    def __init__(self, edges, t_start=0, t_end=None):
         self.src = [a for a, _ in edges]
         self.dst = [b for _, b in edges]
+        self.t_start = t_start
+        self.t_end = t_start + 60 if t_end is None else t_end
 
     def __len__(self):
         return len(self.src)
+
+
+def _contiguous(ticks):
+    """FakeBatches at 60-minute spacing, the way `Stream.ticks` yields them."""
+    return [FakeBatch(t, t_start=60 * i) for i, t in enumerate(ticks)]
 
 
 # Three disjoint pass-through triangles, one per tick.
@@ -63,7 +77,7 @@ ALL_EDGES = [e for t in TICKS for e in t]
 def _run(lookback, n_ticks=3):
     g = FakeGraph(ALL_EDGES)
     gen = C.CandidateGenerator(g, seed_lookback_ticks=lookback)
-    batches = [FakeBatch(t) for t in TICKS[:n_ticks]]
+    batches = _contiguous(TICKS[:n_ticks])
     for b in batches:
         gen.observe(b)
     return gen, gen.seeds(batches[-1])
@@ -89,11 +103,11 @@ def test_observe_is_a_no_op_at_lookback_one():
     keeps every pre-P0 test and the fixture fingerprint valid."""
     g = FakeGraph(ALL_EDGES)
     gen = C.CandidateGenerator(g)                      # default lookback
-    last = FakeBatch(TICKS[-1])
+    last = _contiguous(TICKS)[-1]
     without = gen.seeds(last)
     gen2 = C.CandidateGenerator(g)
-    for t in TICKS:
-        gen2.observe(FakeBatch(t))
+    for b in _contiguous(TICKS):
+        gen2.observe(b)
     assert gen2.seeds(last) == without
     assert not gen2._recent_touched
 
@@ -127,8 +141,8 @@ def test_the_deque_is_bounded_by_the_lookback():
     free. The bound must actually bind."""
     g = FakeGraph(ALL_EDGES)
     gen = C.CandidateGenerator(g, seed_lookback_ticks=2)
-    for _ in range(50):
-        gen.observe(FakeBatch(TICKS[0]))
+    for i in range(50):
+        gen.observe(FakeBatch(TICKS[0], t_start=60 * i))
     assert len(gen._recent_touched) == 2
 
 
@@ -143,6 +157,98 @@ def test_an_empty_tick_does_not_erase_the_lookback():
     otherwise the lookback would collapse to 1 after any quiet hour."""
     g = FakeGraph(ALL_EDGES)
     gen = C.CandidateGenerator(g, seed_lookback_ticks=3)
-    gen.observe(FakeBatch(TICKS[0]))
-    gen.observe(FakeBatch([]))
-    assert gen.seeds(FakeBatch([])) == {1, 2, 3}
+    gen.observe(FakeBatch(TICKS[0], t_start=0))
+    quiet = FakeBatch([], t_start=60)
+    gen.observe(quiet)
+    assert gen.seeds(quiet) == {1, 2, 3}
+
+
+# -- P0b: the guards, each with a negative control ---------------------------
+#
+# `seed_lookback_ticks` is the one parameter here whose misuse produces no
+# error and no visible symptom: the deque stays empty, `seeds()` falls back to
+# the single batch, and every metric looks exactly like a correct lookback-1
+# run. That is this project's characteristic defect, so it gets guards rather
+# than a docstring.
+
+
+def test_forgetting_observe_raises_instead_of_silently_meaning_lookback_one():
+    """The foot-gun the queue named. Without this the caller gets shipped
+    behaviour while believing they configured a six-hour lookback."""
+    g = FakeGraph(ALL_EDGES)
+    gen = C.CandidateGenerator(g, seed_lookback_ticks=6)
+    with pytest.raises(RuntimeError, match=r"observe\(\) was never called"):
+        gen.seeds(_contiguous(TICKS)[-1])
+
+
+def test_the_omission_guard_does_not_fire_when_observe_was_called():
+    """The negative control for the guard above: it must not fire on correct
+    usage, or it would just be a ban on the feature."""
+    _, seeds = _run(3)
+    assert seeds
+
+
+def test_observing_only_every_nth_tick_raises():
+    """The subtler failure: observing on cycle ticks only would make a
+    lookback of 6 silently mean 36 hours. Caught by tick contiguity."""
+    g = FakeGraph(ALL_EDGES)
+    gen = C.CandidateGenerator(g, seed_lookback_ticks=6)
+    gen.observe(FakeBatch(TICKS[0], t_start=0))
+    with pytest.raises(ValueError, match="non-contiguous tick"):
+        gen.observe(FakeBatch(TICKS[1], t_start=360))     # skipped 5 ticks
+
+
+def test_contiguous_observation_is_accepted():
+    """Negative control for the contiguity guard."""
+    g = FakeGraph(ALL_EDGES)
+    gen = C.CandidateGenerator(g, seed_lookback_ticks=6)
+    for b in _contiguous(TICKS):
+        gen.observe(b)
+    assert gen.stats["observed_ticks"] == len(TICKS)
+
+
+def test_a_batch_without_timestamps_is_refused_when_a_lookback_is_asked_for():
+    """A lookback that cannot verify its own tick spacing is a lookback of
+    unknown length."""
+    class Timeless:
+        src, dst = [1], [2]
+
+        def __len__(self):
+            return 1
+
+    g = FakeGraph(ALL_EDGES)
+    gen = C.CandidateGenerator(g, seed_lookback_ticks=6)
+    with pytest.raises(TypeError, match="t_start and t_end"):
+        gen.observe(Timeless())
+
+
+def test_seeding_a_batch_that_was_not_the_last_observed_raises():
+    """observe() and generate() drifting out of step would mean the tick being
+    seeded is not in its own lookback."""
+    g = FakeGraph(ALL_EDGES)
+    gen = C.CandidateGenerator(g, seed_lookback_ticks=6)
+    for b in _contiguous(TICKS):
+        gen.observe(b)
+    with pytest.raises(RuntimeError, match="out of step"):
+        gen.seeds(FakeBatch(TICKS[0], t_start=99999))
+
+
+def test_none_of_the_guards_fire_at_the_shipped_lookback():
+    """Lookback 1 is the shipped configuration and must be entirely
+    unaffected: no observe required, no timestamps required, no contiguity."""
+    class Timeless:
+        src, dst = [1], [2]
+
+        def __len__(self):
+            return 1
+
+    g = FakeGraph(ALL_EDGES)
+    gen = C.CandidateGenerator(g)
+    gen.observe(Timeless())                      # no-op, must not raise
+    assert gen.seeds(FakeBatch(TICKS[0])) == {1, 2, 3}
+    assert gen.stats["observed_ticks"] == 0
+
+
+def test_observed_ticks_is_reported_so_a_harness_can_assert_wiring():
+    gen, _ = _run(3)
+    assert gen.stats["observed_ticks"] == 3

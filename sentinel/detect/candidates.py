@@ -145,6 +145,7 @@ class CandidateGenerator:
         # A generator whose caller never calls `observe` behaves exactly as it
         # did before this parameter existed.
         self._recent_touched: deque = deque(maxlen=seed_lookback_ticks)
+        self._last_observed_end: int | None = None
         self.last_seeds: set[int] = set()
         self.stats = {
             "seeds": 0, "expanded": 0, "deduped": 0,
@@ -153,6 +154,9 @@ class CandidateGenerator:
             # Split out so a funnel gain can be attributed to the arm that
             # bought it rather than to "more seeds".
             "seeds_passthrough": 0, "seeds_extra": 0, "seed_budget": 0,
+            # How many ticks the lookback actually saw. A harness can assert
+            # this rather than trusting that observe() was wired up.
+            "observed_ticks": 0,
         }
 
     def _expansion_signature(self) -> tuple:
@@ -166,9 +170,12 @@ class CandidateGenerator:
     def observe(self, batch) -> None:
         """Record one tick's touched accounts, for the seed lookback.
 
-        Must be called on EVERY tick, not only on cycle ticks, or the lookback
-        counts cycles instead of ticks and silently means something six times
-        longer than it says.
+        Must be called on EVERY tick, not only on cycle ticks. This is
+        ENFORCED rather than documented: a caller that observes only cycle
+        ticks would get a lookback six times longer than the number says, and
+        every metric would look plausible. `seed_lookback_ticks` is the one
+        parameter in this class whose misuse produces no error and no visible
+        symptom, so it is the one that gets guards.
 
         A no-op at the shipped lookback of 1, so a caller that never calls this
         gets exactly the pre-P0 behaviour -- which is what keeps the fixture
@@ -176,7 +183,26 @@ class CandidateGenerator:
         """
         if self.seed_lookback_ticks <= 1:
             return
+        t_start = getattr(batch, "t_start", None)
+        t_end = getattr(batch, "t_end", None)
+        if t_start is None or t_end is None:
+            raise TypeError(
+                "observe() needs a batch carrying t_start and t_end to check "
+                "that ticks are contiguous; got "
+                f"{type(batch).__name__} without them. A lookback that cannot "
+                "verify its own tick spacing is a lookback of unknown length.")
+        if (self._last_observed_end is not None
+                and t_start != self._last_observed_end):
+            raise ValueError(
+                f"observe() got a non-contiguous tick: this batch starts at "
+                f"{t_start} but the previous one ended at "
+                f"{self._last_observed_end}. seed_lookback_ticks counts TICKS, "
+                f"so observing every Nth tick makes the lookback N times "
+                f"longer than it says while every metric still looks "
+                f"plausible. Call observe() on every tick.")
         self._recent_touched.append(_touched(batch))
+        self._last_observed_end = t_end
+        self.stats["observed_ticks"] += 1
 
     def seeds(self, batch) -> set[int]:
         """Accounts touched this tick that are pass-through in the window.
@@ -186,6 +212,21 @@ class CandidateGenerator:
         lift. It is not selective on its own; selectivity comes from the
         structure and scoring stages, not from the seed.
         """
+        if self.seed_lookback_ticks > 1:
+            if not self._recent_touched:
+                raise RuntimeError(
+                    f"seed_lookback_ticks={self.seed_lookback_ticks} but "
+                    f"observe() was never called, so the lookback is empty and "
+                    f"seeding would silently fall back to this single batch -- "
+                    f"i.e. behave as lookback 1 while reporting "
+                    f"{self.seed_lookback_ticks}. Call observe() on every tick.")
+            end = getattr(batch, "t_end", None)
+            if end is not None and end != self._last_observed_end:
+                raise RuntimeError(
+                    f"seeding a batch ending at {end} but the last observed "
+                    f"tick ended at {self._last_observed_end}. observe() and "
+                    f"generate() are out of step, so the lookback does not "
+                    f"include the tick being seeded.")
         touched = (set().union(*self._recent_touched)
                    if self._recent_touched else _touched(batch))
         g = self.graph
