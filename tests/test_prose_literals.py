@@ -266,6 +266,15 @@ LEDGER = [
      "that shows most of the precision gain is redundancy. Also the lb24 cost "
      "table, which is the evidence for a declared deviation and cannot be "
      "referenced away. Authoritative copy: data/eval_seed_lookback.json."),
+    ("2026-09-05", "M2-bootstrap-mc", 2448,
+     "+63: docs/BOOTSTRAP-MC-FINDINGS.md and the M2 ledger entry. The bulk is "
+     "the three-flip table with committed intervals and flip rates at both "
+     "resample counts, and the per-depth breakdown showing M1's claim survives "
+     "at k=10/20 while k=50 does not -- a near-miss that cannot be stated "
+     "without the numbers. Also the four prereg-flagged intervals with their "
+     "0% flip rates, which are the evidence for the finding that endpoint "
+     "proximity does NOT predict instability. Authoritative copy: "
+     "data/eval_bootstrap_mc.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

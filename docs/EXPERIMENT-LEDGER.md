@@ -385,3 +385,51 @@ still stays 1 — P0b makes shipping lb6 *safe*, it does not decide it.
 
 **Queue changes:** P0b struck. P0c (lb24 over the full 34 cycles) remains open
 and unclaimed.
+
+## 2026-09-05 — M2: the bootstrap's own Monte Carlo error
+
+**Predicted:** 1 to 6 verdict flips; zero among comparisons whose nearer
+endpoint is beyond 0.01 from zero; fewer flips at 10,000 resamples; no flip for
+P0's `lb6 − lb1`; at most one for M1's 18/18; none for the shipped
+`score − size`; and **`eval_ranker` at n=18 flipping most per comparison**. The
+prereg also tabulated four near-zero intervals as the ones at risk.
+
+**Observed:** 320 comparisons × 40 seeds × {2000, 10000}, no replay.
+**3 flips at B=2000 (0.9%), 2 at 10,000 (0.6%), and none is a claim any
+findings document makes.** Two of the three are `degree − size` — one baseline
+against another. The third is `score − size @ k=50` in M1's tightest cell,
+which M1 did not claim: its statement was 9/9 at k=10 and 9/9 at k=20, and both
+are clean. Had M1 said "27/27 across three depths", one would have been
+seed-dependent — luck, recorded as luck.
+
+P0's `lb6 − lb1` flips 0% at all three depths with endpoints moving ≤ 0.0088
+against a point estimate of +0.2588. The shipped `score − size` is stable at
+k=10/20/50/100. All 191 comparisons with a nearest endpoint beyond 0.01 are
+stable, exactly as predicted.
+
+**Verdict:** confirmed. No conclusion in this repository is seed-dependent.
+
+**Cost:** 4,704 s, no replay.
+
+**Rule that came out of it:** **neither sample size nor endpoint-proximity
+predicts Monte Carlo instability.** I predicted `eval_ranker` (n=18) would be
+the most fragile and it produced zero flips in 24 comparisons; I tabulated four
+near-zero intervals as at-risk and all four held at 0% across 40 seeds, while a
+comparison I had not looked at flipped 22% of the time. Both obvious predictors
+failed. What appears to matter is how much of the resampled distribution's mass
+sits at the endpoint — hit counts are small integers, so the statistic is lumpy
+— but that is a post-hoc explanation of two wrong predictions and is not a
+result.
+
+**Six of eight predictions hit.** The two misses were both about *which*
+comparisons would flip; the count prediction was right. Being right about the
+aggregate and wrong about every specific is worth noticing.
+
+**Promoted to:** not an invariant. The `n_resamples = 2000` default **stays** —
+10,000 costs 5× on every interval and moves the flip rate 0.9% → 0.6% with no
+conclusion affected. Kill criterion 3 (>25%) came nowhere near firing.
+
+**Queue changes:** M2 struck. **M2b added**: flag intervals whose nearer
+endpoint is within ~0.005 of zero and recompute those at B ≥ 10,000, rather
+than raising the default globally. Not done here because it touches
+`bootstrap.py`, through which every number in this repository flows.

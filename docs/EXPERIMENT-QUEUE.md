@@ -42,7 +42,8 @@ what the pre-registration is for.
 | # | experiment | why now | cost |
 |---:|---|---|---|
 | ~~M1~~ | ~~`is_hit` threshold sensitivity band~~ | **DONE 2026-09-04.** 9/9 cells positive, 9/9 CI-clear at k=10 and at k=20. Shipped cell reproduces `eval_phase2.json` exactly. Thresholds unchanged. See [`THRESHOLD-BAND.md`](THRESHOLD-BAND.md). | done |
-| M2 | **Bootstrap Monte Carlo check** | One headline at a second seed and 10,000 resamples. Minutes. | ~30m |
+| ~~M2~~ | ~~Bootstrap Monte Carlo check~~ | **DONE 2026-09-05.** 320 comparisons x 40 seeds x {2000, 10000}. **3 flips of 320 at B=2000 (0.9%), 2 at 10000, and none is a reported conclusion.** P0's headline and the shipped `score − size` are immovable; all 191 comparisons with an endpoint beyond 0.01 from zero are stable. Default NOT raised. See [`BOOTSTRAP-MC-FINDINGS.md`](BOOTSTRAP-MC-FINDINGS.md). | done |
+| M2b | **Flag Monte-Carlo-unstable intervals at source** | All three flips sit at a nearest endpoint <= 0.0015. When an interval's nearer endpoint falls within ~0.005 of zero, recompute that one at B >= 10000 before quoting it as a verdict. Targeted; touches `bootstrap.py`, which every number flows through, so it needs its own care. | ~2h |
 
 ## Blocked
 
