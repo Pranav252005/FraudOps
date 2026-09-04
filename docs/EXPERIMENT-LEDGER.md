@@ -182,3 +182,56 @@ inline in `sentinel/eval/funnel.py` so the next reader cannot repeat it.
 
 **Queue changes:** S1 and S2 struck. Neither shipped. The evidence points back
 at B1, where `PHASE2-SEED-CHEAT-FINDINGS.md` §H2 already said it pointed.
+
+## 2026-09-04 — B1: shape-directed fragment linking
+
+**Predicted:** built-recall +2 to +8 rings, BIPARTITE and STACK the
+beneficiaries, p@k **not** moving (a merge makes a candidate bigger, not
+better), `link` beating `link_random` on built, score staying CI-clear over
+size, pool growth under 10%.
+
+**Observed:** 34 cycles, 1,788 merges, 0.52% pool growth, 0.13 s/cycle.
+
+- **Built is 161 in all three arms.** Zero rings newly reached. Kill criterion 1
+  fired — though with the null also at 161 the comparison was on a saturated
+  metric and could not have distinguished much.
+- A large, **unpredicted** ranking gain: p@20 0.1574 → 0.2279, p@50 0.0759 →
+  0.1288, CI-clear against both shipped and the null.
+- **The size baseline nearly tripled with it** (p@50 0.0488 → 0.1341), and
+  `score − size` under `link` collapses to CI-clear at k=10 only, includes zero
+  at k=20, and goes **negative** at k=50. Bug #8's pattern.
+- **Distinct rings ranked fell 58 → 55.** More top-50 slots hold a hit,
+  covering fewer distinct rings.
+- Containment of merged candidates **doubles** (0.785 vs 0.385 for the best
+  unmerged), so the mechanism does assemble — kill criterion 4 fired on Jaccard
+  (0.2099 vs 0.2235) but its stated interpretation, "dilutes rather than
+  assembles", is refuted by the containment column.
+
+**Verdict:** refuted as scoped. Four of seven predictions missed, and the two
+central ones missed in **opposite** directions — no generation gain, and a large
+ranking gain that then failed its own baseline check. Not shipped; `link.py`
+stays unused by `CandidateGenerator`.
+
+**Cost:** 480 s, three arms, one generation per cycle.
+
+**Rule that came out of it, and it is the important one:** **a kill criterion
+that references the size baseline must quantify over every reported k.** Mine
+was written as a k=10 check, so the harness printed "not fired" while the margin
+had collapsed at k=20 and gone negative at k=50. A criterion narrower than the
+rule it encodes will keep returning comfortable answers. Fixed in
+`scripts/eval_fragment_link.py`, which now evaluates it at every k.
+
+Second rule, carried over and now confirmed twice in one day: report the
+product-relevant counterpart beside the flattering one. S1 gave "+14 built, +0
+ranked"; B1 gives "p@50 up 70%, distinct rings down 58→55". Both are true
+statements whose first half is the misleading one.
+
+**Promoted to:** not an invariant yet. The size-baseline-at-every-k rule belongs
+in `docs/STANDING-RULES.md` rule 2 when someone mechanises it; recorded here as
+proposed.
+
+**Queue changes:** B1 struck. A **new** hypothesis is generated and explicitly
+**not** claimed: linking may be a *ranking* intervention rather than a
+generation one. That is post-hoc, needs its own pre-registration and a
+size-stratified baseline the size effect cannot win, and B3 (score-free
+suppression) should precede it.

@@ -223,6 +223,16 @@ LEDGER = [
      "against a 1,585 budget. A refutation whose numbers live only in an "
      "untracked JSON cannot be audited, and the authoritative copy is named "
      "in the document."),
+    ("2026-09-04", "B1-fragment-link", 2188,
+     "+105: docs/FRAGMENT-LINK-FINDINGS.md and the B1 ledger entry. The bulk "
+     "is the re-tie table, which is the load-bearing evidence of the "
+     "refutation -- score AND size at three k for three arms, because the "
+     "whole finding is that the apparent p@k win is mostly available to a "
+     "ranker that reads no features, and rule 2 requires the baseline beside "
+     "the number. Also the containment/Jaccard pair, which the experiment was "
+     "required to report together. A refutation a reader cannot check against "
+     "its own numbers is an assertion; the authoritative copy is "
+     "data/eval_fragment_link.json and the document names it."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

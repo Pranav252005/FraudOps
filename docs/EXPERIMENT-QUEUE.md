@@ -27,7 +27,7 @@ what the pre-registration is for.
 
 | # | experiment | why now | cost |
 |---:|---|---|---|
-| B1 | **Fragment linking: join candidates connected through ≤1 external intermediary and temporally compatible** | Named as direction 1 by `PHASE2-SEED-CHEAT-FINDINGS.md` and untested. Must be judged on containment **and** Jaccard together — linking grows candidates, and size is a measured confound. | ~1 day + replay |
+| ~~B1~~ | ~~Fragment linking: join candidates connected through ≤1 external intermediary and temporally compatible~~ | **DONE 2026-09-04 — REFUTED as scoped.** Built 161 in all three arms: zero rings newly reached. A large p@20/p@50 gain appeared but the size baseline nearly tripled with it and `score − size` goes to zero at k=20 and negative at k=50 — bug #8's pattern. Distinct rings ranked fell 58→55. Containment doubles (0.79 vs 0.39), so the mechanism assembles; it just does not pay. Not shipped. See [`FRAGMENT-LINK-FINDINGS.md`](FRAGMENT-LINK-FINDINGS.md). | done |
 | B2 | **Size-adaptive window: extend `WINDOW_MINUTES` for large structures only** | Direction 2 of the same document. Fragmentation is ring-size against window length and `WINDOW_MINUTES` is uniform. Harder than B1 because the window is a global object. | ~2 days |
 | B3 | **Score-free suppression key** | `suppress()` is NMS ordered by score, so the score decides which candidates exist. Ordering by a deterministic key instead would decouple pool from scorer and make every future scorer A/B valid on a fixed pool. Expect the headline to move; the point is that it becomes interpretable. | ~4h + replay |
 

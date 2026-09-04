@@ -305,9 +305,20 @@ def main() -> None:
     fired2 = d10["point"] < 0 and d10["excludes_zero"]
     print(f"2. p@10 delta {d10['point']:+.4f} [{d10['lo']:+.4f},{d10['hi']:+.4f}]"
           f"  -> {'FIRED' if fired2 else 'not fired'}")
-    d3 = arms_out["link"]["score_minus_size"]["10"]
-    print(f"3. score-size under link {'clear' if d3['excludes_zero'] else 'INCLUDES ZERO'}"
-          f"  -> {'not fired' if d3['excludes_zero'] else 'FIRED'}")
+    # Quantified over EVERY reported k, not just k=10. The pre-registration
+    # wrote this criterion as a k=10 check and the first run printed "not
+    # fired" while the margin had collapsed at k=20 and gone negative at
+    # k=50 -- a false negative caused by a criterion narrower than the rule it
+    # encodes. Bug #8's rule is about the score earning its place, at every
+    # depth that gets reported.
+    bad_k = [k for k in KS
+             if not arms_out["link"]["score_minus_size"][str(k)]["excludes_zero"]]
+    for k in KS:
+        d3 = arms_out["link"]["score_minus_size"][str(k)]
+        print(f"3. score-size under link k={k:<3}{d3['point']:+.4f} "
+              f"[{d3['lo']:+.4f},{d3['hi']:+.4f}]  "
+              f"{'clear' if d3['excludes_zero'] else 'INCLUDES ZERO'}")
+    print(f"   -> {'FIRED at k=' + str(bad_k) if bad_k else 'not fired'}")
     qm, qu = out["quality"]["merged"], out["quality"]["unmerged"]
     fired4 = qm["n"] > 0 and qm["mean_jaccard"] < qu["mean_jaccard"]
     print(f"4. merged jaccard {qm['mean_jaccard']:.4f} vs unmerged "
