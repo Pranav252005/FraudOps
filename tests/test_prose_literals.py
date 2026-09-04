@@ -249,6 +249,15 @@ LEDGER = [
      "B3 cost figures the pending shipping decision rests on. Every other "
      "figure in that document is a cross-reference to a findings doc rather "
      "than a restatement, which is why the increase is two and not eighty."),
+    ("2026-09-04", "graph-prior-art-plan", 2311,
+     "+35: docs/GRAPH-PRIOR-ART-PLAN.md. Most of it is the verification "
+     "table and the seed-sampling spike -- 15.3% of window edges, 259/237/230 "
+     "rings, 22 recoverable -- which is a NEW measurement computed in that "
+     "document from data/stream and reconciled against the evals, so there is "
+     "no upstream artifact to reference instead. The rest are the B3 arms "
+     "table restated once because the plan turns on it, and library sizes and "
+     "dates from the installability spike, which are facts about PyPI and "
+     "GitHub on a stated date rather than metrics of this system."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
