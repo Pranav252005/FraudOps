@@ -16,6 +16,7 @@ re-scored dozens of times per tick.
 """
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 from sentinel.config import (EXPAND_HOPS, EXPAND_MAX_DEGREE, EXPAND_MAX_NODES,
@@ -54,6 +55,23 @@ SEED_STRATEGIES = (SEED_PASSTHROUGH, SEED_GARGAML, SEED_DEGREE_BURST,
 # prereg/seed_predicate.md before any arm was run.
 SEED_BUDGET = 0.10
 
+# -- seed lookback (experiment P0) -------------------------------------------
+#
+# `seeds()` draws from the accounts touched in ONE tick, while the generator
+# expands into a WINDOW_MINUTES graph -- 1 hour against 72. Cycles fire every
+# 6 ticks, so five of every six ticks are never sampled for seeds at all.
+#
+# Measured over data/stream with the evals' own active_rings semantics: of 259
+# active rings, 237 are touched in a seed tick and 230 of those are also
+# pass-through (which is what the funnel reports as "seeded"). 22 rings are
+# reachable ONLY by widening this source, and none are unreachable from the
+# whole window. See prereg/seed_lookback.md and docs/GRAPH-PRIOR-ART-PLAN.md 2.
+#
+# 1 is the shipped value and is byte-identical to the original implementation:
+# with a lookback of 1 the deque is never populated and `seeds` reads the batch
+# it was handed, exactly as before.
+SEED_LOOKBACK_TICKS = 1
+
 
 @dataclass
 class Candidate:
@@ -77,6 +95,15 @@ class Candidate:
         return len(self.nodes)
 
 
+def _touched(batch) -> set[int]:
+    """Accounts appearing on either side of one tick's edges."""
+    out: set[int] = set()
+    if len(batch):
+        out.update(int(x) for x in batch.src)
+        out.update(int(x) for x in batch.dst)
+    return out
+
+
 def canonical_key(nodes) -> str:
     """Stable identity for a member set, independent of discovery order."""
     return ",".join(str(n) for n in sorted(nodes))
@@ -91,7 +118,8 @@ class CandidateGenerator:
                  prune_strategy: str = PRUNE_STRATEGY,
                  seed_strategy: str = SEED_PASSTHROUGH,
                  seed_budget: float = SEED_BUDGET,
-                 suppress_ordering: str = SUPPRESS_SCORE):
+                 suppress_ordering: str = SUPPRESS_SCORE,
+                 seed_lookback_ticks: int = SEED_LOOKBACK_TICKS):
         self.graph = graph
         self.registry = registry
         self.node_key = node_key
@@ -109,6 +137,14 @@ class CandidateGenerator:
         # shipped `score` ordering makes the scorer part of the generator; see
         # sentinel/detect/merge.py and prereg/suppression_key.md.
         self.suppress_ordering = suppress_ordering
+        if seed_lookback_ticks < 1:
+            raise ValueError("seed_lookback_ticks must be >= 1, got "
+                             f"{seed_lookback_ticks}")
+        self.seed_lookback_ticks = seed_lookback_ticks
+        # Populated only by `observe()`, and only when a lookback is asked for.
+        # A generator whose caller never calls `observe` behaves exactly as it
+        # did before this parameter existed.
+        self._recent_touched: deque = deque(maxlen=seed_lookback_ticks)
         self.last_seeds: set[int] = set()
         self.stats = {
             "seeds": 0, "expanded": 0, "deduped": 0,
@@ -127,6 +163,21 @@ class CandidateGenerator:
 
     # -- seeding --------------------------------------------------------------
 
+    def observe(self, batch) -> None:
+        """Record one tick's touched accounts, for the seed lookback.
+
+        Must be called on EVERY tick, not only on cycle ticks, or the lookback
+        counts cycles instead of ticks and silently means something six times
+        longer than it says.
+
+        A no-op at the shipped lookback of 1, so a caller that never calls this
+        gets exactly the pre-P0 behaviour -- which is what keeps the fixture
+        fingerprint and the shipped path unchanged.
+        """
+        if self.seed_lookback_ticks <= 1:
+            return
+        self._recent_touched.append(_touched(batch))
+
     def seeds(self, batch) -> set[int]:
         """Accounts touched this tick that are pass-through in the window.
 
@@ -135,10 +186,8 @@ class CandidateGenerator:
         lift. It is not selective on its own; selectivity comes from the
         structure and scoring stages, not from the seed.
         """
-        touched: set[int] = set()
-        if len(batch):
-            touched.update(int(x) for x in batch.src)
-            touched.update(int(x) for x in batch.dst)
+        touched = (set().union(*self._recent_touched)
+                   if self._recent_touched else _touched(batch))
         g = self.graph
         base = {n for n in touched
                 if g.out_adj.get(n) and g.in_adj.get(n)}
