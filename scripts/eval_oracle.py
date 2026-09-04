@@ -111,6 +111,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lightgbm import LGBMClassifier
 from sklearn.metrics import average_precision_score, f1_score
 
+from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, PRUNE_STRATEGY, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -122,6 +123,8 @@ from sentinel.learn.reranker import feature_names, vectorise
 from sentinel.stream.replay import Stream
 
 ROOT = Path(__file__).resolve().parent.parent
+#: The split in play. This module used `DATASET` without defining it.
+DATASET = _active_dataset()
 EVERY = 6
 KS = (10, 20, 50)
 MIN_RING_NODES = 3

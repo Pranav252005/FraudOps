@@ -87,6 +87,22 @@ class Dataset:
         name = "stream" if self.name == DEFAULT else f"stream-{self.name}"
         return root / "data" / name
 
+    def result_path(self, root: Path, filename: str) -> Path:
+        """Where a result JSON for this split belongs.
+
+        Same hazard as `stream_dir`, one layer further out: every eval script
+        writes a hardcoded `data/<name>.json`, so running one under a second
+        split would overwrite the first split's committed result in place and
+        report HI-Medium's numbers under HI-Small's filename.
+
+        HI-Small keeps the bare filename so every committed result stays where
+        it is; other splits get a suffixed one.
+        """
+        if self.name == DEFAULT:
+            return root / "data" / filename
+        stem, _, ext = filename.rpartition(".")
+        return root / "data" / f"{stem}-{self.name}.{ext}"
+
     def present(self, root: Path) -> bool:
         return all(p.is_file() for p in
                    (self.trans(root), self.accounts(root), self.patterns(root)))
@@ -220,6 +236,11 @@ def active_stream_dir(root: Path, env: dict | None = None) -> Path:
     thread the dataset through to its own path.
     """
     return active(env).stream_dir(root)
+
+
+def active_result_path(root: Path, filename: str, env: dict | None = None) -> Path:
+    """Result path for the split this process is running as."""
+    return active(env).result_path(root, filename)
 
 
 def count_rings(dataset: Dataset, root: Path) -> int:

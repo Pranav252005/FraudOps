@@ -22,7 +22,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sentinel.data.datasets import active_stream_dir
+from sentinel.data.datasets import active_result_path, active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
@@ -203,7 +203,7 @@ def main() -> None:
                 ratio_of_sums(f"score_hit_{k}", f"score_n_{k}"))
             for k in KS},
     }
-    (ROOT / "data" / "eval_phase2.json").write_text(json.dumps(out, indent=2))
+    active_result_path(ROOT, "eval_phase2.json").write_text(json.dumps(out, indent=2))
     print("\nwritten to data/eval_phase2.json")
 
 

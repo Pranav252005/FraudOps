@@ -29,9 +29,17 @@ import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.data.patterns import load_rings
 from sentinel.schema import account_key, amount_key
+
+#: The split being compiled. This module referenced `DATASET` at two call
+#: sites without ever defining it, so build_stream.py could not run at
+#: all -- a NameError, not a wrong answer, but invisible because the
+#: HI-Small stream was already compiled and nobody had cause to rebuild
+#: it. No test covers this script: it needs a multi-gigabyte CSV.
+DATASET = _active_dataset()
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "amlworld"

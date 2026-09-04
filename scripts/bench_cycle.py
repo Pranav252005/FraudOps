@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import PRUNE_STRATEGY, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -36,6 +37,8 @@ from sentinel.graph.window import WindowedGraph
 from sentinel.stream.replay import Stream
 
 ROOT = Path(__file__).resolve().parent.parent
+#: The split in play. This module used `DATASET` without defining it.
+DATASET = _active_dataset()
 EVERY = 6
 
 

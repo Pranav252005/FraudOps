@@ -39,11 +39,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from sentinel import config                                          # noqa: E402
+from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.corpus import CorpusKey, stratify_by_dataset           # noqa: E402
 from sentinel.eval import identity as ident                          # noqa: E402
 from sentinel.eval.bootstrap import bootstrap_ci                     # noqa: E402
 from sentinel.generators import synthetic_identity as gen            # noqa: E402
+
+#: The split in play. This module used `DATASET` without defining it.
+DATASET = _active_dataset()
 
 PREREG = ("prereg/synthetic_identity_fragmentation.md",)
 OUT = ROOT / "data" / "fragmentation.json"
