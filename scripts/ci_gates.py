@@ -96,7 +96,8 @@ def _synthetic_registry(stream):
     return reg
 
 
-def run_fixture(label_poison: int | None = None) -> dict:
+def run_fixture(label_poison: int | None = None,
+                suppress_ordering: str | None = None) -> dict:
     """Replay the committed fixture and return everything the gates read.
 
     `label_poison`, when given, is a seed. The fixture's `is_laundering`
@@ -143,8 +144,9 @@ def run_fixture(label_poison: int | None = None) -> dict:
     # cannot fail is worse than no gate: it converts an unmeasured path into a
     # green tick. The registry below is derived deterministically from the
     # fixture's own node keys, so it commits no data and reproduces exactly.
+    kw = {} if suppress_ordering is None else {"suppress_ordering": suppress_ordering}
     gen = CandidateGenerator(graph, registry=_synthetic_registry(stream),
-                             node_key=stream.key)
+                             node_key=stream.key, **kw)
 
     cycles = []
     for i, b in enumerate(stream.ticks(TICK_MINUTES, end=None)):

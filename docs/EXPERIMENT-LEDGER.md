@@ -235,3 +235,56 @@ proposed.
 generation one. That is post-hoc, needs its own pre-registration and a
 size-stratified baseline the size effect cannot win, and B3 (score-free
 suppression) should precede it.
+
+## 2026-09-04 — B3: a score-free suppression key
+
+**Predicted:** the shipped pool moves under a weight perturbation and all three
+score-free pools do not; candidates/cycle within ±5%; p@10 **falls** under
+`largest` and holds under `smallest`; `ranked@50` falls 0-15%; and — the risk
+named in advance — **`score − size` under `largest` at risk of losing CI-clarity
+at k=20 and k=50**, because `largest` is a size-ordered key and that is exactly
+what refuted B1 the same morning.
+
+**Observed:** the property holds in **both** directions. The shipped pool shifts
+by 4 of 525 fixture candidates (**0.76%**); `largest`, `smallest` and `key` are
+each bit-identical under the same perturbation, and differ from one another, so
+they are genuinely three arms.
+
+Cost, 34 cycles: `ranked@50` is **58 in every arm**. `smallest` is
+−0.0029 [−0.009, +0.000] at k=10 and includes zero at every k, with built
+161 → **162**. `largest` is the only arm with a CI-clear loss
+(−0.0147 [−0.026, −0.003] at k=10, −0.0059 [−0.012, −0.001] at k=20).
+
+**Verdict:** confirmed. The confound is real, the fix works, and the price is
+approximately nothing for the right key.
+
+**Cost:** 618 s for four arms — one generation per cycle, four suppressions of
+the same unsuppressed pool, so the arms are paired exactly rather than by
+arrangement.
+
+**Rule that came out of it:** **when a review proposes one member of a family,
+test the family.** The review named `largest` ("largest member set, tie-broken
+on canonical_key"). It is the worst of the three tested and the only one that
+costs anything measurable. Adopting it on recommendation would have taken the
+only avoidable loss available. The mechanism is the one this project keeps
+meeting: `largest` skews the surviving pool bigger, which lifts the size
+baseline (0.0882 → 0.0941 at k=10); `smallest` keeps the tightest
+representative, which is what the Jaccard floor rewards, and leaves the baseline
+flat.
+
+**Miss:** the risk I pre-registered did not materialise. `largest` moved the
+size baseline in the predicted direction but nowhere near far enough to break
+`score − size`, which stays CI-clear at every k in every arm. A miss in the
+favourable direction, recorded because that is the kind easiest not to mention.
+
+Kill criterion 2 was evaluated **at every reported k** — the defect in B1's
+pre-registration, applied rather than merely noted.
+
+**Promoted to:** not an invariant. `SUPPRESS_SCORE` remains the shipped default;
+flipping it would move every ring-level number in the repository and is a
+deliberate decision to be taken and re-rendered behind, not a side effect of an
+experiment.
+
+**Queue changes:** B3 struck. **If adopted, adopt `smallest`, not `largest`.**
+B3 was the blocker named at the end of the B1 and S1/S2 entries; with it
+measured, a scorer A/B can now be run on a pool the scorer did not help choose.

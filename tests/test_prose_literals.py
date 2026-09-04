@@ -233,6 +233,16 @@ LEDGER = [
      "required to report together. A refutation a reader cannot check against "
      "its own numbers is an assertion; the authoritative copy is "
      "data/eval_fragment_link.json and the document names it."),
+    ("2026-09-04", "B3-suppression-key", 2274,
+     "+86: docs/SUPPRESSION-KEY-FINDINGS.md and the B3 ledger entry. Four "
+     "arms x pool, built, ranked and three p@k, plus the paired-delta table "
+     "and the per-arm SIZE baseline table -- the latter is load-bearing, "
+     "because the finding is that the review's proposed key skews the pool "
+     "bigger and lifts that baseline while the recommended one does not, and "
+     "rule 2 requires the baseline beside the number. The invariance figures "
+     "(0.76% pool shift, 98.3-98.5% overlap) are the experiment's actual "
+     "claim and cannot be referenced away. Authoritative copies: "
+     "data/eval_suppression_key.json and tests/test_suppression_key.py."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

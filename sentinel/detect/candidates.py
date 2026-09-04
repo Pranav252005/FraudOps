@@ -21,7 +21,8 @@ from dataclasses import dataclass, field
 from sentinel.config import (EXPAND_HOPS, EXPAND_MAX_DEGREE, EXPAND_MAX_NODES,
                              PRUNE_STRATEGY)
 from sentinel.detect import features as F
-from sentinel.detect.merge import DEFAULT_THRESHOLD, suppress
+from sentinel.detect.merge import (DEFAULT_THRESHOLD, SUPPRESS_SCORE,
+                                   suppress)
 from sentinel.detect.motifs import Motifs, detect
 from sentinel.detect.layers import node_smurf_score
 from sentinel.detect.prune import prune as prune_candidate
@@ -89,7 +90,8 @@ class CandidateGenerator:
                  min_nodes: int = MIN_NODES,
                  prune_strategy: str = PRUNE_STRATEGY,
                  seed_strategy: str = SEED_PASSTHROUGH,
-                 seed_budget: float = SEED_BUDGET):
+                 seed_budget: float = SEED_BUDGET,
+                 suppress_ordering: str = SUPPRESS_SCORE):
         self.graph = graph
         self.registry = registry
         self.node_key = node_key
@@ -103,6 +105,10 @@ class CandidateGenerator:
                              f"expected one of {SEED_STRATEGIES}")
         self.seed_strategy = seed_strategy
         self.seed_budget = seed_budget
+        # Which member of an overlapping group survives suppression. The
+        # shipped `score` ordering makes the scorer part of the generator; see
+        # sentinel/detect/merge.py and prereg/suppression_key.md.
+        self.suppress_ordering = suppress_ordering
         self.last_seeds: set[int] = set()
         self.stats = {
             "seeds": 0, "expanded": 0, "deduped": 0,
@@ -288,7 +294,8 @@ class CandidateGenerator:
 
         if merge_threshold is not None:
             before = len(out)
-            out = suppress(out, threshold=merge_threshold)
+            out = suppress(out, threshold=merge_threshold,
+                           ordering=self.suppress_ordering)
             self.stats["suppressed"] += before - len(out)
         out.sort(key=lambda c: -c.score)
         return out

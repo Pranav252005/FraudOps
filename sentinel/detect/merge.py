@@ -22,6 +22,41 @@ from collections import defaultdict
 # routinely do.
 DEFAULT_THRESHOLD = 0.5
 
+# -- suppression ordering (experiment B3) ------------------------------------
+#
+# WHICH candidate survives an overlapping group is decided by this ordering, so
+# ordering by score means the SCORE PARTICIPATES IN GENERATION: changing a blend
+# weight changes the candidate set, not just its order. That is recorded in
+# docs/HANDOFF-NEXT.md, sentinel/corpus/__init__.py and
+# docs/graph-review/2026-09-04.md 2b, and it is what makes every scorer A/B in
+# this repository structurally confounded.
+#
+# A score-free key decouples the two: the pool becomes a function of the
+# generator alone, so a scorer experiment measures the scorer. The cost is that
+# the highest-scoring representative is no longer the one kept.
+#
+# `score` is the shipped default and is byte-identical to the original
+# implementation, including its lack of a tie-break -- Python's sort is stable,
+# so ties preserve insertion order, and reproducing the headline requires
+# reproducing that.
+SUPPRESS_SCORE = "score"
+SUPPRESS_LARGEST = "largest"      # the review's proposal
+SUPPRESS_SMALLEST = "smallest"
+SUPPRESS_KEY = "key"
+SUPPRESS_ORDERINGS = (SUPPRESS_SCORE, SUPPRESS_LARGEST, SUPPRESS_SMALLEST,
+                      SUPPRESS_KEY)
+
+# Every score-free ordering breaks ties on `canonical_key`, which is a pure
+# function of the member set, so the surviving pool cannot depend on set
+# iteration order or on PYTHONHASHSEED.
+_ORDER_KEYS = {
+    SUPPRESS_SCORE: lambda c: -c.score,
+    SUPPRESS_LARGEST: lambda c: (-len(c.nodes), c.key),
+    SUPPRESS_SMALLEST: lambda c: (len(c.nodes), c.key),
+    SUPPRESS_KEY: lambda c: c.key,
+}
+
+
 # Slack on the size pre-rejection bound (see `suppress`). Sizes are integers,
 # so anything well under 1.0 can only ever admit extra rivals to the exact
 # jaccard test -- never exclude one -- which is what keeps the optimisation
@@ -38,17 +73,29 @@ def jaccard(a: frozenset[int], b: frozenset[int]) -> float:
     return inter / len(a | b)
 
 
-def suppress(candidates, threshold: float = DEFAULT_THRESHOLD):
+def suppress(candidates, threshold: float = DEFAULT_THRESHOLD,
+             ordering: str = SUPPRESS_SCORE):
     """Greedy non-maximum suppression over candidate member sets.
 
-    Candidates must already be scored. Returns the surviving list, still in
-    score order, with `absorbed` populated on each survivor.
+    Candidates must already be scored. Returns the surviving list, in
+    `ordering` order, with `absorbed` populated on each survivor.
+
+    `ordering` decides WHICH member of an overlapping group survives, and
+    therefore which candidates exist at all. Under the shipped `score`
+    ordering that makes the scorer part of the generator; under any
+    score-free ordering the emitted member sets are a function of the
+    generator alone. See the constants above and prereg/suppression_key.md.
 
     An inverted node->candidate index keeps this near-linear: only candidates
     sharing at least one member can overlap at all, so the 14k x 14k pairwise
     comparison never happens.
     """
-    ordered = sorted(candidates, key=lambda c: -c.score)
+    try:
+        order_key = _ORDER_KEYS[ordering]
+    except KeyError:
+        raise ValueError(f"unknown suppression ordering {ordering!r}; "
+                         f"expected one of {SUPPRESS_ORDERINGS}") from None
+    ordered = sorted(candidates, key=order_key)
     by_node: dict[int, list[int]] = defaultdict(list)
     suppressed: set[int] = set()
     kept: list = []
