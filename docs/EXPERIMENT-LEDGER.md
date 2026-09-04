@@ -90,3 +90,47 @@ label-free view so the counter cannot travel at all — was **not** done, becaus
 it allocates per edge on a hot path. Left open rather than dropped.
 
 **Queue changes:** L1 struck.
+
+## 2026-09-04 — M1: the `is_hit` threshold sensitivity band
+
+**Predicted:** (1) p@10 at the loosest cell 1.2x-2.0x the shipped cell;
+(2) at the tightest, 0.4x-0.8x; (3) ring recall monotone in both thresholds;
+(4) `score - size` positive in all nine cells; (5) its interval excluding zero
+in **at least seven of nine**; (6) the shipped cell reproducing
+`data/eval_phase2.json`. I also pre-registered the bad news I expected — the
+tightest cell going underpowered, making the honest claim "holds in seven or
+eight of nine".
+
+**Observed:** 34 cycles, 259 rings, cycle-clustered paired bootstrap.
+`score - size` positive in **9/9** cells and CI-clear in **9/9** at k=10, and
+the same at k=20 — **18/18 intervals exclude zero**. Narrowest margin, at the
+tightest thresholds, +0.1382 [+0.0794, +0.1971]. p@10 spans 0.2118 to 0.3382
+across the grid, a factor of 1.60. Shipped cell reproduces the stored headline
+to the last digit.
+
+Prediction 1 **missed**: the loosest cell came in at 1.16x, just under the
+predicted range. The band is narrower than I expected, which is the more
+favourable direction and therefore the one a missed prediction is easiest to
+quietly not mention. It is recorded.
+
+The pre-registered bad news **did not arrive**. The tightest cell is CI-clear,
+not underpowered. The pessimistic prediction was wrong in the good direction.
+
+**Verdict:** confirmed — and stronger than pre-registered.
+
+**Cost:** 376s of replay, one pass, nine cells.
+
+**Rule that came out of it:** **the two thresholds are not independent knobs.**
+Jaccard is bounded above by containment (`|A∪R| ≥ |R|`), so a Jaccard floor at
+0.4 already implies containment ≥ 0.4 and `hit_share` is shadowed above that
+point — the (0.4, 0.4) and (0.5, 0.4) rows are identical to the last digit.
+Moving `min_jaccard` across the grid moves p@10 by 0.1206; moving `hit_share`
+moves it by at most 0.0176. Anyone reasoning about these as two dials is
+reasoning about roughly one.
+
+**Promoted to:** not promoted as a rule. It is a property of the metric rather
+than a practice, and it is recorded in `docs/THRESHOLD-BAND.md` where the metric
+is defined.
+
+**Queue changes:** M1 struck. Thresholds unchanged — `MIN_JACCARD` stays 0.3,
+and the 0.2 column is published rather than taken.

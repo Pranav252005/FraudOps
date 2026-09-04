@@ -197,6 +197,23 @@ LEDGER = [
      "every figure cannot be checked against the code it reviews. Not marked "
      "historical: the marker asserts a number narrates a PAST state, and "
      "these narrate the present."),
+    ("2026-09-04", "M1-threshold-band", 2025,
+     "+98: docs/THRESHOLD-BAND.md (86) and the M1 entry in "
+     "docs/EXPERIMENT-LEDGER.md (12). The ledger entry is append-only by "
+     "construction and quotes the run's own headline figures, which is what "
+     "makes it auditable against data/eval_threshold_band.json; a ledger that "
+     "said 'see the other file' for every number could not be checked. "
+     "The document is the pre-registered is_hit sensitivity "
+     "grid. Nearly all of it is one results table -- nine cells x score "
+     "p@10, size p@10, the paired delta, its interval, p@20 and ring recall "
+     "-- plus the six-row table scoring the run against its own "
+     "pre-registration. These are the measurement, not prose about it. "
+     "Rendering seventy-odd grid cells through results/metrics.json would "
+     "mean seventy-odd metric ids for a table read once, which trades a "
+     "ratchet increase for a worse artifact; the same judgement was made for "
+     "every earlier findings document (phase-2a +94, phase-3 +105). The "
+     "authoritative copy is data/eval_threshold_band.json and the document "
+     "names it."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

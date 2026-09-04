@@ -41,7 +41,7 @@ what the pre-registration is for.
 
 | # | experiment | why now | cost |
 |---:|---|---|---|
-| M1 | **`is_hit` threshold sensitivity band** | `HIT_SHARE` and `MIN_JACCARD` set every headline and no curve is published. A 3×3 grid reported once as a band beside the headline permanently closes "you tuned the floor". | ~2h |
+| ~~M1~~ | ~~`is_hit` threshold sensitivity band~~ | **DONE 2026-09-04.** 9/9 cells positive, 9/9 CI-clear at k=10 and at k=20. Shipped cell reproduces `eval_phase2.json` exactly. Thresholds unchanged. See [`THRESHOLD-BAND.md`](THRESHOLD-BAND.md). | done |
 | M2 | **Bootstrap Monte Carlo check** | One headline at a second seed and 10,000 resamples. Minutes. | ~30m |
 
 ## Blocked
