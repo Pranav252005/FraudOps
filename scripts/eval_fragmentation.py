@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from sentinel import config                                          # noqa: E402
+from sentinel.data.datasets import active_stream_dir
 from sentinel.corpus import CorpusKey, stratify_by_dataset           # noqa: E402
 from sentinel.eval import identity as ident                          # noqa: E402
 from sentinel.eval.bootstrap import bootstrap_ci                     # noqa: E402
@@ -228,7 +229,7 @@ def amlworld_coverage(every: int = 6) -> dict:
     from sentinel.graph.window import WindowedGraph
     from sentinel.stream.replay import Stream
 
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(
         DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=config.WINDOW_MINUTES)

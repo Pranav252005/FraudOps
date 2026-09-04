@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.case import Lane
 from sentinel.cases.manager import CaseManager
 from sentinel.cases.store import CaseStore
@@ -79,7 +80,7 @@ def precision_at(ordered, k):
 
 
 def main() -> None:
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(
         DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)

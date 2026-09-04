@@ -29,12 +29,13 @@ import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.data.patterns import load_rings
 from sentinel.schema import account_key, amount_key
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "amlworld"
-OUT = ROOT / "data" / "stream"
+OUT = active_stream_dir(ROOT)
 OUT.mkdir(parents=True, exist_ok=True)
 
 COLS = ["Timestamp", "From Bank", "Account", "To Bank", "Account.1",

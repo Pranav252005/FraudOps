@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
@@ -150,7 +151,7 @@ def annotate(rows: list[dict]) -> list[dict]:
 
 def main() -> None:
     rng = random.Random(7)
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)

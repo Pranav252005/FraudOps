@@ -31,6 +31,7 @@ import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.config import TICK_MINUTES, WINDOW_MINUTES
 from sentinel.stream.replay import Stream
 
@@ -51,7 +52,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args()
 
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
 
     # The slice must cover the window feeding the last cycle, so it starts a
     # full window before the first cycle's tick.

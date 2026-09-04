@@ -29,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.identity_case import build_identity_case_file      # noqa: E402
 from sentinel.detect import identity_features as IF                    # noqa: E402
 from sentinel.eval import identity as ident                            # noqa: E402
@@ -87,7 +88,7 @@ def escalation_profile(worlds: int = 5) -> dict:
 
 def amlworld_case_file():
     """The AMLworld side, if the compiled stream and a stored queue are here."""
-    stream_dir = ROOT / "data" / "stream"
+    stream_dir = active_stream_dir(ROOT)
     queue = ROOT / "data" / "queue"
     if not (stream_dir / "edges.parquet").exists() or not queue.exists():
         return None, None

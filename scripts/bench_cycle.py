@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.config import PRUNE_STRATEGY, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
@@ -64,7 +65,7 @@ def fingerprint(cands) -> list:
 
 
 def run(n_cycles: int, warm_ticks: int) -> dict:
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(
         DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)

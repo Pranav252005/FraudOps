@@ -111,6 +111,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lightgbm import LGBMClassifier
 from sklearn.metrics import average_precision_score, f1_score
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, PRUNE_STRATEGY, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
@@ -623,7 +624,7 @@ def train_and_report(records, ring_first_t, label: str,
 
 
 def main() -> None:
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(DATASET.accounts(ROOT))
 
     print("=== collecting candidate pool: AS-IS (real seeding, no cheat) ===")

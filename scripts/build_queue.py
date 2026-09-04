@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.manager import CaseManager
 from sentinel.cases.store import CaseStore
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 EVERY = 12
 CAPACITY = 12
 
-stream = Stream(ROOT / "data" / "stream")
+stream = Stream(active_stream_dir(ROOT))
 registry = AccountRegistry.load(DATASET.accounts(ROOT))
 graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
 gen = CandidateGenerator(graph, registry=registry, node_key=stream.key)

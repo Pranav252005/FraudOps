@@ -79,6 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lightgbm import LGBMClassifier, LGBMRanker
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.config import PRUNE_STRATEGY
 from sentinel.data.accounts import AccountRegistry
 from sentinel.eval.bootstrap import bootstrap_ci, paired_bootstrap_delta, ratio_of_sums
@@ -185,7 +186,7 @@ def build_arrays(records, names):
 
 
 def collect(cache: Path):
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(
         DATASET.accounts(ROOT))
     print("=== collecting candidate pool: AS-IS (real seeding) ===")

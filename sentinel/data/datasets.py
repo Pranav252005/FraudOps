@@ -70,6 +70,23 @@ class Dataset:
     def patterns(self, root: Path) -> Path:
         return root / "data" / "amlworld" / f"{self.name}_Patterns.txt"
 
+    def stream_dir(self, root: Path) -> Path:
+        """Where this split's compiled stream lives.
+
+        HI-Small keeps the bare `data/stream` it has always used, so every
+        committed result and the existing 57 MB compilation stay valid without
+        a rebuild. Every other split gets its own directory.
+
+        THIS EXISTS BECAUSE THE PATH WAS HARDCODED IN 27 FILES while the INPUT
+        already honoured SENTINEL_DATASET. Compiling a second split would have
+        overwritten the first in place, and every eval would then have read
+        HI-Medium's edges while reporting them under HI-Small's name -- no
+        crash, just a different dataset behind the same numbers. That is the
+        exact failure this module exists to refuse, one layer down.
+        """
+        name = "stream" if self.name == DEFAULT else f"stream-{self.name}"
+        return root / "data" / name
+
     def present(self, root: Path) -> bool:
         return all(p.is_file() for p in
                    (self.trans(root), self.accounts(root), self.patterns(root)))
@@ -194,6 +211,15 @@ def active(env: dict | None = None) -> Dataset:
             f"scripts/download_amlworld.bat, then register it in "
             f"sentinel/data/datasets.py.")
     return REGISTRY[name]
+
+
+def active_stream_dir(root: Path, env: dict | None = None) -> Path:
+    """The compiled-stream directory for the split this process is running as.
+
+    A single call every entry point can use, so no script has to remember to
+    thread the dataset through to its own path.
+    """
+    return active(env).stream_dir(root)
 
 
 def count_rings(dataset: Dataset, root: Path) -> int:

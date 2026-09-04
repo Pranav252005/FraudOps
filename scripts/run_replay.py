@@ -2,13 +2,14 @@
 import sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from sentinel.data.datasets import active_stream_dir
 from sentinel.stream.replay import Stream
 from sentinel.graph.window import WindowedGraph
 
 TICK = 60
 WINDOW = 72 * 60
 
-s = Stream(Path(__file__).resolve().parent.parent / "data" / "stream")
+s = Stream(active_stream_dir(Path(__file__).resolve().parent.parent))
 g = WindowedGraph(window_minutes=WINDOW)
 print(f"stream: {s.meta['n_edges']:,} edges, {s.meta['n_nodes']:,} nodes")
 print(f"span  : {s.when(s.t_min)}  ->  {s.when(s.t_max)}  ({s.n_ticks(TICK)} ticks of {TICK}min)")

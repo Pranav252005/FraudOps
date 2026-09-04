@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
@@ -72,7 +73,7 @@ def hits(nodes, rings, strict=True):
 
 def main() -> None:
     import random
-    stream = Stream(ROOT / "data" / "stream")
+    stream = Stream(active_stream_dir(ROOT))
     registry = AccountRegistry.load(DATASET.accounts(ROOT))
     graph = WindowedGraph(window_minutes=WINDOW_MINUTES)
     gens = {s: CandidateGenerator(graph, registry=registry, node_key=stream.key,

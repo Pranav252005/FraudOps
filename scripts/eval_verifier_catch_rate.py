@@ -45,6 +45,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.evidence import build_case_file
 from sentinel.cases.store import CaseStore
 from sentinel.config import WINDOW_MINUTES
@@ -54,7 +55,7 @@ from sentinel.narrative.str_narrative import generate_and_verify
 
 OUT = ROOT / "data" / "eval_verifier_catch_rate.json"
 CASES = ROOT / "data" / "cases"
-STREAM = ROOT / "data" / "stream"
+STREAM = active_stream_dir(ROOT)
 
 RUN_ID = "verifier-catch-rate"
 SEED = 7
