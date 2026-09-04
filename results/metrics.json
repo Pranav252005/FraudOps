@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_by": "scripts/collect_metrics.py",
-  "generated_at": "2026-09-04T00:15:18",
-  "commit": "8ccc3ca365457aebaafdd47d6d5ef7a66601a15f",
+  "generated_at": "2026-09-04T11:37:21",
+  "commit": "6a68a723fd00d11b4b674467940bfac19ba159e4",
   "metrics": {
     "supervised_p_at_10": {
       "id": "supervised_p_at_10",
@@ -1049,6 +1049,6 @@
     "citation_is_full_population": true,
     "citation_kill_criterion_fired": false,
     "citation_member_recall_is_degenerate": true,
-    "n_prose_literals": 1917
+    "n_prose_literals": 1927
   }
 }

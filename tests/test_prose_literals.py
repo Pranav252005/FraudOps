@@ -186,6 +186,17 @@ LEDGER = [
      "preceding non-blank line and these live inside a table row, where that "
      "anchor would attach to a different row and drift. The live catch rates "
      "are placeholders rendered from results/metrics.json."),
+    ("2026-09-04", "graph-review", 1927,
+     "+10: docs/graph-review/2026-09-04.md (8) and docs/EXPERIMENT-QUEUE.md "
+     "(2). The eight are values the review quotes back from measurements that "
+     "are still current -- the two rule-5 interval widths, the H2 "
+     "fragmentation shares, the size-baseline seeding ratio, the "
+     "all-positive-group cost, and BlazingAML's published speedup, which is "
+     "someone else's number and cannot go stale here. Quoted rather than "
+     "referenced because a review that says 'see the other document' for "
+     "every figure cannot be checked against the code it reviews. Not marked "
+     "historical: the marker asserts a number narrates a PAST state, and "
+     "these narrate the present."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
