@@ -103,6 +103,7 @@ class CandidateGenerator:
                              f"expected one of {SEED_STRATEGIES}")
         self.seed_strategy = seed_strategy
         self.seed_budget = seed_budget
+        self.last_seeds: set[int] = set()
         self.stats = {
             "seeds": 0, "expanded": 0, "deduped": 0,
             "too_small": 0, "emitted": 0, "suppressed": 0,
@@ -209,6 +210,11 @@ class CandidateGenerator:
         out: list[Candidate] = []
 
         seeds = self.seeds(batch) if seed_override is None else set(seed_override)
+        # Exposed so an evaluation harness can report the seed set this
+        # cycle actually used without calling `seeds()` a second time --
+        # which would double-count the budget counters and quietly break
+        # the equal-spend property the S1/S2 attribution rests on.
+        self.last_seeds = seeds
         self.stats["seeds"] += len(seeds)
 
         if expansion_cache is not None:
