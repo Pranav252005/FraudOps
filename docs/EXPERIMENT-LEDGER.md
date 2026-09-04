@@ -288,3 +288,55 @@ experiment.
 **Queue changes:** B3 struck. **If adopted, adopt `smallest`, not `largest`.**
 B3 was the blocker named at the end of the B1 and S1/S2 entries; with it
 measured, a scorer A/B can now be run on a pool the scorer did not help choose.
+
+## 2026-09-05 — P0: widening the seed source
+
+**Predicted:** newly seeded +15 to +22; built +8 to +20; **ranked@50 +0 to +6**;
+p@10 paired CI **including zero**; `score − size` CI-clear at k=10/20/50; ρ(score,
+size) unchanged; cost ≈4.3×; dedup rising materially so cost is sublinear in
+seeds.
+
+**Observed**, 34 cycles, `lb1` reproducing the shipped baseline exactly
+(230/161/58, p@10 0.2912) so the deviation policy is satisfied:
+
+- seeded **230 → 258** of 259; built **161 → 218** (+35%); **every typology
+  gained**, including BIPARTITE 5 → 16 and STACK 9 → 14 — the two that S1 and
+  B1 both targeted and neither moved;
+- p@10 **0.2912 → 0.5500**, +0.2588 [+0.182, +0.335]; p@20 +0.2426
+  [+0.199, +0.290]; p@50 +0.1076 [+0.084, +0.132]. All CI-clear;
+- `score − size` clear at every k and **widening** (+0.2029 → +0.5324 at k=10);
+  ρ(score, size) **falls** 0.2714 → 0.1987. Not a size artifact;
+- **`ranked@50` 58 → 61**, and build→rank retention **falls** 0.360 → 0.280;
+- cost **4.85×**; dedup did **not** absorb the seeds (65,283 candidates from
+  68,235), so cost is linear.
+
+**Verdict:** confirmed, and the first change in two days to move a headline
+number — but the output moved by three rings.
+
+**Cost:** 2,547 s for two arms.
+
+**Rule that came out of it:** **p@k and distinct-rings-surfaced can move by
+very different amounts, and the ratio is the tell.** Hit slots per distinct ring
+in the top 50 went 2.2 → 5.1: the queue became twice as redundant, so most of
+the precision gain is the same rings occupying more slots. Any future p@k claim
+must be quoted beside distinct rings ranked, exactly as rule 2 requires the size
+baseline.
+
+Second rule: **an argument named in a pre-registration and then dismissed as
+"not evidence" is still a prediction, and should be forecast from.** The prereg
+distinguished S1's extra seeds (same hour) from P0's (hours never sampled), then
+predicted the S1 outcome anyway. The distinction was the whole result.
+
+**Miss:** four of eight predictions missed, nearly all in the favourable
+direction. Only `ranked@50` — the number the prereg said mattered — landed
+inside its range.
+
+**Promoted to:** not an invariant. `SEED_LOOKBACK_TICKS` stays 1; shipping needs
+the `observe()` guard (queued as P0b) because the parameter is inert without it
+and fails silently.
+
+**Queue changes:** P0 struck. P0b (observe guard) and P0c (lb24 full sweep)
+added. **P0 moves the bottleneck: build loss falls from 26.64 to roughly 12
+points, so essentially all remaining loss is ranking — where the oracle says a
+supervised model on current features buys 1.12×. The feature problem is now the
+whole problem.**

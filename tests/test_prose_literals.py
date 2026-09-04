@@ -258,6 +258,14 @@ LEDGER = [
      "table restated once because the plan turns on it, and library sizes and "
      "dates from the installability spike, which are facts about PyPI and "
      "GitHub on a stated date rather than metrics of this system."),
+    ("2026-09-05", "P0-seed-lookback", 2385,
+     "+74: docs/SEED-LOOKBACK-FINDINGS.md and the P0 ledger entry. The bulk "
+     "is the two-arm result table, the per-typology built AND ranked tables "
+     "-- both are needed because the finding is that they disagree, built +57 "
+     "against ranked +3 -- and the slots-per-ring derivation (2.2 vs 5.1) "
+     "that shows most of the precision gain is redundancy. Also the lb24 cost "
+     "table, which is the evidence for a declared deviation and cannot be "
+     "referenced away. Authoritative copy: data/eval_seed_lookback.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
