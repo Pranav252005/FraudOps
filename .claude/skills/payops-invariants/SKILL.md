@@ -5,9 +5,12 @@ description: The non-negotiable rules any change to sentinel must satisfy — me
 
 # Invariants
 
-Eight rules. Seven are in `docs/STANDING-RULES.md` with their enforcement
-status stated honestly; the eighth is proposed in
-`docs/graph-review/2026-09-04.md` §Leakage and is not yet mechanised.
+Eight rules, all mechanised. Seven are in `docs/STANDING-RULES.md` with
+their enforcement status stated honestly. The eighth was proposed in
+`docs/graph-review/2026-09-04.md` §Leakage and was mechanised on 2026-09-04
+(experiment L1): a static reachability walk in
+`tests/test_measured_path_closure.py` and a runtime poison test in
+`tests/test_label_poison.py`, wired as the `label_poison` CI gate.
 
 Read `docs/STANDING-RULES.md` before relying on this file — it is the source of
 truth and it records where enforcement is *thin*. This file is the working
@@ -24,7 +27,7 @@ checklist, not a replacement.
 | 5 | Cluster the bootstrap on the unit the trials nest in; where they nest in rings, report the **wider** of cycle- and ring-clustered | `Metric` refuses any `ci_method` outside the three permitted names. A bare "bootstrap" is not a reported interval. |
 | 6 | `sentinel.llm` out of every measured path | `tests/test_import_boundaries.py` (runtime) + `tests/test_measured_path_closure.py` (static AST from every entry point). Both carry a negative control. |
 | 7 | Record negative results; never delete them | `docs/negative-results/`. Truncation-in-place is a known gap. |
-| 8 | **(proposed)** The ground-truth label must not be reachable from the detect path | `PairAgg.laundering` is carried on every live edge and `subgraph_edges` hands the whole `PairAgg` to `motifs.detect` and `features.build`. Nothing currently reads it and nothing currently stops it. |
+| 8 | The ground-truth label must not be reachable from the detect path | `PairAgg.laundering` is carried on every live edge and `subgraph_edges` hands the whole `PairAgg` to `motifs.detect` and `features.build`. Enforced twice: statically (no `.laundering` on any measured path outside `sentinel/graph/window.py`; no `laundering` **or** `is_laundering` anywhere in `sentinel/detect` or `sentinel/learn`) and at runtime (randomise the label on every fixture edge, demand a bit-identical fingerprint). Both carry negative controls, because a guard that cannot fail is not evidence. |
 
 ## The three failure modes this repo has actually shipped
 

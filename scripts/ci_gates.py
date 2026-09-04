@@ -96,8 +96,20 @@ def _synthetic_registry(stream):
     return reg
 
 
-def run_fixture() -> dict:
-    """Replay the committed fixture and return everything the gates read."""
+def run_fixture(label_poison: int | None = None) -> dict:
+    """Replay the committed fixture and return everything the gates read.
+
+    `label_poison`, when given, is a seed. The fixture's `is_laundering`
+    column is replaced with a deterministic random draw before replay, so
+    every ground-truth label the detector could possibly reach is wrong.
+    The pipeline's output must not move. See tests/test_label_poison.py --
+    this is the runtime half of rule 8, and it is the half a rename cannot
+    defeat.
+
+    The `ring` column is left alone on purpose. It is the evaluation's own
+    ground truth, read by `_active_rings` to score against, and poisoning it
+    would break the metric rather than test the detector.
+    """
     from sentinel.config import TICK_MINUTES, WINDOW_MINUTES
     from sentinel.detect.candidates import CandidateGenerator
     from sentinel.eval.funnel import is_hit
@@ -105,6 +117,17 @@ def run_fixture() -> dict:
     from sentinel.stream.replay import Stream
 
     stream = Stream(FIXTURE)
+    if label_poison is not None:
+        import numpy as _np
+        original = stream.is_laundering.copy()
+        stream.is_laundering = _np.random.default_rng(label_poison).integers(
+            0, 2, size=original.shape, dtype=original.dtype)
+        # A poison that happened to reproduce the original labels would make
+        # the test vacuous, so the perturbation is asserted rather than
+        # assumed. The fixture has ~10^5 edges; equality here means the
+        # override did not take.
+        assert not _np.array_equal(original, stream.is_laundering), (
+            "label poison produced the original labels; the override is inert")
     meta = stream.meta
     every = meta.get("every_ticks", 6)
     start = meta.get("start_tick", 36)
@@ -457,11 +480,45 @@ def gate_cost() -> int:
     return 0
 
 
+def gate_label_poison(verbose=True) -> int:
+    """Rule 8 (proposed): randomise the ground-truth label, demand the same answer.
+
+    `PairAgg.laundering` rides on every edge in the live window and
+    `subgraph_edges` hands the whole aggregate to `motifs.detect` and
+    `features.build`. Nothing reads it. This is what enforces that, without
+    depending on how a future read might be spelled -- an alias, a `getattr`
+    with a computed name, or an `asdict()` all move the fingerprint.
+
+    The static half lives in `tests/test_measured_path_closure.py` and fails
+    faster with a line number; this half is the one a rename cannot defeat.
+    Both are needed. The negative control -- proof that this gate can fail --
+    is in `tests/test_label_poison.py`, because it needs monkeypatching.
+    """
+    base = fingerprint(run_fixture())
+    bad = []
+    for seed in (1, 20260904):
+        fp = fingerprint(run_fixture(label_poison=seed))
+        if verbose:
+            print(f"  seed {seed:>9}: {fp[:16]} "
+                  f"{'ok' if fp == base else 'CHANGED'}")
+        if fp != base:
+            bad.append(seed)
+    if bad:
+        print(f"FAIL label_poison: output moved under poisoned labels {bad}. "
+              f"Something on the detect path reads the ground truth.")
+        return 1
+    if verbose:
+        print(f"  clean      : {base[:16]}")
+        print("PASS label_poison: output is independent of the label.")
+    return 0
+
+
 GATES = {
     "determinism": lambda: gate_determinism(),
     "retie": lambda: gate_retie(),
     "regression": gate_regression,
     "cost": gate_cost,
+    "label_poison": lambda: gate_label_poison(),
 }
 
 

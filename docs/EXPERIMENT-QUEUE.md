@@ -13,7 +13,7 @@ what the pre-registration is for.
 
 | # | experiment | why now | cost |
 |---:|---|---|---|
-| L1 | **Label-poison test + static reachability scan for `PairAgg.laundering`** | The ground-truth label rides on every live edge and is handed to `motifs.detect` and `features.build`. Nothing reads it; nothing stops it. Rule 6 already has the exact machinery to enforce this. | ~1h, no replay |
+| ~~L1~~ | ~~Label-poison test + static reachability scan for `PairAgg.laundering`~~ | **DONE 2026-09-04.** Both halves shipped with negative controls; now standing rule 8 and the `label_poison` CI gate. See the ledger entry. | done |
 | L2 | **Purge-and-embargo variant of `ring_time_split`** | The current split is time-ordered on negatives only; train-assigned rings keep post-`split_t` candidates. An embargo buys time-ordering on positives at a known cost in rows. Report both splits, not a replacement. | ~2h + refit |
 
 ## Stage: seeded (four typologies at 0%)
