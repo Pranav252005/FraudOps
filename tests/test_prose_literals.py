@@ -243,6 +243,12 @@ LEDGER = [
      "(0.76% pool shift, 98.3-98.5% overlap) are the experiment's actual "
      "claim and cannot be referenced away. Authoritative copies: "
      "data/eval_suppression_key.json and tests/test_suppression_key.py."),
+    ("2026-09-04", "session-handoff", 2276,
+     "+2: docs/HANDOFF-2026-09-04.md. A handoff that could not name the "
+     "numbers a decision hangs on would not be a handoff -- the two are the "
+     "B3 cost figures the pending shipping decision rests on. Every other "
+     "figure in that document is a cross-reference to a findings doc rather "
+     "than a restatement, which is why the increase is two and not eighty."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
