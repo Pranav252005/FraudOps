@@ -275,6 +275,14 @@ LEDGER = [
      "0% flip rates, which are the evidence for the finding that endpoint "
      "proximity does NOT predict instability. Authoritative copy: "
      "data/eval_bootstrap_mc.json."),
+    ("2026-09-05", "dataset-constants", 2459,
+     "+11: the ledger entry for deriving the per-split constants. The figures "
+     "are the three splits' boundaries and tail statistics -- 715 @ 0.912 for "
+     "HI-Small, which is the exact reproduction of Phase 0 that validates the "
+     "rule, and HI-Medium's day 16 against HI-Small's 10, which is the whole "
+     "finding. A ledger that said 'see datasets.py' for those could not be "
+     "audited against the run that produced them. Authoritative copy: "
+     "data/dataset_constants.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

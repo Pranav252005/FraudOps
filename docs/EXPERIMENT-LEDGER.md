@@ -433,3 +433,67 @@ conclusion affected. Kill criterion 3 (>25%) came nowhere near firing.
 endpoint is within ~0.005 of zero and recompute those at B ≥ 10,000, rather
 than raising the default globally. Not done here because it touches
 `bootstrap.py`, through which every number in this repository flows.
+
+## 2026-09-05 — deriving the per-split constants (unblocking the full corpus)
+
+**Predicted:** HI-Small re-derived exactly (10 and 0.733) *or the exercise
+stops*; LI-Small cutting somewhere in days 8-12; HI-Medium cutting **later**
+than 10; both ceilings in 0.60-0.85; ≥90% of each split's rings surviving the
+boundary.
+
+**Observed.** The leak-boundary rule reproduces Phase 0 **exactly** — day 10, a
+715-edge tail carrying 652 laundering edges — but only after excluding
+self-loops, which `build_stream.py` drops and my first attempt did not. That
+mismatch (1,108 edges vs 715) is what surfaced the omission.
+
+| split | edges | days | boundary | tail | rings | ceiling |
+|---|---:|---|---:|---|---:|---:|
+| HI-Small | 4,487,133 | 0-17 | **10** | 715 @ 0.912, 792× | 363/370 inside | 0.777* |
+| LI-Small | 6,924,049 | 0-16 | **10** | 148 @ 0.905, 1555× | 116/117 | 0.810 |
+| HI-Medium | 31,898,238 | 0-27 | **16** | 4,503 @ 0.904, 755× | 2,721/2,756 | 0.758 |
+
+**HI-Medium's boundary is day 16, not 10.** Borrowing HI-Small's constant would
+have silently discarded six days of good data with nothing crashing — the exact
+failure `datasets.py` was written to refuse, now demonstrated with a number
+rather than argued.
+
+Every prediction hit **except the ceiling control, which failed and is the more
+important finding.**
+
+**Verdict:** the leak-boundary rule is confirmed and both splits are unblocked.
+The ceiling rule is **refuted as a reproduction of Phase 0.**
+
+**Cost:** three CSV scans, 41.8M rows.
+
+**Rule that came out of it:** **`STRUCTURAL_RECALL_CEILING = 0.733` cannot be
+re-derived from its own recorded provenance.** Its string says "266 of the 363
+evaluable rings have more than two accounts visible in-window"; four readings —
+ring size >2 with and without self-loops, and >2 accounts co-visible in a 72h
+window with and without — give 278-282, never 266. A committed constant that
+nobody can reconstruct from what the repo records about it is this project's
+characteristic defect wearing a number.
+
+It does not gate correctness: `tests/test_corpus.py` states the ceiling is "a
+reported property, not an input". `eval_end_day`, which *does* gate
+correctness, is fully reproducible. So the verdict is split rather than blanket,
+and the derived ceilings are registered under an explicitly stated definition
+with a comment saying a cross-split comparison is invalid until HI-Small's is
+re-derived.
+
+**Deviation, declared:** the pre-registration said a failed control means "no
+other split may be derived with it". I narrowed that to the ceiling only, and
+proceeded on the boundary, because the two constants are independent and only
+one failed. That is a post-hoc narrowing of my own kill criterion and it is
+recorded as one.
+
+**Promoted to:** not an invariant. Registered in `sentinel/data/datasets.py`
+with provenance; `tests/test_datasets.py` rewritten so the refusal is asserted
+against a synthetic split rather than against whichever splits happen to be
+underived, plus a new test pinning HI-Medium's 16 against HI-Small's 10.
+
+**Queue changes:** none struck. **Added D1:** re-derive HI-Small's ceiling under
+the stated definition so all three splits report one quantity — it changes a
+committed number that appears in prose repo-wide, so it needs its own pass.
+**Added D2:** build the HI-Medium stream and evaluate on it. HI-Medium is 7.4×
+HI-Small's rings (2,756 vs 370) and is the only split that could materially
+narrow the intervals this project keeps hitting.

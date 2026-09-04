@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.data.datasets import (DEFAULT, ENV_VAR, REGISTRY,
+from sentinel.data.datasets import (Dataset, DEFAULT, ENV_VAR, REGISTRY,
                                     DatasetNotDerived, active, count_rings)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -53,16 +53,46 @@ class TestHiSmallDidNotMove:
 class TestTheRefusalHasBothArms:
 
     def test_an_underived_split_refuses_with_the_command_to_fix_it(self):
-        for name in ("LI-Small", "HI-Medium"):
-            d = REGISTRY[name]
-            with pytest.raises(DatasetNotDerived) as exc:
-                d.require_eval_end_day()
-            msg = str(exc.value)
-            # The message has to carry the remedy, or it is just an error.
-            assert "derive_dataset_constants.py" in msg
-            assert name in msg
-            with pytest.raises(DatasetNotDerived):
-                d.require_structural_recall_ceiling()
+        """Asserted against a SYNTHETIC split, not a registered one.
+
+        This test used to name LI-Small and HI-Medium, and it broke the moment
+        they were derived on 2026-09-05 -- a test that fails because the
+        project made progress is a test pinned to the wrong thing. The property
+        worth keeping is that an underived split refuses AND says how to fix
+        itself; that property is about the mechanism, not about which splits
+        happen to be characterised today.
+        """
+        d = Dataset(name="Fake-Split", corpus_key="amlworld-fake")
+        with pytest.raises(DatasetNotDerived) as exc:
+            d.require_eval_end_day()
+        msg = str(exc.value)
+        # The message has to carry the remedy, or it is just an error.
+        assert "derive_dataset_constants.py" in msg
+        assert "Fake-Split" in msg
+        with pytest.raises(DatasetNotDerived):
+            d.require_structural_recall_ceiling()
+
+    def test_every_registered_split_is_now_derived(self):
+        """The complement, and the thing that actually changed today.
+
+        Both halves matter: the mechanism must refuse an underived split, and
+        the registry must no longer contain one. If a future split is added
+        without constants this fails loudly rather than waiting for an
+        evaluation to be run against a borrowed boundary.
+        """
+        for name, d in REGISTRY.items():
+            assert d.require_eval_end_day() is not None, name
+            assert d.require_structural_recall_ceiling() is not None, name
+
+    def test_hi_medium_does_not_borrow_hi_smalls_boundary(self):
+        """The concrete reason this module refuses to default.
+
+        HI-Medium's leak begins on day 16. Carrying HI-Small's 10 across would
+        have silently discarded six days of good data with nothing crashing,
+        which is exactly the failure the refusal exists to prevent.
+        """
+        assert REGISTRY["HI-Medium"].require_eval_end_day() == 16
+        assert REGISTRY["HI-Small"].require_eval_end_day() == 10
 
     def test_a_derived_split_does_not_refuse(self):
         """The other arm. Without it, a registry where EVERY split raised

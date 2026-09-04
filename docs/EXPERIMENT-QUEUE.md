@@ -58,3 +58,10 @@ what the pre-registration is for.
 | ~~P0~~ | ~~Widen the seed source beyond one tick~~ | **DONE 2026-09-05.** seeds() drew from 1h of a 72h window. lb6: seeded 230→258 of 259, built 161→218, **every typology gained** incl. BIPARTITE +11 and STACK +5, p@10 0.2912→0.5500 CI-clear. But **ranked@50 only 58→61** and build→rank retention FELL 0.360→0.280, at 4.85x cost. Not shipped — decision pending. See [`SEED-LOOKBACK-FINDINGS.md`](SEED-LOOKBACK-FINDINGS.md). | done |
 | ~~P0b~~ | ~~Guard: `observe()` must be called when lookback > 1~~ | **DONE 2026-09-05.** Three guards, each with a negative control: omission (`seeds()` refuses an empty lookback), non-contiguity (`observe()` refuses a skipped tick, which is what would make lookback 6 silently mean 36h), and out-of-step observe/generate. Shipped lookback 1 is untouched — no observe, no timestamps, no contiguity required. `stats["observed_ticks"]` added so a harness can assert its own wiring. | done |
 | P0c | **lb24 over the full 34 cycles** | Measured at 17.62x cost for +1 ring in a single cycle and dropped as a declared deviation. No claim made about it over a full run. | ~3h |
+
+## Stage: corpus (opened 2026-09-05)
+
+| # | experiment | why now | cost |
+|---:|---|---|---|
+| D2 | **Build the HI-Medium stream and evaluate on it** | Now unblocked: `eval_end_day=16` derived and registered. **2,756 rings against HI-Small's 370** — the only split that could materially narrow this project's intervals, which are the binding constraint on every conclusion it draws. 3.03 GB source, 31.9M edges. | stream ~15m; eval hours |
+| D1 | **Re-derive HI-Small's `structural_recall_ceiling`** | The committed 0.733 cannot be reproduced from its own provenance (four readings give 278-282 of 363, never 266). Until it is re-derived under the stated definition, cross-split ceiling comparison is invalid. Changes a number that appears in prose repo-wide. | ~2h |

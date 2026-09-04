@@ -121,8 +121,56 @@ HI_SMALL = Dataset(
 # more than an order of magnitude across these three, which is the whole reason
 # the second one is worth having and the reason none of them may borrow the
 # first one's boundary.
-LI_SMALL = Dataset(name="LI-Small", corpus_key="amlworld-li-small")
-HI_MEDIUM = Dataset(name="HI-Medium", corpus_key="amlworld-hi-medium")
+# Derived 2026-09-05 by `scripts/derive_dataset_constants.py` under the rule
+# fixed in prereg/dataset_constants.md BEFORE either split was scanned. The
+# leak-boundary rule was validated first against HI-Small, which it reproduces
+# exactly: day 10, a 715-edge tail carrying 652 laundering edges.
+#
+# READ THIS BEFORE COMPARING CEILINGS ACROSS SPLITS. `structural_recall_ceiling`
+# below is NOT the same quantity as HI-Small's 0.733. HI-Small's committed value
+# cannot be re-derived from its own recorded provenance -- four readings of
+# "266 of the 363 evaluable rings have more than two accounts visible
+# in-window" give 278-282, never 266 (docs/DATASET-CONSTANTS-FINDINGS.md). The
+# values here use the stated definition: rings beginning before the boundary
+# with more than two distinct accounts, self-loops excluded. Under that same
+# definition HI-Small is 0.777, not 0.733. **A cross-split ceiling comparison is
+# therefore invalid until HI-Small's is re-derived.** The constant is a reported
+# property and not an input to anything (tests/test_corpus.py), so this blocks
+# no measurement -- unlike eval_end_day, which gates correctness and IS
+# reproducible.
+LI_SMALL = Dataset(
+    name="LI-Small",
+    corpus_key="amlworld-li-small",
+    eval_end_day=10,
+    structural_recall_ceiling=0.810,
+    provenance=(
+        "Derived 2026-09-05, prereg/dataset_constants.md. 6,924,049 edges "
+        "(self-loops excluded) over days 0-16, base rate 0.000582. The tail "
+        "from day 10 holds 148 edges at a 0.9054 laundering rate, 1555x the "
+        "base rate, so the boundary is day 10. 116 of 117 rings begin inside "
+        "it and 94 of those have more than two accounts. NOTE: the ceiling "
+        "uses the stated definition, which is NOT the one behind HI-Small's "
+        "0.733 -- see the comment above."),
+)
+
+# HI-Medium's boundary is day 16, NOT day 10. This is the concrete
+# demonstration of why this module refuses to default: carrying HI-Small's 10
+# onto HI-Medium would have silently discarded days 10-15 -- six days of good
+# data -- and nothing would have crashed.
+HI_MEDIUM = Dataset(
+    name="HI-Medium",
+    corpus_key="amlworld-hi-medium",
+    eval_end_day=16,
+    structural_recall_ceiling=0.758,
+    provenance=(
+        "Derived 2026-09-05, prereg/dataset_constants.md. 31,898,238 edges "
+        "(self-loops excluded) over days 0-27, base rate 0.001198. The tail "
+        "from day 16 holds 4,503 edges at a 0.9043 laundering rate, 755x the "
+        "base rate, so the boundary is day 16 -- six days later than "
+        "HI-Small's. 2,721 of 2,756 rings begin inside it and 2,063 of those "
+        "have more than two accounts. NOTE: the ceiling uses the stated "
+        "definition, which is NOT the one behind HI-Small's 0.733."),
+)
 
 REGISTRY = {d.name: d for d in (HI_SMALL, LI_SMALL, HI_MEDIUM)}
 
