@@ -20,6 +20,7 @@ is equivalence, not behaviour:
 """
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 
@@ -163,3 +164,95 @@ def test_the_scalars_carried_alongside_match_the_candidate():
         assert float(rec["size"]) == float(c.size)
         assert rec["degree"] == float(c.features.max_fan)
         assert rec["key"] == c.key
+NL = chr(10)
+
+
+def _stored_and_read_keys(src: str):
+    """(keys put into an appended record, keys read anywhere in the module)."""
+    tree = ast.parse(src)
+    stored, read = set(), set()
+    for n in ast.walk(tree):
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "append" and n.args
+                and isinstance(n.args[0], ast.Dict)):
+            for k in n.args[0].keys:
+                if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                    stored.add(k.value)
+        if (isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Constant)
+                and isinstance(n.slice.value, str)):
+            read.add(n.slice.value)
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "get" and n.args
+                and isinstance(n.args[0], ast.Constant)):
+            read.add(n.args[0].value)
+    return stored, read
+
+
+def test_the_pool_retains_no_field_that_nothing_reads():
+    """The general form of the defect that actually killed the HI-Medium run.
+
+    D3b removed the 10-17 GB `Candidate` and left `overlap` and `ring_members`
+    stored beside it "so a caller can label this pool a SECOND way" -- a use
+    that did not exist. `ring_members` is a SET OF NODE KEYS PER RECORD:
+    728 bytes for a ring of 5-10 members and 2,264 for one of 20-40, against
+    544 for the float64 feature vector the whole change was written to protect.
+    Across HI-Medium's ~2.3M-record pool that is multiple GB of dead weight.
+
+    The run died at cycle 40 of 58 on 2026-09-05 having written nothing, eight
+    minutes before the machine was restarted. The vector was measured; the
+    fields next to it were not.
+
+    A field kept for a hypothetical future reader costs memory now and buys
+    nothing until that reader exists. Add the reader first.
+    """
+    stored, read = _stored_and_read_keys(
+        (ROOT / "scripts" / "eval_oracle.py").read_text(encoding="utf-8"))
+    assert stored, "found no appended record literal; the detector is dead"
+    unread = sorted(stored - read)
+    assert not unread, (
+        f"eval_oracle.py stores {unread} on every pooled record and never "
+        f"reads them back. The pool is held for a whole replay and this "
+        f"script builds two of them, so an unread field is paid for millions "
+        f"of times. Delete it, or add the reader that justifies it.")
+
+
+def test_the_detector_would_have_caught_the_field_that_killed_the_run():
+    """The negative control, in the exact shape of the real defect.
+
+    Hermetic rather than read from git history, so it survives a shallow
+    clone.
+    """
+    bad = NL.join([
+        "records = []",
+        "for c in cands:",
+        "    ring, overlap, members = label(c)",
+        "    records.append({'vec': v, 'ring': ring,",
+        "                    'overlap': overlap, 'ring_members': members})",
+        "X = [r['vec'] for r in records]",
+        "y = [r['ring'] for r in records]",
+    ])
+    stored, read = _stored_and_read_keys(bad)
+    assert sorted(stored - read) == ["overlap", "ring_members"]
+
+
+def test_the_detector_accepts_the_fixed_form():
+    """The other arm: it must not fire on the correct shape, or it is a ban."""
+    good = NL.join([
+        "records = []",
+        "records.append({'vec': v, 'ring': ring})",
+        "X = [r['vec'] for r in records]",
+        "y = [r['ring'] for r in records]",
+    ])
+    stored, read = _stored_and_read_keys(good)
+    assert not (stored - read)
+
+
+def test_the_two_measured_offenders_are_specifically_gone():
+    """A named pin on the two fields, in addition to the general rule.
+
+    The general detector passes if someone adds a token read of a field they
+    do not need. These two are known to be expensive and known to be unused.
+    """
+    src = (ROOT / "scripts" / "eval_oracle.py").read_text(encoding="utf-8")
+    assert chr(34) + "ring_members" + chr(34) not in src
+    assert chr(34) + "overlap" + chr(34) + ": overlap" not in src

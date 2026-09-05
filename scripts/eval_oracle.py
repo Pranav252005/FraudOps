@@ -300,12 +300,20 @@ def collect_pool(stream, registry, seed_perfect: bool) -> tuple[list, dict]:
 
         for c in cands:
             nodes = set(c.nodes)
-            ring, overlap, members = label_candidate_detailed(nodes, rings)
-            # `overlap` and `ring_members` are carried so a caller can label
-            # this pool a SECOND way -- from simulated analyst verdicts rather
-            # than from truth -- without re-running the replay. They are inert
-            # for every existing caller: nothing downstream reads them, and
-            # `to_xy` still derives y from `ring` alone.
+            ring, _overlap, _members = label_candidate_detailed(nodes, rings)
+            # DO NOT ADD A FIELD NOTHING READS. `overlap` and `ring_members`
+            # used to be stored here for a hypothetical second labelling pass.
+            # Nothing ever read them, and `ring_members` is a SET OF NODE KEYS
+            # PER RECORD: 728 bytes for a ring of 5-10 and 2,264 for one of
+            # 20-40, against 544 for the feature vector this whole block exists
+            # to protect. On HI-Medium's ~2.3M-record pool that is multiple GB
+            # of dead weight, and it is what actually killed the run -- the
+            # oracle died at cycle 40 of 58 on 2026-09-05 having written
+            # nothing, eight minutes before the machine was restarted.
+            # D3b removed the 10-17 GB Candidate and left this beside it,
+            # because the vector was measured and the fields next to it were
+            # not. `test_the_pool_retains_no_field_that_nothing_reads` now
+            # fails if a field is added back without a reader.
             # RETAIN THE VECTOR, NOT THE CANDIDATE. The pool is held for the
             # whole replay and this script builds two of them, so keeping the
             # object costs ~1,064 bytes PICKLED per candidate -- live objects
@@ -322,7 +330,6 @@ def collect_pool(stream, registry, seed_perfect: bool) -> tuple[list, dict]:
                 "vec": np.asarray(vectorise(c.features, FEATURE_NAMES),
                                   dtype=np.float64),
                 "ring": ring, "t": graph.now,
-                "overlap": overlap, "ring_members": members,
                 "blend": float(c.score), "size": int(c.size),
                 "degree": float(c.features.max_fan), "key": c.key,
             })

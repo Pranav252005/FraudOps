@@ -314,6 +314,14 @@ LEDGER = [
      "(0.11947 in [0.09609,0.11249]) appear in all three; they are the whole "
      "evidence that the defect was real and they are four numbers. "
      "Authoritative copies: data/funnel.json, data/funnel-HI-Medium.json."),
+    ("2026-09-05", "D7-unread-pool-fields", 2656,
+     "+5: the three pre-fix HI-Medium ring_recall rows, quoted in full in "
+     "docs/HI-MEDIUM-FINDINGS.md. An earlier revision quoted ONE of them "
+     "directly under a sentence naming HI-Small, which read as if it were "
+     "HI-Small's row. Quoting all three under their split is what removes the "
+     "ambiguity, and the pre-fix file is the only surviving evidence the "
+     "defect was real -- data/ is untracked and HI-Small's was overwritten by "
+     "its re-run. Authoritative copy: data/funnel-HI-Medium.PRE-D5.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

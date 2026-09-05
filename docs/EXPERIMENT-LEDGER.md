@@ -646,3 +646,58 @@ so it lifts itself the moment they are regenerated.
 oracle as gone and began starting a replay beside it. Caught during its sleep,
 nothing spawned. The wait now goes through PowerShell and aborts outright if
 the PID is not confirmed alive rather than guessing.
+
+## 2026-09-05 — D7: the field D3b left behind, and what it cost
+
+The HI-Medium oracle died at **cycle 40 of 58** having written nothing, after
+2h17m. Reconstructed from the Windows event log: `conhost.exe` hung at
+17:41:34, ~90s after the last progress line; the process exited code 1 at
+17:49:36; a restart was initiated at 17:49:56 and the machine booted at
+17:50:30. **The restart is not what killed it — it was already dead for eight
+minutes.** No Resource-Exhaustion-Detector event was logged, so memory
+exhaustion is strongly indicated by the stall and the arithmetic, not proven
+by an OS record.
+
+**The cause was a field D3b left in place.** `overlap` and `ring_members` were
+stored on every pooled record, with a comment saying they were carried "so a
+caller can label this pool a SECOND way" and admitting in the same breath that
+"nothing downstream reads them". `ring_members` is a **set of node keys per
+record**:
+
+| per record | bytes |
+|---|---:|
+| `vec` — what D3b was written to protect | 544 |
+| `ring_members`, ring of 5-10 | 728 |
+| `ring_members`, ring of 20-40 | 2,264 |
+
+So the dead field cost **1.3x to 4.2x the thing that was optimised**, across a
+~2.3M-record pool, with a second larger pool still to build. D3b fixed a
+10-17 GB problem and left a multi-GB one immediately beside it, because the
+vector was measured and the fields next to it were not.
+
+**The rule, and it is now enforced.** A field kept for a hypothetical future
+reader costs memory now and buys nothing until that reader exists. Add the
+reader first. `test_the_pool_retains_no_field_that_nothing_reads` parses the
+appended record literal and every subscript read in the module, and fails on
+any key stored without a reader. Its negative control reproduces the exact
+shape and reports precisely `["overlap", "ring_members"]`.
+
+**D5 confirmed on real data in the same window.** The HI-Small funnel re-ran
+clean and every interval now brackets its point:
+
+| | point | interval |
+|---|---:|---|
+| ring_recall@10 | 0.173745 | [0.128571, 0.221277] |
+| ring_recall@20 | 0.189189 | [0.142857, 0.239437] |
+| ring_recall@50 | 0.223938 | [0.175182, 0.272277] |
+
+The pre-fix HI-Medium file is preserved as `funnel-HI-Medium.PRE-D5.json` and
+shows all three k failing. It is now the only surviving evidence the defect was
+real: `data/` is untracked, and HI-Small's pre-fix file was overwritten by its
+own re-run before it could be quoted. **A correction: the `0.1600` example in
+`HI-MEDIUM-FINDINGS.md` was quoted under a sentence naming HI-Small. It is
+HI-Medium's row.** Fixed by quoting all three under their split.
+
+The new intervals are far wider than the old ones — recall@10 went from a
+width of 0.016 to 0.093. The old ones were not merely misplaced, they were
+spuriously precise, which is the more dangerous failure of the two.

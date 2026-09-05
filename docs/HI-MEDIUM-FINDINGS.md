@@ -205,11 +205,20 @@ smaller.
 
 ### `ring_recall@k` point estimates fall outside their own intervals
 
-HI-Medium at all three k; HI-Small at k=20 and k=50:
+HI-Medium at all three k; HI-Small at k=20 and k=50. All three HI-Medium
+rows, from `data/funnel-HI-Medium.PRE-D5.json`:
 
 ```
-ring_recall@50   point = 0.1600   CI [0.1429, 0.1550]
+ring_recall@10   point = 0.119474   CI [0.096093, 0.112487]
+ring_recall@20   point = 0.140526   CI [0.123751, 0.136148]
+ring_recall@50   point = 0.160000   CI [0.142857, 0.155005]
 ```
+
+(An earlier revision of this section showed the third row directly under a
+sentence naming HI-Small, which read as though it were HI-Small's. It is
+HI-Medium's. HI-Small's pre-fix file was overwritten by the re-run before it
+could be quoted -- `data/` is not tracked -- which is why the HI-Medium
+snapshot is the one preserved.)
 
 This is the cluster bootstrap applied to a **union** statistic. A resample with
 replacement covers only ~63% of distinct cycles, so the union of distinct rings
