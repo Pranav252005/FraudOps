@@ -134,9 +134,22 @@ def test_the_walk_resolves_more_than_one_hop():
     entry = ROOT / "scripts" / "eval_oracle.py"
     direct = _first_party_imports(entry)
     closure = _closure(entry)
-    assert closure - direct, "the closure found nothing beyond direct imports"
-    assert "sentinel.detect.features" in closure
-    assert "sentinel.detect.features" not in direct
+    indirect = {m for m in closure - direct if m.startswith("sentinel.")}
+    assert indirect, (
+        "the closure found nothing beyond this entry point's direct imports, "
+        "so it may be resolving only one hop")
+    # At least one indirect entry must resolve to a real module on disk, so
+    # the walk is demonstrably following imports rather than only collecting
+    # names. Not ALL of them: `_first_party_imports` deliberately also records
+    # `module.symbol` for `from X import Y`, and a symbol has no module path.
+    assert any(_module_path(m) is not None for m in indirect), sorted(indirect)
+
+    # NOT pinned to a named module. This test used to assert that
+    # `sentinel.detect.features` was in the closure but not direct, and it
+    # broke the moment eval_oracle.py imported `Features` directly (D3b) --
+    # a test failing because the code changed shape, not because transitivity
+    # stopped holding. The property is "something is reached indirectly", and
+    # that is what is asserted.
 
 
 @pytest.mark.parametrize("entry", MEASURED_ENTRYPOINTS,
