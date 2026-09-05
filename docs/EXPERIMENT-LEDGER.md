@@ -540,3 +540,49 @@ built from the two cheapest cycles in the run.
 were unrunnable until today and have never seen this split). D4 added
 (dataset-aware result paths for the remaining eval scripts; only eval_phase2 is
 wired, so every other script would still clobber HI-Small's committed result).
+
+## 2026-09-05 — D3/D3b/D4: the funnel on HI-Medium, and an equivalence proof
+
+**D4 first, as a prerequisite:** 29 scripts wrote hardcoded `data/<name>.json`
+with no reference to the split, so any of them run under a second dataset would
+have overwritten a committed HI-Small result. Migrated reads as well as writes.
+The AST guard that replaced my regex immediately found one the regex had missed.
+
+**D3b — the oracle retained whole `Candidate` objects** for every candidate of
+every cycle, in two pools, neither freed. ~1,064 bytes pickled each (3-5x live)
+against ~3.36M candidates per pool on a 16.5 GB machine. Now stores the 54-value
+float64 vector plus four scalars, and frees the first pool.
+
+**Verified end-to-end, and it proved more than itself.** The HI-Small oracle was
+re-run and diffed against a baseline preserved from 2026-08-31: **four
+differences, all prose strings, ZERO numeric.** `p@k`, `ap`, `f1`, `cycle_rows`,
+`split_t`, `mean_candidate_size` all identical. That baseline predates six
+commits (S1/S2, B3, the linker, P0, P0b) which each claimed the shipped path was
+byte-identical; those were checked against a 3-cycle fixture, and this is the
+first full-replay confirmation. **All hold.** The run also got faster: ~14 min.
+
+**D3 funnel — the structure replicates.** 58 cycles, 1,900 rings:
+
+| stage loss | HI-Medium | HI-Small |
+|---|---:|---:|
+| seeding | -6.1 pts | -11.2 |
+| build | -28.7 | -26.6 |
+| **ranking** | **-49.2** | **-39.8** |
+
+Same ordering on both. **The same two typologies are classified
+"build-destroyed" on both splits and only those two: BIPARTITE (22% built) and
+STACK (30%).** That is stronger than the p@k replication, because it is a
+structural classification rather than a level, and levels do not transfer.
+
+**Verdict:** the funnel's shape is a property of the problem, not of HI-Small.
+
+**Rule that came out of it:** **a union statistic cannot take a cluster
+bootstrap interval.** `ring_recall@k`'s point estimate falls outside its own CI
+on both splits, because a resample with replacement covers ~63% of distinct
+cycles and the union over a resample is systematically smaller than over the
+full set. p@k is unaffected -- it is a ratio of sums. Queued as D5, and
+`ring_recall` is quoted in headline tables today.
+
+**Queue changes:** D4 and D3b struck; D3 part-done (oracle running, ~12h).
+D5 (invalid union intervals) and D6 (eval_funnel misreports its output path)
+added.

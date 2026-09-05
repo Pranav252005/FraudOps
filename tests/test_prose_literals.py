@@ -292,6 +292,17 @@ LEDGER = [
      "(0.1441 vs 0.1328 against an expected 0.1103), which is the evidence "
      "that running a bigger split did NOT do the thing three documents said "
      "it would. Authoritative copy: data/eval_phase2-HI-Medium.json."),
+    ("2026-09-05", "HI-Medium-funnel-and-D3b", 2591,
+     "+37: Part 2 of docs/HI-MEDIUM-FINDINGS.md plus its ledger and queue "
+     "entries. Two tables carry it and neither can be referenced away: the "
+     "eight-row funnel for HI-Medium, because the load-bearing claim is that "
+     "the SAME TWO typologies are build-destroyed on both splits and ONLY "
+     "those two -- a statement about all eight rows, not about two -- and the "
+     "three-stage loss comparison, which is the replication itself. The D3b "
+     "equivalence table is four lines and is the evidence that six earlier "
+     "commits' 'shipped path unchanged' claims hold. Authoritative copies: "
+     "data/funnel-HI-Medium.json, data/eval_oracle.json vs "
+     "data/eval_oracle.PRE-D3B.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

@@ -128,7 +128,101 @@ real scaling problem for `suppress()`.
   different ring counts. The typology ordering replicates; the levels do not
   transfer.
 - **This is one run of one script.** `eval_funnel.py` and `eval_oracle.py` were
-  unrunnable until today's repair and have never been run on HI-Medium, so
-  there is no funnel decomposition and no supervised ceiling for this split.
+  unrunnable until today's repair and had never been run on HI-Medium, so at
+  the time of writing there was no funnel decomposition and no supervised
+  ceiling for this split. **Superseded by Part 2 below**, which reports the
+  funnel; the oracle followed after D3b.
 - **The lb6 seed-lookback finding was not re-tested here.** P0 ran on HI-Small
   only.
+
+---
+
+# Part 2 — the funnel, and what D3b proved on the way
+
+Added 2026-09-05 after `eval_funnel.py` and `eval_oracle.py` were repaired
+(both had been unrunnable) and `collect_pool` was made memory-viable (D3b).
+
+## The funnel replicates HI-Small's structure
+
+58 cycles, 1,900 rings. `data/funnel-HI-Medium.json`; HI-Small's `funnel.json`
+untouched.
+
+| typology | seen | seeded | built | ranked | verdict |
+|---|---:|---:|---:|---:|---|
+| **BIPARTITE** | 231 | 220 (95%) | **51 (22%)** | 16 (7%) | **build-destroyed** |
+| **STACK** | 243 | 235 (97%) | **74 (30%)** | 35 (14%) | **build-destroyed** |
+| FAN-IN | 255 | 226 (89%) | 175 (69%) | 30 (12%) | ordinary attrition |
+| FAN-OUT | 227 | 211 (93%) | 158 (70%) | 36 (16%) | ordinary attrition |
+| GATHER-SCATTER | 235 | 225 (96%) | 189 (80%) | 45 (19%) | ordinary attrition |
+| RANDOM | 218 | 200 (92%) | 174 (80%) | 36 (17%) | ranking-limited |
+| CYCLE | 247 | 234 (95%) | 201 (81%) | 44 (18%) | ranking-limited |
+| SCATTER-GATHER | 244 | 234 (96%) | 217 (89%) | 62 (25%) | ranking-limited |
+| **TOTAL** | **1,900** | 1,785 (94%) | 1,239 (65%) | 304 (16%) | |
+
+**The stage ordering is identical on both splits:**
+
+| stage loss | HI-Medium | HI-Small |
+|---|---:|---:|
+| seeding | −6.1 pts | −11.2 |
+| build | −28.7 | −26.6 |
+| **ranking** | **−49.2** | **−39.8** |
+
+Ranking largest, build second, seeding smallest — on both. And **the same two
+typologies are classified "build-destroyed" on both splits, and only those
+two**: BIPARTITE and STACK.
+
+That is stronger evidence than the p@k replication in Part 1, because it is a
+*structural classification* rather than a level, and levels do not transfer
+across splits with different prevalence.
+
+## D3b was verified end-to-end, and it validated five other claims
+
+The oracle was re-run on HI-Small after D3b and diffed against the preserved
+pre-change baseline (`data/eval_oracle.PRE-D3B.json`, measured 2026-08-31).
+
+**Four differences, all prose strings, zero numeric differences.**
+
+| | pre | post |
+|---|---|---|
+| `oracle_as_is` p@10 / p@20 / p@50 | 0.211111 / 0.127778 / 0.062222 | **identical** |
+| `oracle_on_all_rings` p@10 / p@20 / p@50 | 0.561111 / 0.469444 / 0.336667 | **identical** |
+| `cycle_rows` (the bootstrap unit) | | **identical** |
+| ap, f1, n_test, n_train, split_t, cycles, mean_candidate_size | | **identical** |
+
+The four diffs are `gfp_control`, `interpretation`, `label_dependency` and
+`framing` — narrative strings edited by later commits, not by D3b.
+
+**This validated more than D3b.** That baseline predates six commits (S1/S2,
+B3, the fragment linker, P0, P0b), each of which claimed the shipped path was
+byte-identical. Those claims were checked individually against a 3-cycle
+fixture; this is the first end-to-end confirmation across a full 34-cycle
+replay including model training. **All of them hold.**
+
+The run also took ~14 minutes, so the memory fix made it faster as well as
+smaller.
+
+## Two defects found while reporting, both pre-existing
+
+### `ring_recall@k` point estimates fall outside their own intervals
+
+HI-Medium at all three k; HI-Small at k=20 and k=50:
+
+```
+ring_recall@50   point = 0.1600   CI [0.1429, 0.1550]
+```
+
+This is the cluster bootstrap applied to a **union** statistic. A resample with
+replacement covers only ~63% of distinct cycles, so the union of distinct rings
+found over a resample is systematically smaller than the union over the full
+set. **The interval is biased low by construction and cannot contain the
+point.**
+
+`ring_recall` is quoted in this project's headline tables, and the interval
+attached to it is not a valid interval for it. p@k is unaffected — it is a
+ratio of sums, not a union, and its intervals bracket their points correctly.
+
+### `eval_funnel.py` misreports where it wrote
+
+It prints `written to data/funnel.json and data/funnel.csv` while writing
+`funnel-HI-Medium.*`. The same defect fixed in `eval_phase2.py` when HI-Medium
+was first run, and not swept at the time.
