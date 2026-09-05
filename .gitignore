@@ -37,3 +37,20 @@ data/corpus_*.npz
 # 62 MB each and regenerable (see docs/negative-results/dead-query-groups.md).
 # The JSON results they produced ARE committed -- those are the evidence.
 data/*.DEADGROUPS.npz.bak
+
+# --- Sentinel repository focus, 2026-09-05 ---------------------------------
+# Compiled HI-Medium stream: 390 MB across two files, regenerable with
+# scripts/build_stream.py. Derived from licensed AMLworld data, and the parquet
+# is above GitHub's 100 MB hard limit, which is what blocked every push of this
+# branch until now.
+data/stream-HI-Medium/edges.parquet
+data/stream-HI-Medium/nodes.json
+
+# Superseded pool snapshot: 62 MB, regenerable, kept on disk as evidence but
+# not committed. The JSON results it produced ARE committed -- those are the
+# evidence. Same rule as data/*.DEADGROUPS.npz.bak above.
+data/ranker_pool.PREFIX.npz.bak
+
+# The payops prototype: a separate, earlier project that shares no code with
+# sentinel. Kept on disk, removed from this repository so it is about one thing.
+payops/
