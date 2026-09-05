@@ -40,7 +40,8 @@ from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
 from sentinel.detect.candidates import CandidateGenerator
-from sentinel.eval.bootstrap import bootstrap_ci, ratio_of_sums, union_recall
+from sentinel.eval.bootstrap import (bootstrap_ci, owner_attributed_counts,
+                                     ratio_of_sums, union_recall)
 from sentinel.eval.funnel import FunnelTracker, is_hit
 from sentinel.graph.window import WindowedGraph
 from sentinel.stream.replay import Stream
@@ -254,13 +255,34 @@ def main() -> None:
         ci_out[f"p@{k}"] = result
         print(f"{'p@'+str(k):<14}{result['point']:>8.3f}{result['lo']:>8.3f}{result['hi']:>8.3f}")
 
+    # Ring recall is a UNION, and a cluster bootstrap cannot bound a union --
+    # the interval comes out biased low and need not contain its own point.
+    # It shipped that way; see prereg/ring_recall_ci.md and D5. Each ring is
+    # attributed to one owning cycle, which makes this a ratio of sums with an
+    # identical point estimate. `fractional` is the pre-registered robustness
+    # check: reported, not shipped.
+    recall_stat = ratio_of_sums("rings_found", "rings_owned")
+    recall_counts = {}
     for k in KS:
-        def found_k(records, k=k):
-            return union_recall(f"__found_{k}", "seen")(
-                [{"__found_" + str(k): r["found"][k], "seen": r["seen"]} for r in records])
-        result = bootstrap_ci(cycle_records, found_k)
+        pairs = [{"found": r["found"][k], "seen": r["seen"]} for r in cycle_records]
+        counts = owner_attributed_counts(pairs, "found", "seen")
+        recall_counts[k] = counts
+        result = bootstrap_ci(counts, recall_stat)
+        union_point = union_recall("found", "seen")(pairs)
+        assert result["point"] == union_point, (
+            f"owner attribution moved the point estimate at k={k}: "
+            f"{result['point']} vs {union_point}. Kill criterion 1.")
+        assert result["lo"] <= result["point"] <= result["hi"], (
+            f"ring_recall@{k} interval still does not contain its point: "
+            f"{result['point']} vs [{result['lo']}, {result['hi']}]. "
+            f"Kill criterion 2 -- report the failure, do not patch it.")
+        alt = bootstrap_ci(
+            owner_attributed_counts(pairs, "found", "seen", fractional=True),
+            recall_stat)
+        result["fractional_attribution"] = {"lo": alt["lo"], "hi": alt["hi"]}
         ci_out[f"ring_recall@{k}"] = result
-        print(f"{'recall@'+str(k):<14}{result['point']:>8.3f}{result['lo']:>8.3f}{result['hi']:>8.3f}")
+        print(f"{'recall@'+str(k):<14}{result['point']:>8.3f}{result['lo']:>8.3f}"
+              f"{result['hi']:>8.3f}   (fractional [{alt['lo']:.3f}, {alt['hi']:.3f}])")
 
     # Additive only: `runs`, `rank_k_for_funnel`, `funnel_by_typology` and
     # `metric_cis` keep their names, types and meaning; the rest is new.
@@ -269,6 +291,17 @@ def main() -> None:
         "rank_k_for_funnel": RANK_K_FOR_FUNNEL,
         "funnel_by_typology": rows,
         "metric_cis": ci_out,
+        # Persisted so these intervals can be recomputed without a full replay.
+        # Their absence is why D5 could not be fixed offline and why M2's
+        # Monte-Carlo sweep could never cover this script. Sets are not JSON,
+        # and these counts are exactly what the estimator consumes.
+        "cycle_rows": [
+            {**{f"hit_{k}": r[f"hit_{k}"] for k in KS},
+             **{f"tot_{k}": r[f"tot_{k}"] for k in KS},
+             **{f"rings_found_{k}": recall_counts[k][i]["rings_found"] for k in KS},
+             **{f"rings_owned_{k}": recall_counts[k][i]["rings_owned"] for k in KS}}
+            for i, r in enumerate(cycle_records)
+        ],
         "stage_losses_pts": losses,
         "largest_loss_stage": worst,
         "interpretation_thresholds": {
@@ -282,7 +315,8 @@ def main() -> None:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
-    print("\nwritten to data/funnel.json and data/funnel.csv")
+    print(f"\nwritten to {active_result_path(ROOT, 'funnel.json').name} and "
+          f"{active_result_path(ROOT, 'funnel.csv').name}")
 
 
 if __name__ == "__main__":

@@ -303,6 +303,17 @@ LEDGER = [
      "commits' 'shipped path unchanged' claims hold. Authoritative copies: "
      "data/funnel-HI-Medium.json, data/eval_oracle.json vs "
      "data/eval_oracle.PRE-D3B.json."),
+    ("2026-09-05", "D5-ring-recall-ci", 2651,
+     "+60: prereg/ring_recall_ci.md, the estimator docstring in "
+     "sentinel/eval/bootstrap.py, and tests/test_union_recall_ci.py. The bulk "
+     "is one explanation stated three times on purpose -- why a cluster "
+     "bootstrap cannot bound a UNION -- because the three readers are "
+     "different: someone deciding whether the fix was pre-registered honestly, "
+     "someone calling the function and choosing between it and union_recall, "
+     "and someone reading a failing test. The two measured intervals "
+     "(0.11947 in [0.09609,0.11249]) appear in all three; they are the whole "
+     "evidence that the defect was real and they are four numbers. "
+     "Authoritative copies: data/funnel.json, data/funnel-HI-Medium.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

@@ -586,3 +586,63 @@ full set. p@k is unaffected -- it is a ratio of sums. Queued as D5, and
 **Queue changes:** D4 and D3b struck; D3 part-done (oracle running, ~12h).
 D5 (invalid union intervals) and D6 (eval_funnel misreports its output path)
 added.
+
+## 2026-09-05 — D5: a cluster bootstrap cannot bound a union statistic
+
+`ring_recall@k` shipped with intervals that do not contain their own points.
+HI-Medium failed at all three k, HI-Small at k=20 and k=50:
+
+    HI-Medium ring_recall@10   point 0.11947   CI [0.09609, 0.11249]
+
+**The mechanism, and it is not subtle once stated.** A resample of n cycles
+with replacement holds ~63.2% distinct cycles, so both unions shrink -- but
+not at the same rate. A ring is *seen* in every cycle whose window it is
+active in, typically several consecutive ones, and *found* in a strict subset,
+often exactly one. The numerator rests on fewer supporting cycles per ring
+than the denominator, so dropping a cycle removes rings from `found` faster
+than from `seen`. Biased low **by construction**; no percentile of that
+distribution need contain the point.
+
+`p@k` was never affected -- it is a ratio of sums, where duplicating a cycle
+duplicates numerator and denominator together.
+
+**The fix makes ring recall a ratio of sums too.** Each distinct ring is
+attributed to one owning cycle (first appearance) and carries its found-status
+as a full-data property. The point estimate is unchanged *algebraically*, not
+approximately: each ring is owned once and `found` is a subset of `seen`, so
+the sums are exactly `|union found|` over `|union seen|`. Asserted at float
+equality, in the script and in twelve parametrised tests.
+
+**Why the found-status is deliberately not resampled.** Whether the detector
+found a ring is a fact about its behaviour on that ring, and it saw every
+cycle. Letting a resample revoke it conflates "this cycle was not sampled"
+with "the detector missed it" -- which is the bug itself.
+
+**The negative control reproduces the shipped failure exactly.** On synthetic
+records built from the real mechanism, the old interval lands entirely below
+its own point: 0.295 in [0.1400, 0.2350]. The new one brackets it.
+
+**The pre-registration earned its keep.** Fractional attribution was declared
+in advance as a robustness check with the decision rule fixed: first-appearance
+ships regardless. Fractional turns out to give an interval **half the width**
+(0.0593 vs 0.1193) because first-appearance is unbalanced -- the first cycle
+owns every ring active at the start. The wider, conservative one shipped, as
+written down before either was measured. A test asserts that it did.
+
+**Two things came out of it.** `eval_funnel.py` now persists `cycle_rows`;
+their absence is why this could not be fixed offline and why M2's Monte-Carlo
+sweep could never cover this script. And D6 (the script naming
+`data/funnel.json` while writing `funnel-HI-Medium.*`) is fixed.
+
+**Not yet re-run.** 1.32 GB free with the HI-Medium oracle at 25/58 cycles;
+starting a replay alongside it risked a 3.7-hour job to save an hour. Both
+funnels are chained to start when it exits. Until then the two committed
+funnel JSONs still carry the invalid intervals, and a self-retiring test
+exemption skips exactly those files -- keyed on the absence of `cycle_rows`,
+so it lifts itself the moment they are regenerated.
+
+**A near-miss worth recording.** The first chain script waited with Git Bash
+`kill -0` on a native Windows PID. It cannot see one: it reported the live
+oracle as gone and began starting a replay beside it. Caught during its sleep,
+nothing spawned. The wait now goes through PowerShell and aborts outright if
+the PID is not confirmed alive rather than guessing.
