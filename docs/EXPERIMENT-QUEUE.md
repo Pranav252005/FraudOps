@@ -63,5 +63,7 @@ what the pre-registration is for.
 
 | # | experiment | why now | cost |
 |---:|---|---|---|
-| D2 | **Build the HI-Medium stream and evaluate on it** | Now unblocked: `eval_end_day=16` derived and registered. **2,756 rings against HI-Small's 370** — the only split that could materially narrow this project's intervals, which are the binding constraint on every conclusion it draws. 3.03 GB source, 31.9M edges. | stream ~15m; eval hours |
+| ~~D2~~ | ~~Build the HI-Medium stream and evaluate on it~~ | **DONE 2026-09-05.** 29.3M edges, 2.08M nodes, 58 cycles, 1,900 rings, 2h44m. score-size CI-clear at **every** k including k=100, where HI-Small shows a reversal. Typology ordering replicates, Spearman +0.786. **But it did NOT narrow the intervals** -- the bootstrap resamples cycles (34->58), not rings (259->1900). See [`HI-MEDIUM-FINDINGS.md`](HI-MEDIUM-FINDINGS.md). | done |
 | D1 | **Re-derive HI-Small's `structural_recall_ceiling`** | The committed 0.733 cannot be reproduced from its own provenance (four readings give 278-282 of 363, never 266). Until it is re-derived under the stated definition, cross-split ceiling comparison is invalid. Changes a number that appears in prose repo-wide. | ~2h |
+| D3 | **Run the funnel and oracle on HI-Medium** | Both were unrunnable until today's repair, so HI-Medium has no funnel decomposition and no supervised ceiling. | ~3h |
+| D4 | **Dataset-aware result paths for the remaining eval scripts** | `Dataset.result_path` exists and is wired into eval_phase2 only. Every other script still writes a hardcoded `data/<name>.json` and would clobber HI-Small's committed result if run under another split. | ~1h |

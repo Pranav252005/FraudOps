@@ -283,6 +283,15 @@ LEDGER = [
      "finding. A ledger that said 'see datasets.py' for those could not be "
      "audited against the run that produced them. Authoritative copy: "
      "data/dataset_constants.json."),
+    ("2026-09-05", "HI-Medium-eval", 2554,
+     "+95: docs/HI-MEDIUM-FINDINGS.md and its ledger entry. The bulk is the "
+     "two tables the finding lives in -- the four-ranking result with "
+     "score-size at four depths, and the per-typology recall for BOTH splits "
+     "side by side, which is what the Spearman +0.786 replication claim rests "
+     "on and cannot be referenced away. Also the interval-width comparison "
+     "(0.1441 vs 0.1328 against an expected 0.1103), which is the evidence "
+     "that running a bigger split did NOT do the thing three documents said "
+     "it would. Authoritative copy: data/eval_phase2-HI-Medium.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

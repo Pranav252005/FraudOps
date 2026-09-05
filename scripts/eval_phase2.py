@@ -204,7 +204,8 @@ def main() -> None:
             for k in KS},
     }
     active_result_path(ROOT, "eval_phase2.json").write_text(json.dumps(out, indent=2))
-    print("\nwritten to data/eval_phase2.json")
+    print("")
+    print(f"written to {active_result_path(ROOT, 'eval_phase2.json')}")
 
 
 if __name__ == "__main__":

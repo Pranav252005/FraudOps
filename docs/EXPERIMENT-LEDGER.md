@@ -497,3 +497,46 @@ committed number that appears in prose repo-wide, so it needs its own pass.
 **Added D2:** build the HI-Medium stream and evaluate on it. HI-Medium is 7.4×
 HI-Small's rings (2,756 vs 370) and is the only split that could materially
 narrow the intervals this project keeps hitting.
+
+## 2026-09-05 — HI-Medium: the first evaluation on a second split
+
+**Predicted:** `docs/GRAPH-PRIOR-ART-PLAN.md` and the D2 queue entry both said
+HI-Medium was "the only split that could materially narrow the intervals this
+project keeps hitting". That was the stated justification for running it.
+
+**Observed:** 58 cycles, 1,900 rings, 2h44m. `score - size` is CI-clear at
+**every** depth -- k=10 +0.5776 [+0.5086,+0.6414] through k=100 +0.1162
+[+0.0969,+0.1362] -- including k=100, where HI-Small shows a real reversal in
+favour of size. Per-typology difficulty **replicates across the two splits at
+Spearman +0.786**, SCATTER-GATHER easiest and BIPARTITE hardest on both.
+
+**Verdict:** the detector generalises. The reason I ran it does not.
+
+**THE INTERVALS DID NOT NARROW.** `score - size` @10 width went 0.1441 ->
+0.1328, an 8% narrowing against the 23% that sqrt(34/58) predicts from cycle
+count alone -- so per-cycle variance is actually higher here. **The bootstrap
+resamples CYCLES, not rings.** Cycles rose 1.7x (34->58) while rings rose 7.3x
+(259->1,900), and ring count does not enter the resampling unit at all. The
+conclusions are more robust on this split because the EFFECT is larger, not
+because the ESTIMATE is more precise, and the plan conflated those.
+
+**Rule that came out of it:** **more labelled units do not narrow a
+cluster-bootstrapped interval unless they arrive as more clusters.** Anything
+proposed on the grounds that it "adds more data" must say which resampling unit
+it adds to. Three documents in this repo justified work on the ring count.
+
+Second rule, on cross-split reporting: **p@k levels do not transfer.** p@10 goes
+0.2912 -> 0.688, but HI-Medium carries ~790 active rings per cycle against ~140,
+so most of that is prevalence -- the random baseline moves 0.000 -> 0.003 for
+the same reason. The conditioned quantity is the ratio to the size baseline,
+3.30x -> 6.25x. And **ring recall went DOWN**, 23.9% -> 16.9%.
+
+**Cost:** 9,838s against my projected 8-12 hours -- a 3-4x pessimistic estimate
+built from the two cheapest cycles in the run.
+
+**Promoted to:** not an invariant. Recorded in docs/HI-MEDIUM-FINDINGS.md.
+
+**Queue changes:** D2 struck. D3 added (funnel and oracle on HI-Medium -- both
+were unrunnable until today and have never seen this split). D4 added
+(dataset-aware result paths for the remaining eval scripts; only eval_phase2 is
+wired, so every other script would still clobber HI-Small's committed result).
