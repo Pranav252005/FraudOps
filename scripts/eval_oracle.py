@@ -96,6 +96,7 @@ not.
 """
 from __future__ import annotations
 
+import gc
 import json
 import random
 import sys
@@ -120,7 +121,15 @@ from sentinel.detect.candidates import CandidateGenerator
 from sentinel.eval.bootstrap import bootstrap_ci, paired_bootstrap_delta, ratio_of_sums
 from sentinel.eval.funnel import is_hit
 from sentinel.graph.window import WindowedGraph
+from sentinel.detect.features import Features as _Features
 from sentinel.learn.reranker import feature_names, vectorise
+
+#: The feature order, fixed once. `feature_names` reads the key set of a
+#: `Features` dataclass, identical for every instance (asserted in
+#: tests/test_oracle_pool_retention.py), so it needs no candidate to derive.
+#: Computing it up front is what lets `collect_pool` vectorise at collection
+#: time instead of retaining the object until training.
+FEATURE_NAMES = feature_names(_Features())
 from sentinel.stream.replay import Stream
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -297,8 +306,26 @@ def collect_pool(stream, registry, seed_perfect: bool) -> tuple[list, dict]:
             # than from truth -- without re-running the replay. They are inert
             # for every existing caller: nothing downstream reads them, and
             # `to_xy` still derives y from `ring` alone.
-            records.append({"cand": c, "ring": ring, "t": graph.now,
-                            "overlap": overlap, "ring_members": members})
+            # RETAIN THE VECTOR, NOT THE CANDIDATE. The pool is held for the
+            # whole replay and this script builds two of them, so keeping the
+            # object costs ~1,064 bytes PICKLED per candidate -- live objects
+            # carrying a frozenset, a 54-field dataclass and two dicts run
+            # 3-5x that. HI-Medium yields ~3.36M candidates per pool, i.e.
+            # 10-17 GB per pool on a 16.5 GB machine: it could not run at all.
+            # Nothing downstream touches the Candidate again -- it needs the
+            # feature vector, blend score, size, max fan and canonical key.
+            #
+            # float64 deliberately: float32 would halve this again but would
+            # change the values LightGBM splits on, and the whole point is
+            # that the change is numerically identical.
+            records.append({
+                "vec": np.asarray(vectorise(c.features, FEATURE_NAMES),
+                                  dtype=np.float64),
+                "ring": ring, "t": graph.now,
+                "overlap": overlap, "ring_members": members,
+                "blend": float(c.score), "size": int(c.size),
+                "degree": float(c.features.max_fan), "key": c.key,
+            })
 
         if runs % 5 == 0:
             print(f"  [{'perfect' if seed_perfect else 'as-is':>7}] "
@@ -437,7 +464,8 @@ def ring_time_split(records: list[dict], ring_first_t: dict[int, int],
 
 
 def to_xy(records: list[dict], names: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    X = np.array([vectorise(r["cand"].features, names) for r in records])
+    assert names == FEATURE_NAMES, "feature order changed between collect and train"
+    X = np.array([r["vec"] for r in records])
     y = np.array([1 if r["ring"] is not None else 0 for r in records])
     return X, y
 
@@ -459,17 +487,16 @@ def _cycle_rows(test_records, proba) -> list[dict]:
     """
     by_t: dict[int, list[dict]] = defaultdict(list)
     for rec, p in zip(test_records, proba):
-        c = rec["cand"]
         by_t[rec["t"]].append({
             "label": 1 if rec["ring"] is not None else 0,
             "oracle": float(p),
-            "blend": float(c.score),
-            "size": float(c.size),
-            "degree": float(c.features.max_fan),
+            "blend": rec["blend"],
+            "size": float(rec["size"]),
+            "degree": rec["degree"],
             # Deterministic per-candidate random key: seeded off the candidate's
             # canonical key so the random baseline is reproducible run to run
             # and does not depend on dict iteration order.
-            "random": random.Random(c.key).random(),
+            "random": random.Random(rec["key"]).random(),
         })
 
     rows = []
@@ -539,7 +566,7 @@ def evaluate(model, names, test_records) -> dict:
             "n_positive": int(y.sum()), "cycles": len(rows),
             "precision_at": precision_at, "precision_ci": ci,
             "paired": paired, "oracle_over_blend": ratio,
-            "mean_candidate_size": float(np.mean([r["cand"].size for r in test_records])),
+            "mean_candidate_size": float(np.mean([r["size"] for r in test_records])),
             "cycle_rows": rows}
 
 
@@ -570,8 +597,7 @@ def train_and_report(records, ring_first_t, label: str,
         return {"label": label, "role": role, "framing": framing, "n_pool": 0}
 
     train, test, split_t = ring_time_split(records, ring_first_t)
-    names = feature_names(train[0]["cand"].features) if train else \
-        feature_names(records[0]["cand"].features)
+    names = FEATURE_NAMES
     X, y = to_xy(train, names)
 
     n_pos_train = int(y.sum())
@@ -636,6 +662,13 @@ def main() -> None:
     as_is_report = train_and_report(
         as_is_records, as_is_first_t, "oracle-as-is",
         role=AS_IS_ROLE, framing=AS_IS_FRAMING)
+
+    # Free the as-is pool before building the second one. Both were live
+    # simultaneously, so peak memory was the SUM of two pools even though
+    # nothing reads the first again after training. On HI-Small that was
+    # invisible; on HI-Medium it is the difference between running and not.
+    del as_is_records
+    gc.collect()
 
     print("\n=== collecting candidate pool: PERFECT SEEDING "
           "(SEED-CHEAT, ceiling diagnostic only) ===")
