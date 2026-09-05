@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
@@ -276,8 +277,8 @@ def main() -> None:
             "build_healthy_at_or_above": BUILD_HEALTHY_AT_OR_ABOVE,
         },
     }
-    (ROOT / "data" / "funnel.json").write_text(json.dumps(out, indent=2))
-    with open(ROOT / "data" / "funnel.csv", "w", newline="") as fh:
+    (active_result_path(ROOT, "funnel.json")).write_text(json.dumps(out, indent=2))
+    with open(active_result_path(ROOT, "funnel.csv"), "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)

@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import (EVAL_END, EXPAND_HOPS, EXPAND_MAX_DEGREE,
                              EXPAND_MAX_NODES, TICK_MINUTES, WINDOW_MINUTES)
@@ -154,7 +155,7 @@ def main() -> None:
             row += f"{(d['built'] if d else 0):>6}/{(d['n'] if d else 0):<9}"
         print(row)
 
-    (ROOT / "data" / "prune_sweep.json").write_text(json.dumps(out, indent=2))
+    (active_result_path(ROOT, "prune_sweep.json")).write_text(json.dumps(out, indent=2))
     print("\nwritten to data/prune_sweep.json")
 
 

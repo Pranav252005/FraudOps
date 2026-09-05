@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -260,7 +261,7 @@ def main() -> None:
         l = out["funnel_by_typology"][t]["leaf2"]
         print(f"  {t:<16} seeded={n['seeded']:>4} built {n['built']:>4} -> {l['built']:>4}")
 
-    (ROOT / "data" / "prune_impact.json").write_text(json.dumps(out, indent=2, default=str))
+    (active_result_path(ROOT, "prune_impact.json")).write_text(json.dumps(out, indent=2, default=str))
     print("\nwritten to data/prune_impact.json")
 
 

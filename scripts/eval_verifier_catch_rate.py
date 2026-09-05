@@ -45,6 +45,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.evidence import build_case_file
 from sentinel.cases.store import CaseStore
@@ -53,7 +54,7 @@ from sentinel.eval.bootstrap import bootstrap_ci
 from sentinel.narrative.citation import CITATION, split_sentences, verify
 from sentinel.narrative.str_narrative import generate_and_verify
 
-OUT = ROOT / "data" / "eval_verifier_catch_rate.json"
+OUT = active_result_path(ROOT, "eval_verifier_catch_rate.json")
 CASES = ROOT / "data" / "cases"
 STREAM = active_stream_dir(ROOT)
 

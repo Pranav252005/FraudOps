@@ -45,13 +45,14 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.eval.bootstrap import paired_bootstrap_delta, ratio_of_sums
 
 from scripts.gfp_compare import (EXPORT_DIR, KS, cycle_rows, fit, load_export,
                                  split_mask)
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "eval_median_gap.json"
+OUT = active_result_path(ROOT, "eval_median_gap.json")
 CACHE = ROOT / "data" / "median_features.npz"
 
 # Model-fit seeds. The paired bootstrap resamples CYCLES, so it carries the

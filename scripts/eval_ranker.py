@@ -79,6 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lightgbm import LGBMClassifier, LGBMRanker
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import PRUNE_STRATEGY
 from sentinel.data.accounts import AccountRegistry
@@ -468,7 +469,7 @@ def main() -> None:
                     help="also train LambdaMART at 2000/5000/10000 to show the "
                          "cap is not load-bearing")
     ap.add_argument("--out", type=Path,
-                    default=ROOT / "data" / "eval_ranker.json")
+                    default=active_result_path(ROOT, "eval_ranker.json"))
     args = ap.parse_args()
 
     t0 = time.time()

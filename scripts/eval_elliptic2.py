@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data import elliptic2
 from sentinel.eval.funnel import is_hit
 from sentinel.eval.dataset import run_static_funnel
@@ -114,7 +115,7 @@ def main() -> None:
         print("\nValidating the pipeline against a small synthetic sample instead...")
         out = report(SAMPLE_DIR, is_sample=True)
 
-    (ROOT / "data" / "eval_elliptic2.json").write_text(json.dumps(out, indent=2))
+    (active_result_path(ROOT, "eval_elliptic2.json")).write_text(json.dumps(out, indent=2))
     print("\nwritten to data/eval_elliptic2.json")
 
 

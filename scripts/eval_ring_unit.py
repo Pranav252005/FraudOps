@@ -43,12 +43,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lightgbm import LGBMClassifier
 
+from sentinel.data.datasets import active_result_path
 from sentinel.corpus import (CorpusKey, load, require_consistent,
                              require_poolable)
 
 ROOT = Path(__file__).resolve().parent.parent
 CORPUS = ROOT / "data" / "corpus_amlworld_hi_small.npz"
-OUT = ROOT / "data" / "eval_ring_unit.json"
+OUT = active_result_path(ROOT, "eval_ring_unit.json")
 DATASET = "amlworld-hi-small"
 # Sentinel builds its own candidate boundaries by seed-and-expand. Stated as a
 # constant rather than inferred, because the alternative -- a dataset that

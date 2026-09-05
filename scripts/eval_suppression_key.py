@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -46,7 +47,7 @@ from sentinel.stream.replay import Stream
 
 DATASET = _active_dataset()
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "eval_suppression_key.json"
+OUT = active_result_path(ROOT, "eval_suppression_key.json")
 
 ARMS = SUPPRESS_ORDERINGS
 KS = (10, 20, 50)

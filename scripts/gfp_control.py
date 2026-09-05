@@ -80,6 +80,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -98,7 +99,7 @@ from scripts.eval_oracle import EVERY, active_rings, label_candidate
 ROOT = Path(__file__).resolve().parent.parent
 EXPORT_DIR = ROOT / "data" / "gfp_export"
 GFP_FEATURES = ROOT / "data" / "gfp_features.npz"
-COMPARE_OUT = ROOT / "data" / "eval_gfp.json"
+COMPARE_OUT = active_result_path(ROOT, "eval_gfp.json")
 
 # The paper's AML configuration (arXiv:2402.08593, section 5): scatter-gather
 # bounded at 6 h, simple cycles at 1 day and 10 hops, temporal cycles on. These

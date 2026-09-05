@@ -111,6 +111,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lightgbm import LGBMClassifier
 from sklearn.metrics import average_precision_score, f1_score
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, PRUNE_STRATEGY, TICK_MINUTES, WINDOW_MINUTES
@@ -777,7 +778,7 @@ def main() -> None:
             "('oracle_on_all_rings'), which cheats at seeding, is a ceiling "
             "diagnostic. See 'run_roles'."),
     }
-    (ROOT / "data" / "eval_oracle.json").write_text(json.dumps(out, indent=2, default=str))
+    (active_result_path(ROOT, "eval_oracle.json")).write_text(json.dumps(out, indent=2, default=str))
     print("\nwritten to data/eval_oracle.json")
 
 

@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -53,7 +54,7 @@ from sentinel.data.datasets import active as _active_dataset
 DATASET = _active_dataset()
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "eval_seed_cheat_diff.json"
+OUT = active_result_path(ROOT, "eval_seed_cheat_diff.json")
 
 # Kept identical to scripts/eval_oracle.py on purpose: this diff is only
 # meaningful if it is describing the same two pools that produced the 2.2x.

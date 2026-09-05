@@ -19,17 +19,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.economics.cost import (CostModel, evaluate_queue, joint_adverse,
                                      optimal_k, sensitivity)
 
 ROOT = Path(__file__).resolve().parent.parent
-MEASURED = ROOT / "data" / "eval_phase2.json"
+MEASURED = active_result_path(ROOT, "eval_phase2.json")
 # This script used to print its results and write nothing, which is why the
 # joint worst-case break-even reached README as a TYPED literal -- the one
 # class of number standing rule 1 exists to stop. It now writes an artefact so
 # `scripts/collect_metrics.py` can carry the figure into results/metrics.json
 # and the document can render it.
-OUT = ROOT / "data" / "eval_cost.json"
+OUT = active_result_path(ROOT, "eval_cost.json")
 
 # Post-pruning figures from docs/HANDOFF.md §5d, kept here only so this script
 # runs without the dataset. The size baseline is carried alongside because

@@ -31,6 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.detect import identity_features as IF                  # noqa: E402
 from sentinel.eval import identity as ident                          # noqa: E402
 from sentinel.eval.bootstrap import bootstrap_ci                     # noqa: E402
@@ -38,7 +39,7 @@ from sentinel.eval.funnel import is_hit                              # noqa: E40
 from sentinel.generators import synthetic_identity as gen            # noqa: E402
 
 PREREG = ("prereg/synthetic_identity_features.md",)
-OUT = ROOT / "data" / "identity_features.json"
+OUT = active_result_path(ROOT, "identity_features.json")
 
 # Transcribed from the prereg. A divergence here is a bug in this file.
 LEAK_AUC = 0.99

@@ -61,13 +61,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scipy import stats as sps
 from scipy.optimize import nnls
 
+from sentinel.data.datasets import active_result_path
 from sentinel.corpus import CorpusKey, load, require_consistent, require_poolable
 from sentinel.detect.features import (RETIRED_TERMS, WEIGHTS, Features,
                                       _V1_WEIGHTS, score)
 
 ROOT = Path(__file__).resolve().parent.parent
 CORPUS = ROOT / "data" / "corpus_amlworld_hi_small.npz"
-OUT = ROOT / "data" / "eval_blend_v2.json"
+OUT = active_result_path(ROOT, "eval_blend_v2.json")
 DATASET = "amlworld-hi-small"
 PROVENANCE = "constructed"
 QUESTION = "scorer"

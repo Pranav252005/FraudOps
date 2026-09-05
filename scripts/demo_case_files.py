@@ -29,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.identity_case import build_identity_case_file      # noqa: E402
 from sentinel.detect import identity_features as IF                    # noqa: E402
@@ -38,7 +39,7 @@ from sentinel.generators import synthetic_identity as gen              # noqa: E
 from sentinel.narrative.identity_brief import (case_narrative_verified,
                                                 merchant_brief_verified)  # noqa: E402
 
-OUT = ROOT / "data" / "case_demo.json"
+OUT = active_result_path(ROOT, "case_demo.json")
 RUN_ID = "phase-e-demo"
 GENERATED_AT = "2026-09-01T00:00:00+00:00"     # fixed, so the demo is diffable
 

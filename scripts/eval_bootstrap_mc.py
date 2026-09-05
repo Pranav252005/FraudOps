@@ -27,10 +27,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.eval.bootstrap import paired_bootstrap_delta
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "eval_bootstrap_mc.json"
+OUT = active_result_path(ROOT, "eval_bootstrap_mc.json")
 
 # Files with persisted per-cycle rows, and the arm each one compares against.
 # `None` means the file's rows are a flat list (one arm) and only the
@@ -119,7 +120,7 @@ def main() -> None:
     t0 = time.time()
     results = []
     for fname, ref in SOURCES.items():
-        path = ROOT / "data" / fname
+        path = active_result_path(ROOT, fname)
         if not path.exists():
             print(f"  skip {fname} (absent)")
             continue

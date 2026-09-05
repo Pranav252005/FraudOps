@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sklearn.metrics import average_precision_score
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.config import EVAL_END, TICK_MINUTES, WINDOW_MINUTES
 from sentinel.data.accounts import AccountRegistry
@@ -147,7 +148,7 @@ def main() -> None:
                     "unsupervised, by-neighbourhood-membership system",
         },
     }
-    (ROOT / "data" / "eval_vs_published.json").write_text(json.dumps(out, indent=2))
+    (active_result_path(ROOT, "eval_vs_published.json")).write_text(json.dumps(out, indent=2))
     print("\nwritten to data/eval_vs_published.json")
 
 

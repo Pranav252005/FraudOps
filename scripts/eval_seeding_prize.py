@@ -39,12 +39,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.eval.bootstrap import (bootstrap_ci, paired_bootstrap_delta,
                                      ratio_of_sums)
 
 ROOT = Path(__file__).resolve().parent.parent
-ORACLE = ROOT / "data" / "eval_oracle.json"
-OUT = ROOT / "data" / "eval_seeding_prize.json"
+ORACLE = active_result_path(ROOT, "eval_oracle.json")
+OUT = active_result_path(ROOT, "eval_seeding_prize.json")
 
 KS = (10, 20, 50)
 # `blend` is the shipped v1 hand-set scorer and is the arm the 2.2x claim is

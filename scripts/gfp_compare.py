@@ -44,13 +44,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lightgbm import LGBMClassifier
 
+from sentinel.data.datasets import active_result_path
 from sentinel.eval.bootstrap import (bootstrap_ci, paired_bootstrap_delta,
                                      ratio_of_sums)
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPORT_DIR = ROOT / "data" / "gfp_export"
 GFP_FEATURES = ROOT / "data" / "gfp_features.npz"
-COMPARE_OUT = ROOT / "data" / "eval_gfp.json"
+COMPARE_OUT = active_result_path(ROOT, "eval_gfp.json")
 KS = (10, 20, 50)
 SPLIT_FRACTION = 0.5
 

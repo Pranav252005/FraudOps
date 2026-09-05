@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from sentinel import config                                          # noqa: E402
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active as _active_dataset
 from sentinel.data.datasets import active_stream_dir
 from sentinel.corpus import CorpusKey, stratify_by_dataset           # noqa: E402
@@ -50,7 +51,7 @@ from sentinel.generators import synthetic_identity as gen            # noqa: E40
 DATASET = _active_dataset()
 
 PREREG = ("prereg/synthetic_identity_fragmentation.md",)
-OUT = ROOT / "data" / "fragmentation.json"
+OUT = active_result_path(ROOT, "fragmentation.json")
 
 # From the prereg. A divergence here is a bug in this file.
 PRIMARY_SIZE = 8

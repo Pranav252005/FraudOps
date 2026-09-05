@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.datasets import active_stream_dir
 from sentinel.cases.case import Lane
 from sentinel.cases.manager import CaseManager
@@ -205,7 +206,7 @@ def main() -> None:
                     "does NOT survive -- indistinguishable from noise at this sample size")
         print(f"\nThe p@10 lift {verdict} its own 95% CI.")
 
-    (ROOT / "data" / "eval_phase4.json").write_text(json.dumps({
+    (active_result_path(ROOT, "eval_phase4.json")).write_text(json.dumps({
         "runs": runs, "split_t": split_t,
         "n_train": len(train_cases), "n_test": len(test_cases),
         "case_stats": store.stats(), "analyst_stats": analyst.stats,

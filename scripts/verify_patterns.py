@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.data.patterns import describe, load_rings_with_report
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -54,6 +55,6 @@ print()
 print(f"structurally findable (>2 accounts): {d['n_rings']-total_trivial:,} "
       f"({100*(d['n_rings']-total_trivial)/d['n_rings']:.1f}%)")
 
-out = Path(__file__).resolve().parent.parent / "data" / "patterns_profile.json"
+out = active_result_path(ROOT, "patterns_profile.json")
 out.write_text(json.dumps(d, indent=2, default=str), encoding="utf-8")
 print(f"\nprofile written to {out.relative_to(out.parent.parent)}")

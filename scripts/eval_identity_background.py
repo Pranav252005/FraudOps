@@ -32,13 +32,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sentinel.data.datasets import active_result_path
 from sentinel.eval.bootstrap import bootstrap_ci                     # noqa: E402
 from sentinel.generators import synthetic_identity as gen            # noqa: E402
 
 PREREG = ("prereg/synthetic_identity_generator.md",
           "prereg/synthetic_identity_kill_rule.md")
 
-OUT = ROOT / "data" / "identity_background.json"
+OUT = active_result_path(ROOT, "identity_background.json")
 
 # The kill rule, transcribed from the prereg. Changing a number here without
 # changing it there is a bug in this file.
