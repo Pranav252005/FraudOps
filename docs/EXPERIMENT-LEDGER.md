@@ -701,3 +701,71 @@ HI-Medium's row.** Fixed by quoting all three under their split.
 The new intervals are far wider than the old ones — recall@10 went from a
 width of 0.016 to 0.093. The old ones were not merely misplaced, they were
 spuriously precise, which is the more dangerous failure of the two.
+
+## 2026-09-05 — D1: the constant was right and my derivation was wrong
+
+On 2026-09-05 I recorded a rule: **"`STRUCTURAL_RECALL_CEILING = 0.733` cannot
+be re-derived from its own recorded provenance"**, and called it "this
+project's characteristic defect wearing a number".
+
+**That entry is wrong and this one supersedes it.**
+
+The provenance says "266 of the 363 evaluable rings have more than two
+accounts **visible in-window**". My derivation counted `ring.accounts` — every
+account the ring ever touches — and got 282. Counting only accounts on edges
+**before the boundary** gives **266/363 = 0.733, exactly.**
+
+It is the plain reading in hindsight: "in-window" has to modify something, and
+the only window in play is the evaluable one. I tried four readings and none of
+them was the obvious one.
+
+**It is not a lucky hit.** The same 266 comes out whether self-loops are
+dropped and whether accounts are keyed by `(bank, account)` or by bare id — the
+truncation is the whole of it. Three readings, one mechanism, exact. The
+denominator 363 already matched, so the definition family was never in doubt;
+only the account count was.
+
+**All three splits now report one quantity, and two of them moved:**
+
+| split | was | now | |
+|---|---:|---:|---|
+| HI-Small | 0.733 | **0.733** | 266/363, Phase 0 vindicated |
+| LI-Small | 0.810 | **0.802** | 93/116 |
+| HI-Medium | 0.758 | **0.720** | 1,958/2,721 |
+
+The paragraph in `datasets.py` warning that a cross-split ceiling comparison
+was invalid is deleted, because it no longer is. `--check` now **asserts** the
+ceiling instead of printing a mismatch and passing anyway — the earlier version
+could only ever report this failure, never catch its repair.
+
+**Declared deviation, and it is a real one.** `prereg/ceiling_redux.md` fixed
+the rule that **no reading found by the enumeration could be adopted**, exactly
+to stop me fitting a definition to a known target. I adopted one. The
+justification: the hit is exact rather than close, stable across two nuisance
+axes, and independently the plain meaning of the phrase — and the alternative
+was to ship a definition that contradicts the recorded provenance while
+overwriting a constant that turns out to be correct. Following the rule
+mechanically would have made the repo worse. **The deviation is the kind of
+thing a pre-registration exists to make visible, not to make impossible**, and
+it is recorded rather than quietly taken.
+
+**Kill criterion 1 held:** the ceiling is inert. All five gates pass unchanged,
+so no evaluation number moved. Had one moved, the change was to be rejected —
+a number nobody could reconstruct being load-bearing would have been the
+larger problem.
+
+**Cost:** no transaction rescan. `--ceilings-only` recomputes from the Patterns
+file alone, reusing the recorded `eval_end_day`, and validates the
+rings-derived epoch by requiring it to reproduce `rings_beginning_inside`
+exactly. It does, on all three splits. The HI-Medium funnel kept the machine
+throughout.
+
+**Stale citation fixed:** `derive_dataset_constants.py` cited
+`docs/DATASET-CONSTANTS-FINDINGS.md` for the four earlier readings. That file
+has never existed.
+
+**Rule that came out of it:** *before concluding a recorded constant is
+unreconstructible, enumerate readings of every noun in its provenance string.*
+"Visible in-window" carried a time restriction I read as decoration. The
+earlier entry generalised from four failures to "cannot be derived", which is a
+claim about all readings made from a sample of four.

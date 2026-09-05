@@ -322,6 +322,16 @@ LEDGER = [
      "ambiguity, and the pre-fix file is the only surviving evidence the "
      "defect was real -- data/ is untracked and HI-Small's was overwritten by "
      "its re-run. Authoritative copy: data/funnel-HI-Medium.PRE-D5.json."),
+    ("2026-09-05", "D1-ceiling-redux", 2674,
+     "+18: the corrected ceiling numbers in the registry provenance strings, "
+     "in tests/test_ceiling_definition.py, and in the ledger entry that "
+     "SUPERSEDES an earlier one. The three-row was/now table is the bulk and "
+     "cannot be referenced away: the claim is that all three splits now "
+     "report one quantity and that two of them MOVED, which is a statement "
+     "about all three pairs. The change deleted prose as well -- the "
+     "paragraph saying 0.733 could not be re-derived and that a cross-split "
+     "comparison was invalid is gone, because it is no longer true. "
+     "Authoritative copy: data/dataset_constants.json."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]

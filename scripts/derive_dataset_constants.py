@@ -40,6 +40,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sentinel.data.datasets import REGISTRY, count_rings
+from sentinel.data.patterns import load_rings
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "dataset_constants.json"
@@ -49,13 +50,17 @@ TAIL_MAX_EDGE_SHARE = 0.01
 TAIL_MIN_RATE_LIFT = 10.0
 
 # Phase 0's hand-derived values, used as the control.
-# Phase 0's hand-derived values. `eval_end_day` and the tail counts reproduce
-# EXACTLY once self-loops are excluded. `structural_recall_ceiling` does NOT
-# reproduce under any reading of its own provenance string -- see
-# docs/DATASET-CONSTANTS-FINDINGS.md -- so it is reported, not asserted.
+# Phase 0's hand-derived values. ALL of them now reproduce exactly: the tail
+# counts once self-loops are excluded, and the ceiling once "accounts visible
+# in-window" is read as accounts on edges before the boundary rather than every
+# account of the ring. A 2026-09-05 entry recorded the ceiling as
+# unreconstructible; that was this script's definition being wrong, not the
+# constant. The ceiling is therefore ASSERTED here, not merely reported.
 CONTROL = {"HI-Small": {"eval_end_day": 10, "tail_edges": 715,
                         "tail_laundering": 652,
-                        "structural_recall_ceiling_committed": 0.733}}
+                        "structural_recall_ceiling": 0.733,
+                        "rings_beginning_inside": 363,
+                        "rings_inside_with_more_than_two_accounts": 266}}
 
 TS_FORMATS = ("%Y/%m/%d %H:%M", "%Y/%m/%d %H:%M:%S")
 
@@ -160,8 +165,37 @@ def leak_boundary(counts: dict[int, list[int]]):
     return qualifying[-1]["day"], diag
 
 
+def visible_accounts(ring, cutoff) -> set:
+    """Accounts on this ring's edges strictly before `cutoff`.
+
+    This one function is the difference between 266 and 282. Counting
+    `ring.accounts` instead -- every account the ring ever touches, including
+    those it only reaches after the evaluation boundary -- is what made
+    HI-Small's committed ceiling look unreconstructible.
+    """
+    out = set()
+    for e in ring.edges:
+        if e.ts < cutoff:
+            out.add(e.src)
+            out.add(e.dst)
+    return out
+
+
 def ring_stats(patterns: Path, eval_end_day: int, epoch_ordinal: int):
     """(rings beginning before the boundary, of which have >2 accounts).
+
+    "ACCOUNTS VISIBLE IN-WINDOW" MEANS ACCOUNTS ON EDGES BEFORE THE BOUNDARY,
+    not every account the ring ever touches. This script originally counted the
+    latter, got 282 against Phase 0's 266, and the 2026-09-05 ledger entry
+    concluded the committed 0.733 "cannot be re-derived from its own recorded
+    provenance". That conclusion was wrong. Truncating the ring's edges at the
+    boundary reproduces 266/363 = 0.733 exactly, and does so whether or not
+    self-loops are dropped and whether accounts are keyed by (bank, account) or
+    by bare id -- the truncation is the whole of it. See
+    `scripts/probe_ceiling_readings.py` and prereg/ceiling_redux.md.
+
+    It is the plain reading in hindsight: "in-window" has to modify something,
+    and the only window in play is the evaluable one.
 
     `epoch_ordinal` comes from the TRANSACTION file, not from the Patterns
     file. Day 0 must mean the same thing in both or the boundary is applied
@@ -173,13 +207,16 @@ def ring_stats(patterns: Path, eval_end_day: int, epoch_ordinal: int):
     """
     from sentinel.data.patterns import load_rings
 
+    from datetime import datetime
+
+    cutoff = datetime.fromordinal(epoch_ordinal + eval_end_day)
     rings = load_rings(patterns)
     inside = big = 0
     for r in rings:
         start = min(e.ts for e in r.edges)
         if start.toordinal() - epoch_ordinal < eval_end_day:
             inside += 1
-            if len(r.accounts) > 2:
+            if len(visible_accounts(r, cutoff)) > 2:
                 big += 1
     return inside, big, len(rings)
 
@@ -211,11 +248,47 @@ def derive(name: str, quiet=False) -> dict:
     }
 
 
+def receiling(name: str, prior: dict) -> dict:
+    """Recompute ONLY the ceiling, from the Patterns file, reusing `prior`.
+
+    Added when the ceiling's definition was corrected (D1) and the two other
+    splits needed re-deriving while a long job held the machine. A full
+    `derive()` rescans the transaction CSV -- 3 GB for HI-Medium -- purely to
+    recover `eval_end_day` and the epoch, both of which `prior` already holds.
+
+    The epoch is the one thing not recorded, so it is taken from the rings and
+    then VALIDATED: recomputing `rings_beginning_inside` with it must reproduce
+    the recorded value exactly. If the transaction file began on an earlier day
+    than any ring, that check fails and the split is refused rather than
+    silently dated against a different clock -- the failure this whole module
+    exists to prevent.
+    """
+    ds = REGISTRY[name]
+    rings = load_rings(ds.patterns(ROOT))
+    epoch = min(r.t_start for r in rings).toordinal()
+    inside, big, _total = ring_stats(ds.patterns(ROOT), prior["eval_end_day"],
+                                     epoch)
+    if inside != prior["rings_beginning_inside"]:
+        raise SystemExit(
+            f"{name}: rings-derived epoch gives {inside} rings inside the "
+            f"boundary, but {prior['rings_beginning_inside']} is recorded. The "
+            f"transaction file must start earlier than the first ring; re-run "
+            f"the full derivation for this split instead of --ceilings-only.")
+    out = dict(prior)
+    out["structural_recall_ceiling"] = round(big / inside, 3) if inside else None
+    out["rings_inside_with_more_than_two_accounts"] = big
+    out["ceiling_recomputed_from_patterns_only"] = True
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("datasets", nargs="*", default=[])
     ap.add_argument("--check", action="store_true",
                     help="re-derive HI-Small and assert Phase 0's values")
+    ap.add_argument("--ceilings-only", action="store_true",
+                    help="recompute only the ceiling, from the Patterns file, "
+                         "reusing the recorded eval_end_day (no CSV scan)")
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args()
 
@@ -224,10 +297,21 @@ def main() -> None:
         ap.error("name a split, or pass --check")
 
     results = {}
+    existing = json.loads(args.out.read_text()) if args.out.exists() else {}
     for name in names:
         if name not in REGISTRY:
             raise SystemExit(f"unknown split {name!r}; known {sorted(REGISTRY)}")
         print(f"\n=== {name} ===", flush=True)
+        if args.ceilings_only:
+            if name not in existing:
+                raise SystemExit(f"{name} has no recorded derivation to reuse")
+            r = receiling(name, existing[name])
+            results[name] = r
+            print(f"  ceiling recomputed from Patterns only: "
+                  f"{r['rings_inside_with_more_than_two_accounts']}/"
+                  f"{r['rings_beginning_inside']} = "
+                  f"{r['structural_recall_ceiling']}")
+            continue
         r = derive(name)
         results[name] = r
         d = r["diagnostics"]
@@ -279,15 +363,26 @@ def main() -> None:
         print("  PASS -- the leak-boundary rule, fixed in advance, "
               "reproduces Phase 0 exactly.")
         print("")
-        print(f"  structural_recall_ceiling: derived "
-              f"{r['structural_recall_ceiling']} vs committed "
-              f"{want['structural_recall_ceiling_committed']}")
-        print("  *** NOT REPRODUCIBLE. Four readings of its provenance "
-              "give 278-282 of 363, never 266. The committed 0.733 cannot "
-              "be re-derived from what this repo records about it. ***")
-        print("  Reported, not asserted: tests/test_corpus.py states the "
-              "ceiling is a reported property, not an input, so it does "
-              "not gate correctness -- unlike eval_end_day, which does.")
+        ceil_ok = (r["structural_recall_ceiling"]
+                   == want["structural_recall_ceiling"]
+                   and r["rings_beginning_inside"]
+                   == want["rings_beginning_inside"]
+                   and r["rings_inside_with_more_than_two_accounts"]
+                   == want["rings_inside_with_more_than_two_accounts"])
+        print(f"  ceiling         derived {r['structural_recall_ceiling']} "
+              f"vs Phase 0 {want['structural_recall_ceiling']} "
+              f"({r['rings_inside_with_more_than_two_accounts']}/"
+              f"{r['rings_beginning_inside']} vs "
+              f"{want['rings_inside_with_more_than_two_accounts']}/"
+              f"{want['rings_beginning_inside']})")
+        if not ceil_ok:
+            print("")
+            print("*** CONTROL FAILED on the ceiling. It reproduced exactly "
+                  "on 2026-09-05 once 'accounts visible in-window' was read "
+                  "as accounts on edges before the boundary; if it no longer "
+                  "does, the reading or the data has changed. ***")
+            raise SystemExit(2)
+        print("  PASS -- the ceiling reproduces Phase 0 exactly too.")
 
 
 if __name__ == "__main__":
