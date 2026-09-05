@@ -209,11 +209,19 @@ def test_no_committed_interval_fails_to_contain_its_point():
     offline -- `eval_funnel.py` did not persist per-cycle records, which is
     precisely why D5 needed a re-run -- so a result carrying `metric_cis` but
     no `cycle_rows` is known to predate the fix and is skipped. It stops being
-    skipped the moment it is regenerated. Nothing else is exempt, and the
-    exemption cannot be widened without deleting this docstring.
+    skipped the moment it is regenerated.
+
+    `*.PRE-*.json` is excluded outright rather than skipped. Those are
+    deliberate archives of a superseded run -- `funnel-HI-Medium.PRE-D5.json`
+    exists precisely BECAUSE its intervals are broken, as the only surviving
+    evidence that the defect was real. Left in the skip path it would hold the
+    exemption open forever and the guard would never check anything, which is
+    how a green test stops meaning anything.
     """
     stale, checked = [], 0
     for path in sorted((ROOT / "data").glob("*.json")):
+        if ".PRE-" in path.name:
+            continue
         try:
             d = json.loads(path.read_text())
         except (json.JSONDecodeError, UnicodeDecodeError):
