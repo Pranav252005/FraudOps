@@ -332,6 +332,20 @@ LEDGER = [
      "paragraph saying 0.733 could not be re-derived and that a cross-split "
      "comparison was invalid is gone, because it is no longer true. "
      "Authoritative copy: data/dataset_constants.json."),
+    ("2026-09-06", "readme-identity-extracted", 2609,
+     "-65, so this entry tightens the ratchet rather than asking it to give "
+     "way. The identity deep dive left README.template.md for the PHASEA-"
+     "PHASEE documents that already carried it; the front page keeps the kill "
+     "rule, the shared harness, the dose-response that held and the "
+     "cross-domain prediction that was refuted, and links out for the rest. "
+     "What was NOT removed is the reason this is worth a line: the pruning "
+     "A/B, the supervised re-ranker, the label tax and the three negative "
+     "results had been sitting UNDER the identity heading, and they are "
+     "AMLworld results that were only ever there by drift. They were promoted "
+     "to a heading of their own. A cut that had taken the whole section would "
+     "have deleted four measured results while looking like a tidy-up. "
+     "Authoritative copies: docs/PHASEA-IDENTITY-BACKGROUND.md, "
+     "docs/PHASED-FRAGMENTATION.md."),
 ]
 
 BASELINE_UNMARKED = LEDGER[-1][2]
