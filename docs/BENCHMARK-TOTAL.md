@@ -83,10 +83,13 @@ it is in **seeding**, worth 2.7× at k=10.
 - **The rupee figures are unquotable.** The cost gate confirms no single
   unsourced input flips the conclusion across 10×, but with all six adverse at
   once, break-even is 1.8382 and the queue does not pay.
-- **`ring_recall@k` intervals are invalid** (defect D5, found today, not fixed).
-  A cluster bootstrap cannot bound a union statistic; the point estimate falls
-  outside its own CI on both splits. `ring_recall` is quoted above with its
-  point estimate only, deliberately. p@k is unaffected — it is a ratio of sums.
+- **`ring_recall@k` intervals were invalid** (defect D5). A cluster bootstrap
+  cannot bound a union statistic, and the point estimate fell outside its own
+  CI on both splits. **The estimator is fixed and tested; the two funnel JSONs
+  still carry the old intervals until they are re-run.** The point estimates
+  quoted above are unaffected either way — the fix is algebraically
+  point-preserving, and ring recall is quoted here with no interval on purpose.
+  p@k was never affected; it is a ratio of sums.
 - **HI-Small's `structural_recall_ceiling` of 0.733 has never been reproduced.**
   Four definitions were tried; all land 278–282, none at 266.
 - **One run of one script per split.** No repeated-run variance.
