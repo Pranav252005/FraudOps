@@ -764,6 +764,14 @@ throughout.
 `docs/DATASET-CONSTANTS-FINDINGS.md` for the four earlier readings. That file
 has never existed.
 
+**D7 verified end-to-end, 2026-09-05 21:01.** The HI-Small oracle was re-run
+after the field removal and diffed against `data/eval_oracle.PRE-D7.json` leaf
+by leaf: **1,655 leaves compared, ZERO numeric differences.** The single diff is
+`measured_at`. `oracle_as_is` and `oracle_on_all_rings` are identical across
+`n_pool`, `n_train`, `split_t`, `ap`, `f1`, `n_positive` and
+`mean_candidate_size`. Removing two fields nothing reads changed nothing, which
+is the claim the change rested on.
+
 **Rule that came out of it:** *before concluding a recorded constant is
 unreconstructible, enumerate readings of every noun in its provenance string.*
 "Visible in-window" carried a time restriction I read as decoration. The
